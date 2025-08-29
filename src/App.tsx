@@ -13,7 +13,7 @@ import { Label } from "./components/ui/label";
 import { Badge } from "./components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Toaster } from "./components/ui/sonner";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import {
   User as UserIcon,
   FileText,
