@@ -53,7 +53,15 @@
     },
     build: {
       target: 'esnext',
-      outDir: 'build',
+          outDir: 'dist',
+      chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', '@supabase/supabase-js'],
+          },
+        },
+      },
     },
     server: {
       port: 3000,
