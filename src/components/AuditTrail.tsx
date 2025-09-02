@@ -72,6 +72,21 @@ interface PlateMapState {
   cols: number;
 }
 
+function getDescription(details: any): string {
+  if (!details) return '';
+  if (typeof details === 'string') return details;
+  if (Array.isArray(details)) return JSON.stringify(details);
+  const desc = details.description;
+  if (typeof desc === 'string') return desc;
+  if (Array.isArray(desc)) return JSON.stringify(desc);
+  if (desc && typeof desc === 'object') {
+    return typeof desc.description === 'string'
+      ? desc.description
+      : JSON.stringify(desc);
+  }
+  return String(desc ?? '');
+}
+
 // Sample movement tracking with enhanced plate maps
 export function createAuditLog(
   actionType: string,
@@ -99,8 +114,8 @@ export function createAuditLog(
         action: actionType,
         entityType: resourceType,
         entityId: resourceId,
-        details: { 
-          description: typeof details === 'string' ? details : details.description,
+        details: {
+          description: getDescription(details),
           oldValues: options.oldValues,
           newValues: options.newValues,
           metadata: options.metadata
@@ -172,7 +187,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           fromPosition: log.details.metadata?.fromPosition,
           toContainer: log.details.metadata?.toContainer || log.details.metadata?.containerId,
           toPosition: log.details.metadata?.toPosition || log.details.metadata?.position,
-          notes: log.details.description,
+          notes: getDescription(log.details),
           success: log.success
         };
         movements.push(movement);
@@ -231,12 +246,14 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
 
   // Filter logs
   const filteredLogs = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase();
     return logs.filter(log => {
-      const matchesSearch = searchQuery === '' ||
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.details.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const description = getDescription(log.details);
+      const matchesSearch = searchLower === '' ||
+        log.action.toLowerCase().includes(searchLower) ||
+        log.entityId.toLowerCase().includes(searchLower) ||
+        log.userName.toLowerCase().includes(searchLower) ||
+        description.toLowerCase().includes(searchLower);
 
       const matchesAction = actionFilter === 'all' || log.action === actionFilter;
       const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter;
@@ -335,7 +352,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
         log.entityId,
         log.severity,
         log.success,
-        `"${log.details.description?.replace(/"/g, '""') || ''}"`
+        `"${getDescription(log.details).replace(/"/g, '""')}"`
       ].join(','))
     ].join('\n');
 
@@ -528,7 +545,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                           </TableCell>
                           <TableCell className="max-w-md">
                             <div className="text-sm">
-                              {log.details.description}
+                              {getDescription(log.details)}
                               {log.details.metadata && (
                                 <div className="text-xs text-muted-foreground mt-1 font-mono">
                                   {JSON.stringify(log.details.metadata, null, 1)}
