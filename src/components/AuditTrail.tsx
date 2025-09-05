@@ -139,15 +139,17 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
         const savedLogs = localStorage.getItem('saga-audit-logs');
         if (savedLogs) {
           setLogs(JSON.parse(savedLogs));
+        } else {
+          setLogs([]); // fallback if no logs
         }
       } catch (error) {
         console.error('Error loading audit logs:', error);
+        setLogs([]); // fallback on error
       }
     };
 
     loadLogs();
-    
-    // Refresh every 5 seconds to catch new logs
+
     const interval = setInterval(loadLogs, 5000);
     return () => clearInterval(interval);
   }, []);
