@@ -291,8 +291,8 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
   }, [sampleMovements, searchQuery]);
 
   // Get unique values for filters
-  const uniqueActions = [...new Set(logs.map(log => log.action))];
-  const uniqueUsers = [...new Set(logs.map(log => log.userId))];
+  const uniqueActions = Array.isArray(logs) ? [...new Set(logs.map(log => log.action))] : [];
+  const uniqueUsers = Array.isArray(logs) ? [...new Set(logs.map(log => log.userId))] : [];
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -536,12 +536,12 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                           </TableCell>
                           <TableCell className="max-w-md">
                             <div className="text-sm">
-                              {typeof log.details.description === 'string'
+                              {typeof log.details?.description === 'string'
                                 ? log.details.description
-                                : log.details.description
+                                : log.details?.description
                                   ? JSON.stringify(log.details.description)
                                   : ''}
-                              {log.details.metadata && (
+                              {log.details?.metadata && (
                                 <div className="text-xs text-muted-foreground mt-1 font-mono">
                                   {JSON.stringify(log.details.metadata, null, 1)}
                                 </div>
