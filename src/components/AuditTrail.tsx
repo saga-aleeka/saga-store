@@ -235,55 +235,59 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
 
   // Filter logs
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const matchesSearch = searchQuery === '' ||
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.details.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    return Array.isArray(logs)
+      ? logs.filter(log => {
+          const matchesSearch = searchQuery === '' ||
+            log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            log.details.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-      const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter;
-      const matchesUser = userFilter === 'all' || log.userId === userFilter;
-      const matchesSuccess = successFilter === 'all' || 
-        (successFilter === 'success' && log.success) ||
-        (successFilter === 'failure' && !log.success);
+          const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+          const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter;
+          const matchesUser = userFilter === 'all' || log.userId === userFilter;
+          const matchesSuccess = successFilter === 'all' || 
+            (successFilter === 'success' && log.success) ||
+            (successFilter === 'failure' && !log.success);
 
-      let matchesDate = true;
-      if (dateFilter !== 'all') {
-        const logDate = new Date(log.timestamp);
-        const now = new Date();
-        
-        switch (dateFilter) {
-          case 'today':
-            matchesDate = logDate.toDateString() === now.toDateString();
-            break;
-          case 'week':
-            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            matchesDate = logDate >= weekAgo;
-            break;
-          case 'month':
-            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            matchesDate = logDate >= monthAgo;
-            break;
-        }
-      }
+          let matchesDate = true;
+          if (dateFilter !== 'all') {
+            const logDate = new Date(log.timestamp);
+            const now = new Date();
+            
+            switch (dateFilter) {
+              case 'today':
+                matchesDate = logDate.toDateString() === now.toDateString();
+                break;
+              case 'week':
+                const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                matchesDate = logDate >= weekAgo;
+                break;
+              case 'month':
+                const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                matchesDate = logDate >= monthAgo;
+                break;
+            }
+          }
 
-      return matchesSearch && matchesAction && matchesSeverity && matchesUser && matchesSuccess && matchesDate;
-    });
+          return matchesSearch && matchesAction && matchesSeverity && matchesUser && matchesSuccess && matchesDate;
+        })
+      : [];
   }, [logs, searchQuery, actionFilter, severityFilter, userFilter, successFilter, dateFilter]);
 
   // Filter movements
   const filteredMovements = useMemo(() => {
-    return sampleMovements.filter(movement => {
-      const matchesSearch = searchQuery === '' ||
-        movement.sampleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        movement.actionType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        movement.toContainer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        movement.notes?.toLowerCase().includes(searchQuery.toLowerCase());
+    return Array.isArray(sampleMovements)
+      ? sampleMovements.filter(movement => {
+          const matchesSearch = searchQuery === '' ||
+            movement.sampleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            movement.actionType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            movement.toContainer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            movement.notes?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesSearch;
-    });
+          return matchesSearch;
+        })
+      : [];
   }, [sampleMovements, searchQuery]);
 
   // Get unique values for filters

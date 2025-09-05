@@ -1,8 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { cors } from 'https://deno.land/x/hono@v3.7.2/middleware.ts'
-import { Hono } from 'https://deno.land/x/hono@v3.7.2/mod.ts'
-import { logger } from 'https://deno.land/x/hono@v3.7.2/middleware.ts'
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { Hono } from "https://deno.land/x/hono@v3.11.6/mod.ts";
+import { cors, logger } from "https://deno.land/x/hono@v3.11.6/middleware.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import * as kv from './kv_store.tsx'
 
 const app = new Hono()
@@ -348,22 +347,25 @@ app.get('/make-server-aaac77aa/audit-logs', async (c) => {
 
     let logs = await kv.get('saga-audit-logs') || []
 
+    // Defensive: ensure logs is always an array
+    logs = Array.isArray(logs) ? logs : []
+
     // Apply filters
     if (resourceType) {
-      logs = logs.filter((log: any) => log.resource_type === resourceType)
+      logs = (logs ?? []).filter((log: any) => log.resource_type === resourceType)
     }
     if (actionType) {
-      logs = logs.filter((log: any) => log.action_type === actionType)
+      logs = (logs ?? []).filter((log: any) => log.action_type === actionType)
     }
     if (userId) {
-      logs = logs.filter((log: any) => log.user_id === userId)
+      logs = (logs ?? []).filter((log: any) => log.user_id === userId)
     }
     if (severity) {
-      logs = logs.filter((log: any) => log.severity === severity)
+      logs = (logs ?? []).filter((log: any) => log.severity === severity)
     }
 
     // Apply pagination
-    const paginatedLogs = logs.slice(offset, offset + limit)
+    const paginatedLogs = (logs ?? []).slice(offset, offset + limit)
 
     return c.json({ logs: paginatedLogs })
   } catch (error) {
@@ -388,7 +390,8 @@ async function createAuditLogEntry(actionType: string, resourceType: string, res
       timestamp: new Date().toISOString()
     }
 
-    const auditLogs = await kv.get('saga-audit-logs') || []
+    let auditLogs = await kv.get('saga-audit-logs') || []
+    auditLogs = Array.isArray(auditLogs) ? auditLogs : []
     auditLogs.unshift(auditLog)
 
     if (auditLogs.length > 1000) {
