@@ -137,11 +137,13 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
     const loadLogs = () => {
       try {
         const savedLogs = localStorage.getItem('saga-audit-logs');
+        // Ensure fallback to empty array if parsing fails or result is not an array
+        let parsedLogs = [];
         if (savedLogs) {
-          setLogs(JSON.parse(savedLogs));
-        } else {
-          setLogs([]); // fallback if no logs
+          parsedLogs = JSON.parse(savedLogs);
+          if (!Array.isArray(parsedLogs)) parsedLogs = [];
         }
+        setLogs(parsedLogs);
       } catch (error) {
         console.error('Error loading audit logs:', error);
         setLogs([]); // fallback on error
@@ -228,7 +230,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       console.error('Error loading sample movements:', error);
     }
 
-    return movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return Array.isArray(movements) ? movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) : [];
   }, [logs]);
 
   // Filter logs
