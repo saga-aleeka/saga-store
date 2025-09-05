@@ -530,7 +530,11 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                           </TableCell>
                           <TableCell className="max-w-md">
                             <div className="text-sm">
-                              {log.details.description}
+                              {typeof log.details.description === 'string'
+                                ? log.details.description
+                                : log.details.description
+                                  ? JSON.stringify(log.details.description)
+                                  : ''}
                               {log.details.metadata && (
                                 <div className="text-xs text-muted-foreground mt-1 font-mono">
                                   {JSON.stringify(log.details.metadata, null, 1)}
