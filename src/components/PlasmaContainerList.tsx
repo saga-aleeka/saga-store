@@ -84,16 +84,16 @@ interface PlasmaContainerListProps {
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
   const [localContainers, setLocalContainers] = useState<PlasmaContainer[]>([]);
   const STORAGE_KEY = 'plasma-containers';
-  
+
   // Debug logging
-  console.log('PlasmaContainerList props:', { 
-    propsContainers: propsContainers?.length, 
-    propsOnContainersChange: typeof propsOnContainersChange 
+  console.log('PlasmaContainerList props:', {
+    propsContainers: Array.isArray(propsContainers) ? propsContainers.length : 0,
+    propsOnContainersChange: typeof propsOnContainersChange
   });
-  
+
   // Use props if provided, otherwise use local state
-  const containers = propsContainers ?? localContainers;
-  const onContainersChange = propsOnContainersChange ?? setLocalContainers;
+  const containers = Array.isArray(propsContainers) ? propsContainers : localContainers;
+  const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
 
   // Load containers from localStorage if using local state
   useEffect(() => {
@@ -114,11 +114,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Auto-save containers if using local state
   useEffect(() => {
-    if (!propsContainers && localContainers.length >= 0) {
+    if (!propsContainers && Array.isArray(localContainers)) {
       const timeoutId = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(localContainers));
       }, 500);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [localContainers, propsContainers]);
@@ -141,49 +141,44 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const [bulkSearchSampleIds, setBulkSearchSampleIds] = useState<string[]>([]);
 
   // Separate active and archived containers
-  const activeContainers = useMemo(() => containers.filter(container => !container.isArchived), [containers]);
-  const archivedContainers = useMemo(() => containers.filter(container => container.isArchived), [containers]);
+  const activeContainers = useMemo(() => (Array.isArray(containers) ? containers : []).filter(container => !container.isArchived), [containers]);
+  const archivedContainers = useMemo(() => (Array.isArray(containers) ? containers : []).filter(container => container.isArchived), [containers]);
 
-  // Get containers to display based on active tab
   const containersToFilter = useMemo(() => {
     return activeTab === 'archive' ? archivedContainers : activeContainers;
   }, [activeTab, activeContainers, archivedContainers]);
 
-  // Filter and search containers
   const filteredContainers = useMemo(() => {
-    return containersToFilter.filter(container => {
-      const matchesSearch = searchQuery === '' || 
-        container.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        container.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        container.location.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesSampleType = selectedSampleType === null || 
+    return (Array.isArray(containersToFilter) ? containersToFilter : []).filter(container => {
+      const matchesSearch = searchQuery === '' ||
+        container.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        container.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        container.location?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesSampleType = selectedSampleType === null ||
         container.sampleType === selectedSampleType;
-      
-      // Calculate effective total slots dynamically based on sample type
+
       const effectiveTotalSlots = getGridDimensions(container.containerType, container.sampleType).total;
-      const hasAvailableSlots = !showAvailableOnly || 
+      const hasAvailableSlots = !showAvailableOnly ||
         container.occupiedSlots < effectiveTotalSlots;
 
       const matchesTraining = !showTrainingOnly || container.isTraining === true;
-      
+
       return matchesSearch && matchesSampleType && hasAvailableSlots && matchesTraining;
     });
   }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
 
-  // Load all samples from all containers (including archived for search)
+  // Defensive: always arrays
   const allSamples = useMemo(() => {
     const samples: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
-    
-    containers.forEach(container => {
+    (Array.isArray(containers) ? containers : []).forEach(container => {
       const storageKey = `samples-${container.id}`;
       const savedSamples = localStorage.getItem(storageKey);
-      
+
       if (savedSamples) {
         try {
           const parsedData = JSON.parse(savedSamples);
-          
-          // Convert from admin import format {position: {id, timestamp}} to PlasmaSample format
+
           if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
             Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
               const sample: PlasmaSample = {
@@ -217,52 +212,42 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         }
       }
     });
-    
+
     return samples;
   }, [containers]);
 
-  // Filter samples based on search query or worklist
+  // Defensive: always arrays
   const filteredSamples = useMemo(() => {
     if (sampleSearchMode === 'worklist') {
-      if (worklistSampleIds.length === 0) return [];
-      
-      return allSamples.filter(({ sample }) => 
-        worklistSampleIds.includes(sample.sampleId)
+      if (!Array.isArray(worklistSampleIds) || worklistSampleIds.length === 0) return [];
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+        (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId)
       );
     } else if (sampleSearchMode === 'bulk') {
-      if (bulkSearchSampleIds.length === 0) return [];
-      
-      return allSamples.filter(({ sample }) => 
-        bulkSearchSampleIds.includes(sample.sampleId)
+      if (!Array.isArray(bulkSearchSampleIds) || bulkSearchSampleIds.length === 0) return [];
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+        (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId)
       );
     } else {
       if (!sampleSearchQuery.trim()) {
-        // Clear manual search sample IDs when no search query
         setManualSearchSampleIds([]);
         return [];
       }
-      
-      // Split the search query by commas and trim whitespace
       const searchTerms = sampleSearchQuery.split(',').map(term => term.trim().toLowerCase()).filter(term => term.length > 0);
-      
-      const results = allSamples.filter(({ sample, container }) => {
-        // Check if any search term matches the sample
+      const results = (Array.isArray(allSamples) ? allSamples : []).filter(({ sample, container }) => {
         return searchTerms.some(query => {
           return (
-            sample.sampleId.toLowerCase().includes(query) ||
-            sample.position.toLowerCase().includes(query) ||
-            container.name.toLowerCase().includes(query) ||
-            container.location.toLowerCase().includes(query) ||
-            container.id.toLowerCase().includes(query) ||
-            container.sampleType.toLowerCase().includes(query)
+            sample.sampleId?.toLowerCase().includes(query) ||
+            sample.position?.toLowerCase().includes(query) ||
+            container.name?.toLowerCase().includes(query) ||
+            container.location?.toLowerCase().includes(query) ||
+            container.id?.toLowerCase().includes(query) ||
+            container.sampleType?.toLowerCase().includes(query)
           );
         });
       });
-      
-      // Update manual search sample IDs for highlighting
       const sampleIds = results.map(({ sample }) => sample.sampleId);
       setManualSearchSampleIds(sampleIds);
-      
       return results;
     }
   }, [allSamples, sampleSearchQuery, sampleSearchMode, worklistSampleIds, bulkSearchSampleIds]);
@@ -352,7 +337,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     setSampleSearchMode('manual');
   };
 
-  const handleWorklistSamplesExtracted = (sampleIds: string[], duplicateIds: string[] = []) => {
+  const handleWorklistSamplesExtracted = (sampleIds: string[] = [], duplicateIds: string[] = []) => {
     setWorklistSampleIds(sampleIds);
     setWorklistDuplicateIds(duplicateIds);
     if (sampleIds.length > 0) {
@@ -465,7 +450,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         onOpenChange={handleEditDialogClose}
         container={containerToEdit}
         onUpdateContainer={handleContainerUpdate}
-        key={containerToEdit?.id} // Force re-render when container changes
+        // Force re-render when container changes
       />
 
       {/* Main Content with Tabs */}
@@ -612,12 +597,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredContainers.map((container) => (
-                  <ContainerCard
-                    key={container.id}
-                    container={container}
-                    onSelect={setSelectedContainer}
-                    onEdit={handleEditContainer}
-                  />
+                  <div key={container.id}>
+                    <ContainerCard
+                      container={container}
+                      onSelect={setSelectedContainer}
+                      onEdit={handleEditContainer}
+                    />
+                  </div>
                 ))}
               </div>
             )}
@@ -708,12 +694,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredContainers.map((container) => (
-                  <ContainerCard
-                    key={container.id}
-                    container={container}
-                    onSelect={setSelectedContainer}
-                    onEdit={handleEditContainer}
-                  />
+                  <div key={container.id}>
+                    <ContainerCard
+                      container={container}
+                      onSelect={setSelectedContainer}
+                      onEdit={handleEditContainer}
+                    />
+                  </div>
                 ))}
               </div>
             )}
