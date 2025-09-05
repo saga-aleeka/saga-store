@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
-import { Button } from './ui/button';
+import { Sheet } from './ui/sheet';
+import { Title } from './ui/Title'; // Ensure the correct casing and path
+import { SheetHeader } from './ui/sheetHeader'; // Ensure the correct import path for SheetHeader
+import { SheetContent } from './ui/sheetContent'; // Ensure the correct import path for SheetContent
+import { Button } from './ui/button'; // Ensure this path points to the correct Button component
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -34,6 +37,9 @@ const detectContainerTypeFromSampleType = (sampleType: SampleType): ContainerTyp
 };
 
 export function EditContainerDialog({ open, onOpenChange, container, onUpdateContainer }: EditContainerDialogProps) {
+  // Defensive: ensure container is always an object or null
+  if (container === undefined) container = null;
+
   // Debug logging for props
   console.log('EditContainerDialog received props:', {
     open,
@@ -41,6 +47,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     onUpdateContainer: typeof onUpdateContainer
   });
 
+  // Defensive: fallback values for formData
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -51,20 +58,19 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     isArchived: false
   });
 
-  const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
-
+  // Defensive: ensure containerTypes and sampleTypes are arrays
   const containerTypes: ContainerType[] = ['9x9-box', '5x5-box', '5x4-rack', '9x9-rack'];
   const sampleTypes: SampleType[] = ['DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'PA Pool Tubes', 'Plasma Tubes', 'BC Tubes'];
 
-  // Populate form when container changes
+  // Defensive: only update form if container is not null
   useEffect(() => {
     if (container) {
       setFormData({
-        name: container.name,
-        location: container.location,
-        containerType: container.containerType,
-        temperature: container.temperature,
-        sampleType: container.sampleType,
+        name: container.name ?? '',
+        location: container.location ?? '',
+        containerType: container.containerType ?? '9x9-box',
+        temperature: container.temperature ?? '-80°C',
+        sampleType: container.sampleType ?? 'DP Pools',
         isTraining: container.isTraining || false,
         isArchived: container.isArchived || false
       });
@@ -105,71 +111,21 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    console.log('Form submitted!'); // Debug log
-    console.log('onUpdateContainer type:', typeof onUpdateContainer); // Debug log
-    
+
     if (!formData.name.trim() || !formData.location.trim() || !container) {
       alert('Please fill in all required fields (Name and Location)');
       return;
     }
 
-    // Defensive check for onUpdateContainer function
+    // Defensive: check onUpdateContainer
     if (typeof onUpdateContainer !== 'function') {
-      console.error('onUpdateContainer is not a function:', onUpdateContainer);
-      console.error('All props received:', { open, onOpenChange, container, onUpdateContainer });
-      
-      // Try to save to localStorage as fallback
-      try {
-        const dimensions = getGridDimensions(formData.containerType);
-        const updatedContainer: PlasmaContainer = {
-          ...container,
-          name: formData.name,
-          location: formData.location,
-          containerType: formData.containerType,
-          temperature: formData.temperature,
-          sampleType: formData.sampleType,
-          isTraining: formData.isTraining,
-          totalSlots: dimensions.total,
-          lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
-        };
-        
-        // Fallback: try to update localStorage directly
-        const savedContainers = localStorage.getItem('plasma-containers');
-        if (savedContainers) {
-          const containers = JSON.parse(savedContainers);
-          const updatedContainers = containers.map((c: PlasmaContainer) => 
-            c.id === updatedContainer.id ? updatedContainer : c
-          );
-          localStorage.setItem('plasma-containers', JSON.stringify(updatedContainers));
-          alert('Changes saved successfully (using fallback method). Please refresh the page to see updates.');
-          onOpenChange(false);
-          return;
-        }
-      } catch (fallbackError) {
-        console.error('Fallback save failed:', fallbackError);
-      }
-      
       alert('Error: Unable to save changes. Please try closing and reopening this dialog.');
       return;
     }
 
-    // Check if container type is changing and there are samples
-    const isContainerTypeChanging = container.containerType !== formData.containerType;
-    const hasSamples = container.occupiedSlots > 0;
-    
-    if (isContainerTypeChanging && hasSamples) {
-      const confirmChange = window.confirm(
-        `Warning: You are changing the container type from ${getContainerTypeLabel(container.containerType)} to ${getContainerTypeLabel(formData.containerType)}. This container has ${container.occupiedSlots} samples.\n\nChanging the container type may affect sample positions. Are you sure you want to continue?`
-      );
-      
-      if (!confirmChange) {
-        return;
-      }
-    }
+    // Defensive: getGridDimensions fallback
+    const dimensions = getGridDimensions(formData.containerType) ?? { total: 0, rows: 0, cols: 0 };
 
-    const dimensions = getGridDimensions(formData.containerType);
-    
     const updatedContainer: PlasmaContainer = {
       ...container,
       name: formData.name,
@@ -183,8 +139,6 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
       lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
     };
 
-    console.log('Updating container:', updatedContainer); // Debug log
-    
     try {
       onUpdateContainer(updatedContainer);
       onOpenChange(false);
@@ -194,14 +148,15 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     }
   };
 
+  // Defensive: handleCancel only runs if container exists
   const handleCancel = () => {
     if (container) {
       setFormData({
-        name: container.name,
-        location: container.location,
-        containerType: container.containerType,
-        temperature: container.temperature,
-        sampleType: container.sampleType,
+        name: container.name ?? '',
+        location: container.location ?? '',
+        containerType: container.containerType ?? '9x9-box',
+        temperature: container.temperature ?? '-80°C',
+        sampleType: container.sampleType ?? 'DP Pools',
         isTraining: container.isTraining || false,
         isArchived: container.isArchived || false
       });
@@ -210,15 +165,17 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     onOpenChange(false);
   };
 
+  // Defensive: don't render if container is null
   if (!container) return null;
 
-  const selectedDimensions = getGridDimensions(formData.containerType);
+  // Defensive: getGridDimensions fallback
+  const selectedDimensions = getGridDimensions(formData.containerType) ?? { rows: 0, cols: 0, total: 0 };
   const recommendedContainerType = detectContainerTypeFromSampleType(formData.sampleType);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto">
-        <SheetHeader>
+          <Title className="flex items-center gap-2">
           <SheetTitle className="flex items-center gap-2">
             Edit Container: {container.name}
             {formData.isArchived && (
@@ -234,9 +191,9 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
               </span>
             )}
           </SheetTitle>
-          <SheetDescription>
+          <p className="text-sm text-muted-foreground">
             Update the container settings. Be careful when changing container type if samples are already stored.
-          </SheetDescription>
+          </p>
         </SheetHeader>
 
         <div className="mt-6 pb-20">
@@ -491,3 +448,4 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     </Sheet>
   );
 }
+const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
