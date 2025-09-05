@@ -52,7 +52,7 @@ export function MicroPlate({ container }: MicroPlateProps) {
   const generatePlateGrid = () => {
     const rows = 8;
     const cols = 12;
-    const wells = [];
+    const wells: Well[] = [];
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {

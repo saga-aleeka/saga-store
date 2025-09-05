@@ -127,7 +127,9 @@ export function useRealtimeSamples({
       newSamples = { ...currentSamples };
       for (const [position, sample] of Object.entries(newSamples)) {
         if ((sample as any).id === sampleId || (sample as any).sampleId === sampleId) {
-          newSamples[position] = { ...sample, ...updateData };
+          newSamples[position] = typeof sample === 'object' && sample !== null 
+            ? { ...sample, ...updateData } 
+            : updateData;
           break;
         }
       }

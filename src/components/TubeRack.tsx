@@ -54,7 +54,7 @@ export function TubeRack({ container }: TubeRackProps) {
   const generateGrid = () => {
     const rows = 8;
     const cols = 12;
-    const positions = [];
+    const positions: { position: string; sample: Sample | undefined }[] = [];
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {

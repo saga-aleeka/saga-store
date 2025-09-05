@@ -236,7 +236,8 @@ export function WorklistResults({
           <h3 className="mb-4">Containers to Pull</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(analysis.foundByContainer).map(([containerId, containerResults]) => {
-              const container = containerResults[0].container;
+              const containerResultsTyped = containerResults as SampleSearchResult[];
+              const container = containerResultsTyped[0].container;
               return (
                 <div key={containerId} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
                   <div className="flex items-center gap-3">
@@ -255,7 +256,7 @@ export function WorklistResults({
                       {container.sampleType}
                     </Badge>
                     <Badge variant="secondary" className="text-xs">
-                      {containerResults.length}
+                      {(containerResults as SampleSearchResult[]).length}
                     </Badge>
                   </div>
                 </div>
@@ -273,8 +274,9 @@ export function WorklistResults({
         <Card className="p-6">
           <h3 className="mb-4">Found Samples by Container</h3>
           <div className="space-y-4">
+          </div>
             {Object.entries(analysis.foundByContainer).map(([containerId, containerResults]) => {
-              const container = containerResults[0].container;
+              const container = (containerResults as SampleSearchResult[])[0].container;
               return (
                 <div key={containerId} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -292,45 +294,72 @@ export function WorklistResults({
                         {container.sampleType}
                       </Badge>
                     </div>
-                    <Badge variant="secondary">
-                      {containerResults.length} samples
-                    </Badge>
+                    {(containerResults as SampleSearchResult[]).length} samples
                   </div>
                   
                   <div className="text-sm text-muted-foreground mb-3">
                     {container.location} • {container.temperature}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {containerResults.map((result, index) => {
-                      const { sample } = result;
-                      const daysSinceStorage = Math.floor(
-                        (new Date().getTime() - new Date(sample.storageDate).getTime()) / (1000 * 60 * 60 * 24)
-                      );
+                  interface ContainerResultProps {
+                    result: SampleSearchResult;
+                    containerId: string;
+                    onNavigateToSample: (containerId: string, sampleId: string) => void;
+                  }
+                  
+                  interface ContainerResultsProps {
+                    containerResults: SampleSearchResult[];
+                    containerId: string;
+                    onNavigateToSample: (containerId: string, sampleId: string) => void;
+                  }
 
-                      return (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                          <div className="flex items-center gap-2">
-                            <TestTube className="w-4 h-4 text-blue-600" />
-                            <div>
-                              <p className="font-medium text-sm">{sample.sampleId}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Position {sample.position} • {daysSinceStorage}d ago
-                              </p>
-                            </div>
+                  const ContainerResult: React.FC<ContainerResultProps> = ({ result, containerId, onNavigateToSample }) => {
+                    const { sample } = result;
+                    const daysSinceStorage = Math.floor(
+                      (new Date().getTime() - new Date(sample.storageDate).getTime()) / (1000 * 60 * 60 * 24)
+                    );
+                  
+                    return (
+                      <div className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                        <div className="flex items-center gap-2">
+                          <TestTube className="w-4 h-4 text-blue-600" />
+                          <div>
+                            <p className="font-medium text-sm">{sample.sampleId}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Position {sample.position} • {daysSinceStorage}d ago
+                            </p>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onNavigateToSample(container.id, sample.sampleId)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <ArrowRight className="w-3 h-3" />
-                          </Button>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onNavigateToSample(containerId, sample.sampleId)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <ArrowRight className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    );
+                  };
+                  
+                  const ContainerResults: React.FC<ContainerResultsProps> = ({ containerResults, containerId, onNavigateToSample }) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {(containerResults as SampleSearchResult[]).map((result, index) => (
+                        <ContainerResult
+                          key={index}
+                          result={result}
+                          containerId={containerId}
+                          onNavigateToSample={onNavigateToSample}
+                        />
+                      ))}
+                    </div>
+                  );
+
+                  <ContainerResults
+                    containerResults={containerResults}
+                    containerId={containerId}
+                    onNavigateToSample={onNavigateToSample}
+                  />
                 </div>
               );
             })}

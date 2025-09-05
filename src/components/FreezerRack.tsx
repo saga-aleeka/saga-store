@@ -51,7 +51,7 @@ export function FreezerRack({ container }: FreezerRackProps) {
   const generateRackGrid = () => {
     const rows = 5;
     const cols = 5;
-    const slots = [];
+    const slots: FreezerSlot[] = [];
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {

@@ -51,7 +51,7 @@ export function StorageBox({ container }: StorageBoxProps) {
   const generateBoxGrid = () => {
     const rows = 9;
     const cols = 9;
-    const items = [];
+    const items: StoredItem[] = [];
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {

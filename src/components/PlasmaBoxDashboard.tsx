@@ -144,7 +144,13 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const dimensions = getGridDimensions(container.containerType, container.sampleType);
 
   const generateGrid = () => {
-    const grid = [];
+    interface GridItem {
+      position: string;
+      sample: PlasmaSample | undefined;
+      isDisabled: boolean;
+    }
+    
+    const grid: GridItem[] = [];
     for (let row = 0; row < dimensions.rows; row++) {
       for (let col = 0; col < dimensions.cols; col++) {
         const position = `${String.fromCharCode(65 + row)}${col + 1}`;
