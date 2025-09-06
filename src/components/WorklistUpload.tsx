@@ -9,6 +9,7 @@ import { Upload, FileText, AlertTriangle, CheckCircle, XCircle, Download } from 
 
 interface WorklistUploadProps {
   onSamplesExtracted: (sampleIds: string[], duplicateIds?: string[]) => void;
+  onClearWorklist?: () => void;
   className?: string;
 }
 
@@ -20,7 +21,7 @@ interface ParsedWorklistData {
   fileName: string;
 }
 
-export function WorklistUpload({ onSamplesExtracted, className }: WorklistUploadProps) {
+export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className }: WorklistUploadProps) {
   const [parsedData, setParsedData] = useState<ParsedWorklistData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +154,9 @@ export function WorklistUpload({ onSamplesExtracted, className }: WorklistUpload
     onSamplesExtracted([], []);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (typeof onClearWorklist === 'function') {
+      onClearWorklist();
     }
   };
 
