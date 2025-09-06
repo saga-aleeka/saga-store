@@ -194,7 +194,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
           <p className="text-sm text-muted-foreground">
             Update the container settings. Be careful when changing container type if samples are already stored.
           </p>
-        </SheetHeader>
+  </Title>
 
         <div className="mt-6 pb-20">
           <form onSubmit={handleSubmit} className="space-y-6">
