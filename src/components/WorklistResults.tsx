@@ -312,7 +312,7 @@ export function WorklistResults({
                     containerId: string;
                     onNavigateToSample: (containerId: string, sampleId: string) => void;
                   }
-
+                  
                   const ContainerResult: React.FC<ContainerResultProps> = ({ result, containerId, onNavigateToSample }) => {
                     const { sample } = result;
                     const daysSinceStorage = Math.floor(

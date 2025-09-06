@@ -92,7 +92,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   });
 
   // Use props if provided, otherwise use local state
-  const containers = Array.isArray(propsContainers) ? propsContainers : localContainers;
+  const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
   const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
 
   // Load containers from localStorage if using local state
