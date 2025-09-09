@@ -1,5 +1,5 @@
 import React from 'react';
-import sagaLogo from '../assets/saga-logo.png'; // Update the path to the correct location of the image file
+import sagaLogo from '../assets/64588e517bd125623e5f91d657806eafe8768d13.png'; // Ensure the path is correct relative to this file
 
 interface HeaderProps {
   actions?: React.ReactNode;

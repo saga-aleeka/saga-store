@@ -29,7 +29,7 @@ interface WorklistResultsProps {
 // Ensure analysis is destructured from props
 import React, { useMemo } from 'react';
 
-const WorklistResults: React.FC<WorklistResultsProps> = ({
+export const WorklistResults: React.FC<WorklistResultsProps> = ({
   searchedSampleIds,
   searchResults,
   duplicateIds,

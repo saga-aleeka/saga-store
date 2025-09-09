@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sheet } from './ui/sheet';
-import { Title } from './ui/Title'; // Ensure the correct casing and path
-import { SheetHeader, SheetTitle } from './ui/sheetHeader'; // Ensure the correct import path for SheetHeader and SheetTitle
-import { SheetContent } from './ui/sheetContent'; // Ensure the correct import path for SheetContent
+import { SheetHeader, SheetTitle, SheetContent } from './ui/sheet';
 import { Button } from './ui/button'; // Ensure this path points to the correct Button component
 import { Input } from './ui/input';
 import { Label } from './ui/label';
