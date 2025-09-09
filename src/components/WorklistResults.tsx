@@ -37,12 +37,14 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   onNavigateToSample,
   onClearWorklist,
 }) => {
+  // Defensive: fallback to empty object if analysis is undefined
+  const safeAnalysis = analysis ?? { missing: [] };
   return (
     <div>
       <div className="flex items-center gap-2">
         <Badge />
       {/* Missing Samples */}
-      {analysis.missing.length > 0 && (
+      {safeAnalysis.missing.length > 0 && (
         <Card className="p-6">
           <h3 className="flex items-center gap-2 mb-4">
             <XCircle className="w-5 h-5 text-red-600" />
