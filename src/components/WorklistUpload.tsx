@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, ChangeEvent } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
@@ -22,10 +22,10 @@ interface ParsedWorklistData {
 }
 
 export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className }: WorklistUploadProps) {
-  const [parsedData, setParsedData] = useState<ParsedWorklistData | null>(null);
+  const [parsedData, setParsedData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState(null);
+  const fileInputRef = useRef(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

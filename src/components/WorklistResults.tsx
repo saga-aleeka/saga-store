@@ -1,5 +1,13 @@
 import React, { useMemo } from 'react';
 
+interface WorklistResultsProps {
+  searchedSampleIds: string[];
+  searchResults: any; // Replace 'any' with the actual type of searchResults
+  duplicateIds?: string[];
+  onNavigateToSample: (containerId: string, sampleId: string) => void;
+  onClearWorklist: () => void;
+}: WorklistResultsProps) {
+
 export function WorklistResults({ 
   searchedSampleIds, 
   searchResults, 
