@@ -172,10 +172,13 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
   const selectedDimensions = getGridDimensions(formData.containerType) ?? { rows: 0, cols: 0, total: 0 };
   const recommendedContainerType = detectContainerTypeFromSampleType(formData.sampleType);
 
+  // Move showContainerTypeWarning state to top of function
+  const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto">
-          <Title className="flex items-center gap-2">
+        <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             Edit Container: {container.name}
             {formData.isArchived && (
@@ -194,7 +197,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
           <p className="text-sm text-muted-foreground">
             Update the container settings. Be careful when changing container type if samples are already stored.
           </p>
-  </Title>
+        </SheetHeader>
 
         <div className="mt-6 pb-20">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -448,4 +451,4 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     </Sheet>
   );
 }
-const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
+// No duplicate Input or Button definitions; ensure only imported ones are used
