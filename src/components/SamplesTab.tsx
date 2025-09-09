@@ -143,9 +143,25 @@ export function SamplesTab({
           {/* Worklist Results */}
           {worklistSampleIds.length > 0 && (
             <WorklistResults
-              worklistSampleIds={worklistSampleIds}
-              worklistDuplicateIds={worklistDuplicateIds}
-              filteredSamples={filteredSamples}
+              searchedSampleIds={worklistSampleIds}
+              duplicateIds={worklistDuplicateIds}
+              searchResults={Object.fromEntries(
+                worklistSampleIds.map(sampleId => {
+                  const found = filteredSamples.find(({ sample }) => sample.sampleId === sampleId);
+                  if (found) {
+                    return [sampleId, {
+                      sample: found.sample,
+                      container: found.container
+                    }];
+                  }
+                  return [sampleId, null];
+                })
+              )}
+              analysis={{
+                missing: worklistSampleIds.filter(
+                  sampleId => !filteredSamples.some(({ sample }) => sample.sampleId === sampleId)
+                )
+              }}
               onNavigateToSample={handleNavigateToSample}
               onClearWorklist={handleClearWorklist}
             />
