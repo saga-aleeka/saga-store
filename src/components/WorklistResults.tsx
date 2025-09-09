@@ -42,6 +42,33 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   // Defensive: get found samples from searchResults
   const foundSamples = Object.values(searchResults ?? {}).filter((result: any) => result && result.sample && result.container);
   const hasFoundSamples = foundSamples.length > 0;
+
+  // State for selected samples to checkout
+  const [selectedSamples, setSelectedSamples] = React.useState<string[]>([]);
+  const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>([]);
+
+  // Handle select/deselect
+  const handleSelectSample = (sampleId: string) => {
+    setSelectedSamples((prev) =>
+      prev.includes(sampleId) ? prev.filter((id) => id !== sampleId) : [...prev, sampleId]
+    );
+  };
+
+  // Handle checkout
+  const handleCheckout = (sampleIds: string[]) => {
+    setCheckedOutSamples((prev) => [...prev, ...sampleIds.filter(id => !prev.includes(id))]);
+    setSelectedSamples([]);
+    // Optionally: persist to localStorage
+    // localStorage.setItem('checkedOutSamples', JSON.stringify([...checkedOutSamples, ...sampleIds]));
+  };
+
+  // Handle undo checkout
+  const handleUndoCheckout = (sampleIds: string[]) => {
+    setCheckedOutSamples((prev) => prev.filter((id) => !sampleIds.includes(id)));
+    // Optionally: update localStorage
+    // localStorage.setItem('checkedOutSamples', JSON.stringify(checkedOutSamples.filter(id => !sampleIds.includes(id))));
+  };
+
   return (
     <div>
       <div className="flex items-center gap-2">
@@ -79,27 +106,49 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
             <CheckCircle className="w-5 h-5 text-green-600" />
             Found Samples ({foundSamples.length})
           </h3>
+          <div className="flex gap-2 mb-4">
+            <Button size="sm" variant="outline" onClick={() => handleCheckout(foundSamples.map((r: any) => r.sample.sampleId))}>
+              Check Out All
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleCheckout(selectedSamples)} disabled={selectedSamples.length === 0}>
+              Check Out Selected
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleUndoCheckout(checkedOutSamples)} disabled={checkedOutSamples.length === 0}>
+              Undo Checkout
+            </Button>
+          </div>
           <ScrollArea className="h-48">
             <div className="flex flex-col gap-2">
-              {foundSamples.map((result: any, index: number) => (
-                <div key={index} className="flex items-center gap-3 bg-muted/30 rounded px-2 py-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {result.sample.sampleId}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    in <strong>{result.container.name}</strong> (<span className="font-mono">{result.container.location}</span>)
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onNavigateToSample(result.container.id, result.sample.sampleId)}
-                    className="h-6 w-6 p-0"
-                    aria-label={`Go to ${result.sample.sampleId}`}
-                  >
-                    <ArrowRight className="w-3 h-3" />
-                  </Button>
-                </div>
-              ))}
+              {foundSamples.map((result: any, index: number) => {
+                const sampleId = result.sample.sampleId;
+                const isCheckedOut = checkedOutSamples.includes(sampleId);
+                return (
+                  <div key={index} className={`flex items-center gap-3 bg-muted/30 rounded px-2 py-1 ${isCheckedOut ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSamples.includes(sampleId)}
+                      onChange={() => handleSelectSample(sampleId)}
+                      disabled={isCheckedOut}
+                    />
+                    <Badge variant="secondary" className="text-xs">
+                      {sampleId}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      in <strong>{result.container.name}</strong> (<span className="font-mono">{result.container.location}</span>)
+                    </span>
+                    <span className="text-xs text-muted-foreground">Position: <strong>{result.sample.position}</strong></span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onNavigateToSample(result.container.id, sampleId)}
+                      className="h-6 w-6 p-0"
+                      aria-label={`Go to ${sampleId}`}
+                    >
+                      <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </ScrollArea>
         </Card>
