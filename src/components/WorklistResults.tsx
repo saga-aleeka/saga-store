@@ -39,6 +39,9 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 }) => {
   // Defensive: fallback to empty object if analysis is undefined
   const safeAnalysis = analysis ?? { missing: [] };
+  // Defensive: get found samples from searchResults
+  const foundSamples = Object.values(searchResults ?? {}).filter((result: any) => result && result.sample && result.container);
+  const hasFoundSamples = foundSamples.length > 0;
   return (
     <div>
       <div className="flex items-center gap-2">
@@ -65,6 +68,33 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
               <li>Currently checked out of storage</li>
               <li>Stored in containers not in the system</li>
               <li>Have different sample IDs than expected</li>
+            </ul>
+          </div>
+        </Card>
+      )}
+      {/* Found Samples */}
+      {hasFoundSamples && (
+        <Card className="p-6 mt-6">
+          <h3 className="flex items-center gap-2 mb-4">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            Found Samples ({foundSamples.length})
+          </h3>
+          <ScrollArea className="h-32">
+            <div className="flex flex-wrap gap-2">
+              {foundSamples.map((result: any, index: number) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {result.sample.sampleId}
+                </Badge>
+              ))}
+            </div>
+          </ScrollArea>
+          <div className="mt-4 text-sm text-muted-foreground">
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              {foundSamples.map((result: any, index: number) => (
+                <li key={index}>
+                  <strong>{result.sample.sampleId}</strong> — {result.container.name} ({result.container.location})
+                </li>
+              ))}
             </ul>
           </div>
         </Card>
