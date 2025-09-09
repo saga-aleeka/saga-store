@@ -79,24 +79,29 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
             <CheckCircle className="w-5 h-5 text-green-600" />
             Found Samples ({foundSamples.length})
           </h3>
-          <ScrollArea className="h-32">
-            <div className="flex flex-wrap gap-2">
+          <ScrollArea className="h-48">
+            <div className="flex flex-col gap-2">
               {foundSamples.map((result: any, index: number) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  {result.sample.sampleId}
-                </Badge>
+                <div key={index} className="flex items-center gap-3 bg-muted/30 rounded px-2 py-1">
+                  <Badge variant="secondary" className="text-xs">
+                    {result.sample.sampleId}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    in <strong>{result.container.name}</strong> (<span className="font-mono">{result.container.location}</span>)
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onNavigateToSample(result.container.id, result.sample.sampleId)}
+                    className="h-6 w-6 p-0"
+                    aria-label={`Go to ${result.sample.sampleId}`}
+                  >
+                    <ArrowRight className="w-3 h-3" />
+                  </Button>
+                </div>
               ))}
             </div>
           </ScrollArea>
-          <div className="mt-4 text-sm text-muted-foreground">
-            <ul className="list-disc list-inside mt-2 space-y-1">
-              {foundSamples.map((result: any, index: number) => (
-                <li key={index}>
-                  <strong>{result.sample.sampleId}</strong> — {result.container.name} ({result.container.location})
-                </li>
-              ))}
-            </ul>
-          </div>
         </Card>
       )}
       </div>
