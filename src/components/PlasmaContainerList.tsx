@@ -704,7 +704,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
                       onEdit={handleEditContainer}
                     />
                   </div>
-can                 ))}
+                ))}
               </div>
             )}
           </TabsContent>
