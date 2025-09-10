@@ -24,6 +24,19 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     }
   };
   const [containerPreview, setContainerPreview] = useState(null);
+
+  const handleSampleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result;
+        console.log('Sample file content:', content);
+        // Add logic to process the file content
+      };
+      reader.readAsText(file);
+    }
+  };
   const [samplePreview, setSamplePreview] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState('');
