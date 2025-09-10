@@ -16,6 +16,7 @@ import { BulkSampleSearch } from './BulkSampleSearch';
 import { SamplesTab } from './SamplesTab';
 import { ContainerCard } from './ContainerCard';
 import { Header } from './Header';
+import { ScrollArea } from './ui/scroll-area';
 
 export type ContainerType = '9x9-box' | '5x5-box' | '5x4-rack' | '9x9-rack' | '7x14-rack';
 export type SampleType = 'DP Pools' | 'cfDNA Tubes' | 'DTC Tubes' | 'MNC Tubes' | 'PA Pool Tubes' | 'Plasma Tubes' | 'BC Tubes' | 'IDT Plates';
@@ -356,6 +357,74 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   const handleEditContainer = (container: PlasmaContainer) => {
   // ...existing code...
+  // Helper to get today's nightly snapshot
+  const getTodayNightlySnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) return [];
+    try {
+      return JSON.parse(backupDataRaw);
+    } catch {
+      return [];
+    }
+  };
+
+  // Example: Add revert button to each container card
+  // (Replace with your actual container card rendering logic)
+  const renderContainerCard = (container) => (
+    <Card key={container.id} className="mb-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h4>{container.name}</h4>
+          <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
+          Revert to Last Nightly Save
+        </Button>
+      </div>
+      {/* ...other container details... */}
+    </Card>
+  );
+
+  // Admin view: Show nightly snapshot
+  const isAdmin = true; // Replace with your actual admin check
+  const todaySnapshot = getTodayNightlySnapshot();
+
+  const renderAdminNightlySnapshot = () => (
+    <Card className="p-4 mb-6">
+      <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+      {todaySnapshot.length === 0 ? (
+        <p className="text-muted-foreground">No snapshot found for today.</p>
+      ) : (
+        todaySnapshot.map(({ container, samples }) => (
+          <div key={container.id} className="mb-4">
+            <h4>{container.name} <span className="text-xs text-muted-foreground">({container.location})</span></h4>
+            <div className="text-xs text-muted-foreground">Samples: {Array.isArray(samples) ? samples.length : Object.keys(samples || {}).length}</div>
+            <ScrollArea className="border rounded p-2 mt-1 h-24">
+              <div className="flex flex-wrap gap-1">
+                {Array.isArray(samples)
+                  ? samples.map((s: any, i: number) => {
+                      const sample = s as { sampleId?: string; id?: string; position?: string };
+                      return <Badge key={i} className="text-xs">{sample.sampleId || sample.id || sample.position}</Badge>;
+                    })
+                  : Object.entries(samples || {}).map(([pos, s]: [string, any]) => {
+                      const sample = s as { sampleId?: string; id?: string; position?: string };
+                      return <Badge key={pos} className="text-xs">{sample.sampleId || sample.id || pos}</Badge>;
+                    })}
+              </div>
+            </ScrollArea>
+          </div>
+        ))
+      )}
+    </Card>
+  );
+
+  {/* Admin Nightly Snapshot View */}
+  {isAdmin && renderAdminNightlySnapshot()}
+
+  {/* Render all containers with revert button */}
+  {containers.map(renderContainerCard)}
 
   // Add revert button to each container card (example, adapt to your UI)
   // Example usage in your container rendering:
