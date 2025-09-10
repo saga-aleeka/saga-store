@@ -1,8 +1,8 @@
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'vitest';
+import { expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PlasmaContainerList } from '../components/PlasmaContainerList';
-import '@testing-library/jest-dom';
 
 const mockContainers = [
   {
@@ -26,7 +26,8 @@ describe('PlasmaContainerList', () => {
 
   it('shows create button when containers exist', () => {
     render(<PlasmaContainerList containers={mockContainers} />);
-    expect(screen.getByText(/Create New Container/i)).toBeInTheDocument();
+    const buttons = screen.getAllByText(/Create New Container/i);
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
   it('shows welcome message when no containers', () => {

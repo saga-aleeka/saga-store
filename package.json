@@ -67,6 +67,9 @@
             "test": "vitest"
       },
       "vitest": {
-        "setupFiles": "./vitest.setup.ts"
+            "setupFiles": [
+                  "./vitest.setup.ts"
+            ],
+            "environment": "jsdom"
       }
 }
