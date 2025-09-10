@@ -389,11 +389,55 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Admin view: Show nightly snapshot
   const isAdmin = true; // Replace with your actual admin check
+  // Manual backup logic for admin
+  const handleManualBackup = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const containersToBackup = Array.isArray(containers) ? containers : [];
+    const backupData = containersToBackup.map(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      return {
+        container,
+        samples: savedSamples ? JSON.parse(savedSamples) : []
+      };
+    });
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
+  };
+
+  // Download snapshot as JSON
+  const handleDownloadSnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) {
+      alert('No snapshot found for today.');
+      return;
+    }
+    const blob = new Blob([backupDataRaw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshot-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   const todaySnapshot = getTodayNightlySnapshot();
 
   const renderAdminNightlySnapshot = () => (
     <Card className="p-4 mb-6">
       <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+      <div className="flex gap-2 mb-4">
+        <Button size="sm" variant="outline" onClick={handleManualBackup}>
+          Manual Backup
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>
+          Download Snapshot
+        </Button>
+      </div>
       {todaySnapshot.length === 0 ? (
         <p className="text-muted-foreground">No snapshot found for today.</p>
       ) : (
