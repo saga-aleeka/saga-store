@@ -82,18 +82,75 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+  // Local state for containers if not provided by props
   const [localContainers, setLocalContainers] = useState([]);
   const STORAGE_KEY = 'plasma-containers';
-
-  // Debug logging
-  console.log('PlasmaContainerList props:', {
-    propsContainers: Array.isArray(propsContainers) ? propsContainers.length : 0,
-    propsOnContainersChange: typeof propsOnContainersChange
-  });
 
   // Use props if provided, otherwise use local state
   const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
   const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
+
+  // Nightly backup logic (2am Eastern Time, overwrite previous)
+  React.useEffect(() => {
+    function getEasternTimeDate() {
+      const now = new Date();
+      const utcOffset = -5; // hours
+      const eastern = new Date(now.getTime() + utcOffset * 60 * 60 * 1000);
+      return eastern;
+    }
+
+    function scheduleNightlyBackup() {
+      const easternNow = getEasternTimeDate();
+      const today = easternNow.toISOString().slice(0, 10);
+      const backupKey = `nightly-backup-${today}`;
+
+      const next2am = new Date(easternNow);
+      next2am.setHours(2, 0, 0, 0);
+      if (easternNow > next2am) {
+        next2am.setDate(next2am.getDate() + 1);
+      }
+      const msUntil2am = next2am.getTime() - easternNow.getTime();
+
+      const timer = setTimeout(() => {
+        const containersToBackup = Array.isArray(propsContainers) ? propsContainers : localContainers;
+        const backupData = (Array.isArray(containersToBackup) ? containersToBackup : []).map(container => {
+          const storageKey = `samples-${container.id}`;
+          const savedSamples = localStorage.getItem(storageKey);
+          return {
+            container,
+            samples: savedSamples ? JSON.parse(savedSamples) : []
+          };
+        });
+        localStorage.setItem(backupKey, JSON.stringify(backupData));
+        scheduleNightlyBackup();
+      }, msUntil2am);
+      return () => clearTimeout(timer);
+    }
+
+    const cancel = scheduleNightlyBackup();
+    return cancel;
+  }, [propsContainers, localContainers]);
+
+  // Revert container to last nightly backup
+  const handleRevertContainer = (containerId: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) {
+      alert('No nightly backup found for today.');
+      return;
+    }
+    const backupData = JSON.parse(backupDataRaw);
+    const containerBackup = backupData.find((b: any) => b.container.id === containerId);
+    if (!containerBackup) {
+      alert('No backup found for this container.');
+      return;
+    }
+    // Restore samples for this container
+    const storageKey = `samples-${containerId}`;
+    localStorage.setItem(storageKey, JSON.stringify(containerBackup.samples));
+    alert('Container reverted to last nightly save. Please refresh to see changes.');
+  };
 
   // Load containers from localStorage if using local state
   useEffect(() => {
@@ -298,6 +355,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleEditContainer = (container: PlasmaContainer) => {
+  // ...existing code...
+
+  // Add revert button to each container card (example, adapt to your UI)
+  // Example usage in your container rendering:
+  // <Button onClick={() => handleRevertContainer(container.id)} variant="outline" size="sm">Revert to Last Nightly Save</Button>
     setContainerToEdit(container);
     setIsEditDialogOpen(true);
   };
