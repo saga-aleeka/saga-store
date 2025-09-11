@@ -69,50 +69,65 @@ function getPositions(containers: Container[]): GridPositions {
 const GridSnapshotView: React.FC<GridSnapshotViewProps> = ({ containers }: GridSnapshotViewProps) => {
   const sampleTypes = getSampleTypes(containers);
 
+  // Responsive: max containers per row
+  const getMaxPerRow = () => {
+    if (window.innerWidth >= 1200) return 4;
+    if (window.innerWidth >= 900) return 3;
+    if (window.innerWidth >= 600) return 2;
+    return 1;
+  };
+
   return (
     <div>
       {sampleTypes.map(sampleType => {
         const containersOfType = getContainersBySampleType(containers, sampleType);
-        // Get full grid columns and rows for this sample type
         const grid = getPositions(containersOfType);
         const columns = grid.columns;
         const rows = grid.rows;
+        const maxPerRow = getMaxPerRow();
+        // Split containers into rows
+        const rowsOfTables: Container[][] = [];
+        for (let i = 0; i < containersOfType.length; i += maxPerRow) {
+          rowsOfTables.push(containersOfType.slice(i, i + maxPerRow));
+        }
         return (
           <div key={sampleType} style={{ marginBottom: 32 }}>
             <h2 style={{ fontWeight: "bold", fontSize: 18 }}>{sampleType}</h2>
-            <div style={{ display: "flex", gap: 32 }}>
-              {containersOfType.map(container => (
-                <table key={container.id} style={{ borderCollapse: "collapse", minWidth: 200 }}>
-                  <thead>
-                    <tr>
-                      <th colSpan={columns.length + 1} style={{ background: "#eee", textAlign: "center" }}>{container.name}</th>
-                    </tr>
-                    <tr>
-                      <th></th>
-                      {columns.map((col: string) => (
-                        <th key={col} style={{ background: "#f5f5f5", textAlign: "center" }}>{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((rowNum: string) => (
-                      <tr key={rowNum}>
-                        <td style={{ fontWeight: "bold" }}>{rowNum}</td>
-                        {columns.map((col: string) => {
-                          const pos = `${rowNum}${col}`;
-                          const sample = container.samples.find(s => s.position === pos);
-                          return (
-                            <td key={pos} style={{ border: "1px solid #ccc", textAlign: "center" }}>
-                              {sample ? sample.id || sample.sampleId : ""}
-                            </td>
-                          );
-                        })}
+            {rowsOfTables.map((rowContainers, rowIdx) => (
+              <div key={rowIdx} style={{ display: "flex", gap: 32, marginBottom: 24 }}>
+                {rowContainers.map(container => (
+                  <table key={container.id} style={{ borderCollapse: "collapse", minWidth: 200 }}>
+                    <thead>
+                      <tr>
+                        <th colSpan={columns.length + 1} style={{ background: "#eee", textAlign: "center" }}>{container.name}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ))}
-            </div>
+                      <tr>
+                        <th></th>
+                        {columns.map((col: string) => (
+                          <th key={col} style={{ background: "#f5f5f5", textAlign: "center" }}>{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((rowNum: string) => (
+                        <tr key={rowNum}>
+                          <td style={{ fontWeight: "bold" }}>{rowNum}</td>
+                          {columns.map((col: string) => {
+                            const pos = `${rowNum}${col}`;
+                            const sample = container.samples.find(s => s.position === pos);
+                            return (
+                              <td key={pos} style={{ border: "1px solid #ccc", textAlign: "center" }}>
+                                {sample ? sample.id || sample.sampleId : ""}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ))}
+              </div>
+            ))}
           </div>
         );
       })}

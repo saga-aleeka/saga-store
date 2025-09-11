@@ -117,19 +117,17 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       // Assign a unique id if not present
       const id = container.id || `${container.name.replace(/\s+/g, '_')}_${idx}`;
       // Extract samples from grid if present
+      let samplesObj: Record<string, any> = {};
       let samplesArr: any[] = [];
       if (Array.isArray(container.samples) && container.samples.length > 0) {
         samplesArr = container.samples.map((sample: any) => ({
           ...sample,
           sampleId: sample.id
         }));
-        // Save samples to localStorage in both array and object format for compatibility
-        const samplesObj: Record<string, any> = {};
         samplesArr.forEach((sample: any) => {
           if (sample.position) samplesObj[sample.position] = sample;
         });
         localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
-        localStorage.setItem(`samples-array-${id}`, JSON.stringify(samplesArr));
       }
       // Calculate occupiedSlots and totalSlots
       const containerType = container.containerType || '5x5-box';
@@ -143,10 +141,19 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         return 25;
       })();
       const occupiedSlots = samplesArr.length;
+      // After import, always load samples from localStorage for dashboard/grid views
+      let loadedSamples: any[] = [];
+      try {
+        const saved = localStorage.getItem(`samples-${id}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          loadedSamples = Object.values(parsed);
+        }
+      } catch {}
       return {
         ...container,
         id,
-        samples: samplesArr,
+        samples: loadedSamples,
         occupiedSlots,
         totalSlots,
         lastUpdated: new Date().toISOString(),
