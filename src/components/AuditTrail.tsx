@@ -206,8 +206,8 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                 const movement: SampleMovement = {
                   id: `${sample.sampleId}-${historyEntry.timestamp}`,
                   timestamp: historyEntry.timestamp,
-                  userId: historyEntry.userInitials || 'Unknown',
-                  userName: historyEntry.userInitials || 'Unknown',
+                  userId: historyEntry.user || 'Unknown',
+                  userName: historyEntry.user || 'Unknown',
                   sampleId: sample.sampleId,
                   actionType: historyEntry.action,
                   toContainerId: container.id,
