@@ -332,39 +332,39 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
 
   const exportLogs = () => {
     if (activeTab === 'movements') {
-      // Grid format for sample movements
-      // Group by sampleType and container
+      // True grid format for sample movements
+      // For each container, output grid: first row is columns (A,B,C...), each subsequent row is a position number (1,2,...) and sample IDs for each column
       const containers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
       let csvSections: string[] = [];
-      const movementsByType: { [sampleType: string]: { [containerName: string]: SampleMovement[] } } = {};
+      // Group movements by container
+      const movementsByContainer: { [containerId: string]: SampleMovement[] } = {};
       filteredMovements.forEach(movement => {
-        const container = containers.find((c: any) => c.id === movement.toContainerId);
-        const sampleType = container?.sampleType || 'Unknown';
-        const containerName = container?.name || movement.toContainerName || movement.toContainerId || 'Unknown';
-        if (!movementsByType[sampleType]) movementsByType[sampleType] = {};
-        if (!movementsByType[sampleType][containerName]) movementsByType[sampleType][containerName] = [];
-        movementsByType[sampleType][containerName].push(movement);
+        const cid = movement.toContainerId || movement.fromContainerId || 'Unknown';
+        if (!movementsByContainer[cid]) movementsByContainer[cid] = [];
+        movementsByContainer[cid].push(movement);
       });
-      Object.entries(movementsByType).forEach(([sampleType, containersObj]) => {
-        csvSections.push(`${sampleType}`);
-        Object.entries(containersObj).forEach(([containerName, movements]) => {
-          // Get all positions for this container
-          const positions = Array.from(new Set(movements.map(m => m.toPosition))).sort();
-          // Header row: container name
-          csvSections.push(`${containerName},,,`);
-          // Second row: positions
-          csvSections.push(["", ...positions].join(","));
-          // Third row: sample IDs at each position
-          const row = ["Contents"];
-          positions.forEach(pos => {
-            const sample = movements.find(m => m.toPosition === pos);
+      Object.entries(movementsByContainer).forEach(([containerId, movements]) => {
+        const container = containers.find((c: any) => c.id === containerId);
+        const containerName = container?.name || containerId;
+        // Get all positions for this container
+  const allPositions = movements.map(m => m.toPosition).filter((p): p is string => typeof p === 'string' && p.length > 1);
+  const columns = Array.from(new Set(allPositions.map(p => p[0]))).sort();
+  const rows = Array.from(new Set(allPositions.map(p => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+        // Header: container name
+        csvSections.push(`${containerName}`);
+        // First row: column labels
+        csvSections.push(["", ...columns].join(","));
+        // For each row number, output row label and sample IDs for each column
+        rows.forEach(rowNum => {
+          const row = [rowNum];
+          columns.forEach(col => {
+            const pos = `${col}${rowNum}`;
+            const sample = movements.find((m: any) => m.toPosition === pos);
             row.push(sample ? sample.sampleId : "");
           });
           csvSections.push(row.join(","));
-          // Blank line between containers
-          csvSections.push("");
         });
-        // Blank line between sample types
+        // Blank line between containers
         csvSections.push("");
       });
       const csvContent = csvSections.join("\n");

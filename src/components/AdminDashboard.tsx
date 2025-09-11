@@ -159,9 +159,9 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
         : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
       // Build grid: columns are A,B,C..., rows are 1,2,...
       // Map positions to grid: position like 'A1', 'B2', etc.
-      const allPositions = samples.map((s: any) => s.position).filter(Boolean);
-      const columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
-      const rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+  const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
+  const columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
+  const rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
       // Header: container name
       csvSections.push(`${c.name}`);
       // First row: column labels
