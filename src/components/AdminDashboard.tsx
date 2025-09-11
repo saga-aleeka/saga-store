@@ -66,8 +66,66 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    console.log('Importing containers...');
-    // Add logic to handle container import here
+    // Find the file input
+    const input = containerFileRef.current as HTMLInputElement | null;
+    if (!input || !input.files || input.files.length === 0) {
+      window.alert('No file selected.');
+      return;
+    }
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const content = reader.result as string;
+        // Basic CSV parsing (grid or standard)
+        let containers: any[] = [];
+        if (content.includes('containerType') && content.includes('sampleType')) {
+          // Standard CSV
+          const lines = content.split(/\r?\n/).filter(l => l.trim());
+          const header = lines[0].split(',');
+          containers = lines.slice(1).map(line => {
+            const values = line.split(',').map(v => v.replace(/"/g, '').trim());
+            const obj: any = {};
+            header.forEach((h, i) => { obj[h.trim()] = values[i] || ''; });
+            obj.id = `${obj.name.replace(/\s/g, '_')}_${Math.random().toString(36).substr(2,5)}`;
+            return obj;
+          });
+        } else {
+          // Grid format: parse each block
+          const blocks = content.split(/\n\n+/);
+          blocks.forEach(block => {
+            const lines = block.split(/\r?\n/).filter(l => l.trim());
+            if (lines.length < 3) return;
+            // First line: rack info, second line: box info, third line: header
+            const rackLine = lines[0].split(',');
+            const boxName = rackLine[2] || `Box_${Math.random().toString(36).substr(2,5)}`;
+            const containerType = lines[2].length > 10 ? '9x9-box' : '5x5-box';
+            const sampleType = boxName.toLowerCase().includes('plasma') ? 'DP Pools' : 'cfDNA Tubes';
+            const container = {
+              id: `${boxName.replace(/\s/g, '_')}_${Math.random().toString(36).substr(2,5)}`,
+              name: boxName,
+              location: rackLine[0] || '',
+              containerType,
+              sampleType,
+              temperature: '-80°C',
+            };
+            containers.push(container);
+          });
+        }
+        if (containers.length === 0) {
+          window.alert('No valid containers found in file.');
+          return;
+        }
+        onContainersChange(containers);
+        window.alert(`Successfully imported ${containers.length} containers.`);
+      } catch (err) {
+        window.alert('Error importing containers: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.onerror = () => {
+      window.alert('Failed to read file.');
+    };
+    reader.readAsText(file);
   };
 
   // Templates
