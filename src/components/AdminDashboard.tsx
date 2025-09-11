@@ -34,8 +34,51 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       const reader = new FileReader();
       reader.onload = () => {
         const content = reader.result;
-        console.log('Container file content:', content);
-        // Add logic to process the file content
+        if (typeof content !== 'string') return;
+        // Parse CSV lines
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+        let containers: any[] = [];
+        let currentContainer: any = null;
+        lines.forEach((line, idx) => {
+          const cols = line.split(',');
+          // Detect new container when 'Box Name:' appears in column B
+          if (cols[1] && cols[1].trim() === 'Box Name:') {
+            // Save previous container if exists
+            if (currentContainer) containers.push(currentContainer);
+            // Start new container
+            currentContainer = {
+              location: cols[0]?.trim(),
+              name: cols[2]?.trim(),
+              containerType: cols.length - 3 > 5 ? '9x9-box' : '5x5-box',
+              sampleType: cols[2]?.trim(), // Will refine below
+              samples: []
+            };
+            // Try to detect sampleType from container name
+            if (currentContainer.name) {
+              if (/plasma/i.test(currentContainer.name)) currentContainer.sampleType = 'Plasma';
+              else if (/cfDNA/i.test(currentContainer.name)) currentContainer.sampleType = 'cfDNA';
+              else if (/dp pool/i.test(currentContainer.name)) currentContainer.sampleType = 'DP Pool';
+              else currentContainer.sampleType = currentContainer.name;
+            }
+          } else if (currentContainer && cols[0] && /^[A-I]$/.test(cols[0].trim())) {
+            // Grid row: cols[0] is row letter, cols[2+] are sample IDs
+            const rowLetter = cols[0].trim();
+            for (let i = 2; i < cols.length; i++) {
+              const sampleId = cols[i].trim();
+              if (sampleId) {
+                const colNum = (i - 1).toString();
+                currentContainer.samples.push({
+                  id: sampleId,
+                  position: `${rowLetter}${colNum}`
+                });
+              }
+            }
+          }
+        });
+        // Push last container
+        if (currentContainer) containers.push(currentContainer);
+        setContainerPreview({ valid: true, data: containers, errors: [] });
+        setSamplePreview({ valid: true, data: containers.flatMap(c => c.samples), errors: [] });
       };
       reader.readAsText(file);
     }
@@ -66,66 +109,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    // Find the file input
-    const input = containerFileRef.current as HTMLInputElement | null;
-    if (!input || !input.files || input.files.length === 0) {
-      window.alert('No file selected.');
-      return;
-    }
-    const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const content = reader.result as string;
-        // Basic CSV parsing (grid or standard)
-        let containers: any[] = [];
-        if (content.includes('containerType') && content.includes('sampleType')) {
-          // Standard CSV
-          const lines = content.split(/\r?\n/).filter(l => l.trim());
-          const header = lines[0].split(',');
-          containers = lines.slice(1).map(line => {
-            const values = line.split(',').map(v => v.replace(/"/g, '').trim());
-            const obj: any = {};
-            header.forEach((h, i) => { obj[h.trim()] = values[i] || ''; });
-            obj.id = `${obj.name.replace(/\s/g, '_')}_${Math.random().toString(36).substr(2,5)}`;
-            return obj;
-          });
-        } else {
-          // Grid format: parse each block
-          const blocks = content.split(/\n\n+/);
-          blocks.forEach(block => {
-            const lines = block.split(/\r?\n/).filter(l => l.trim());
-            if (lines.length < 3) return;
-            // First line: rack info, second line: box info, third line: header
-            const rackLine = lines[0].split(',');
-            const boxName = rackLine[2] || `Box_${Math.random().toString(36).substr(2,5)}`;
-            const containerType = lines[2].length > 10 ? '9x9-box' : '5x5-box';
-            const sampleType = boxName.toLowerCase().includes('plasma') ? 'DP Pools' : 'cfDNA Tubes';
-            const container = {
-              id: `${boxName.replace(/\s/g, '_')}_${Math.random().toString(36).substr(2,5)}`,
-              name: boxName,
-              location: rackLine[0] || '',
-              containerType,
-              sampleType,
-              temperature: '-80°C',
-            };
-            containers.push(container);
-          });
-        }
-        if (containers.length === 0) {
-          window.alert('No valid containers found in file.');
-          return;
-        }
-        onContainersChange(containers);
-        window.alert(`Successfully imported ${containers.length} containers.`);
-      } catch (err) {
-        window.alert('Error importing containers: ' + (err instanceof Error ? err.message : String(err)));
-      }
-    };
-    reader.onerror = () => {
-      window.alert('Failed to read file.');
-    };
-    reader.readAsText(file);
+    console.log('Importing containers...');
+    // Add logic to handle container import here
   };
 
   // Templates
@@ -324,10 +309,6 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     accept=".csv"
                     onChange={handleContainerFileUpload}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
-                  </p>
-                  {/* Button to complete file upload, shown after file is selected */}
                   <Button
                     variant="default"
                     className="mt-2"
@@ -337,6 +318,9 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     <Upload className="w-4 h-4 mr-2" />
                     {isImporting ? 'Importing...' : 'Complete Upload'}
                   </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
+                  </p>
                 </div>
                 <Tabs defaultValue="grid" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
