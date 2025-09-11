@@ -15,6 +15,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Header } from './Header';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 
@@ -119,7 +120,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       if (Array.isArray(container.samples)) {
         const samplesObj: Record<string, any> = {};
         container.samples.forEach((sample: any) => {
-          if (sample.position) samplesObj[sample.position] = sample;
+          // Ensure sampleId is present
+          const sampleObj = {
+            ...sample,
+            sampleId: sample.id
+          };
+          if (sample.position) samplesObj[sample.position] = sampleObj;
         });
         localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
       }
@@ -132,9 +138,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     if (typeof onContainersChange === 'function') onContainersChange(importedContainers);
     setIsImporting(false);
     setImportResults(`Imported ${importedContainers.length} containers.`);
-    // Optionally clear preview
-    // setContainerPreview(null);
-    // setSamplePreview(null);
+    toast.success(`Successfully imported ${importedContainers.length} containers and samples.`);
   };
 
   // Templates
