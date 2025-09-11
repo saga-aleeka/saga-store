@@ -148,27 +148,49 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
       alert('No snapshot found for today.');
       return;
     }
-    // Parse backupDataRaw and convert to CSV
+    // Parse backupDataRaw and convert to grid CSV format
     const backupData = JSON.parse(backupDataRaw);
-    let rows = ['containerId,containerName,location,containerType,sampleType,temperature,sampleId,position'];
+    // Group by sampleType and container
+    let csvSections: string[] = [];
+    const containersByType: { [sampleType: string]: { [containerName: string]: any } } = {};
     backupData.forEach((entry: any) => {
       const c = entry.container;
-      const samples = entry.samples || [];
-      if (samples && Object.keys(samples).length > 0) {
-        Object.entries(samples).forEach(([position, sample]) => {
-          const s = sample as any;
-          rows.push(`"${c.id}","${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}","${s.id}","${position}"`);
-        });
-      } else {
-        rows.push(`"${c.id}","${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}",,""`);
-      }
+      const samples = Array.isArray(entry.samples)
+        ? entry.samples
+        : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
+      const sampleType = c.sampleType || 'Unknown';
+      const containerName = c.name || c.id || 'Unknown';
+      if (!containersByType[sampleType]) containersByType[sampleType] = {};
+      containersByType[sampleType][containerName] = { samples, container: c };
     });
-    const csvContent = rows.join('\n');
+    Object.entries(containersByType).forEach(([sampleType, containersObj]) => {
+      csvSections.push(`${sampleType}`);
+      Object.entries(containersObj).forEach(([containerName, { samples, container }]) => {
+        // Get all positions for this container
+        const positions = Array.from(new Set(samples.map((s: any) => s.position))).sort();
+        // Header row: container name
+        csvSections.push(`${containerName},,,`);
+        // Second row: positions
+        csvSections.push(["", ...positions].join(","));
+        // Third row: sample IDs at each position
+        const row = ["Contents"];
+        positions.forEach(pos => {
+          const sample = samples.find((s: any) => s.position === pos);
+          row.push(sample ? sample.id || sample.sampleId : "");
+        });
+        csvSections.push(row.join(","));
+        // Blank line between containers
+        csvSections.push("");
+      });
+      // Blank line between sample types
+      csvSections.push("");
+    });
+    const csvContent = csvSections.join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `snapshot-${today}.csv`;
+    a.download = `snapshot-grid-${today}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

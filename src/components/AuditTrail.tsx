@@ -331,27 +331,73 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
   };
 
   const exportLogs = () => {
-    const csvContent = [
-      ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Severity', 'Success', 'Description'].join(','),
-      ...filteredLogs.map(log => [
-        log.timestamp,
-        log.userName,
-        log.action,
-        log.entityType,
-        log.entityId,
-        log.severity,
-        log.success,
-        `"${log.details.description?.replace(/"/g, '""') || ''}"`
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `saga-audit-log-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (activeTab === 'movements') {
+      // Grid format for sample movements
+      // Group by sampleType and container
+      const containers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
+      let csvSections: string[] = [];
+      const movementsByType: { [sampleType: string]: { [containerName: string]: SampleMovement[] } } = {};
+      filteredMovements.forEach(movement => {
+        const container = containers.find((c: any) => c.id === movement.toContainerId);
+        const sampleType = container?.sampleType || 'Unknown';
+        const containerName = container?.name || movement.toContainerName || movement.toContainerId || 'Unknown';
+        if (!movementsByType[sampleType]) movementsByType[sampleType] = {};
+        if (!movementsByType[sampleType][containerName]) movementsByType[sampleType][containerName] = [];
+        movementsByType[sampleType][containerName].push(movement);
+      });
+      Object.entries(movementsByType).forEach(([sampleType, containersObj]) => {
+        csvSections.push(`${sampleType}`);
+        Object.entries(containersObj).forEach(([containerName, movements]) => {
+          // Get all positions for this container
+          const positions = Array.from(new Set(movements.map(m => m.toPosition))).sort();
+          // Header row: container name
+          csvSections.push(`${containerName},,,`);
+          // Second row: positions
+          csvSections.push(["", ...positions].join(","));
+          // Third row: sample IDs at each position
+          const row = ["Contents"];
+          positions.forEach(pos => {
+            const sample = movements.find(m => m.toPosition === pos);
+            row.push(sample ? sample.sampleId : "");
+          });
+          csvSections.push(row.join(","));
+          // Blank line between containers
+          csvSections.push("");
+        });
+        // Blank line between sample types
+        csvSections.push("");
+      });
+      const csvContent = csvSections.join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `saga-sample-movements-grid-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      // Original format for audit logs
+      const csvContent = [
+        ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Severity', 'Success', 'Description'].join(','),
+        ...filteredLogs.map(log => [
+          log.timestamp,
+          log.userName,
+          log.action,
+          log.entityType,
+          log.entityId,
+          log.severity,
+          log.success,
+          `"${log.details.description?.replace(/"/g, '""') || ''}"`
+        ].join(','))
+      ].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `saga-audit-log-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   return (
