@@ -10,7 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft } from 'lucide-react';
 import { Header } from './Header';
 
-export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }) => {
+interface Container {
+  id: string;
+  name: string;
+  location: string;
+  containerType: string;
+  sampleType: string;
+  temperature: string;
+}
+
+export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
   const handleContainerFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -89,6 +98,82 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
   const sampleTemplate = `containerId,sampleId,position
 "PB001","C01039DPP1B","A1"
 "PB001","C01040DPP2B","A2"`;
+
+  // Helper: Export containers as CSV
+  const exportContainers = () => {
+    const csvContent = [
+      'name,location,containerType,sampleType,temperature',
+      ...containers.map(c => `"${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}"`)
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'containers-export.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Helper: Manual backup
+  const handleManualBackup = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const containersToBackup = Array.isArray(containers) ? containers : [];
+    const backupData = containersToBackup.map(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      return {
+        container,
+        samples: savedSamples ? JSON.parse(savedSamples) : []
+      };
+    });
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
+  };
+
+  // Helper: Download snapshot
+  const handleDownloadSnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) {
+      alert('No snapshot found for today.');
+      return;
+    }
+    const blob = new Blob([backupDataRaw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshot-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Helper: Export samples as CSV
+  const exportSamples = () => {
+    let rows = ['containerId,sampleId,position'];
+    containers.forEach(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        const samples = JSON.parse(savedSamples);
+        Object.entries(samples).forEach(([position, sample]) => {
+          const typedSample = sample as { id: string }; // Cast sample to the expected type
+          rows.push(`"${container.id}","${typedSample.id}","${position}"`);
+        });
+      }
+    });
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'samples-export.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-6 min-h-screen bg-background">
@@ -339,21 +424,21 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                   Download your current container and sample data, or perform a manual backup of the current state. Manual backup will be overwritten at the next 2am snapshot.
                 </p>
                 <div className="flex gap-4 flex-wrap">
-                  <Button onClick={() => {}} disabled={containers.length === 0}>
+                  <Button onClick={exportContainers} disabled={containers.length === 0}>
                     <Download className="w-4 h-4 mr-2" />
                     Export Containers ({containers.length})
                   </Button>
-                  <Button onClick={() => {}}>
+                  <Button onClick={handleManualBackup}>
                     <Database className="w-4 h-4 mr-2" />
                     Manual Backup
                   </Button>
-                  <Button onClick={() => {}}>
+                  <Button onClick={handleDownloadSnapshot}>
                     <Download className="w-4 h-4 mr-2" />
                     Download Snapshot
                   </Button>
-                  <Button disabled>
+                  <Button onClick={exportSamples} disabled={containers.length === 0}>
                     <Download className="w-4 h-4 mr-2" />
-                    Export Samples (Coming Soon)
+                    Export Samples
                   </Button>
                 </div>
               </div>
