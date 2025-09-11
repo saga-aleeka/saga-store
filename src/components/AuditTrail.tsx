@@ -332,8 +332,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
 
   const exportLogs = () => {
     if (activeTab === 'movements') {
-      // True grid format for sample movements
-      // For each container, output grid: first row is columns (A,B,C...), each subsequent row is a position number (1,2,...) and sample IDs for each column
+      // True grid format for sample movements, always pad grid to full size
       const containers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
       let csvSections: string[] = [];
       // Group movements by container
@@ -346,10 +345,21 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       Object.entries(movementsByContainer).forEach(([containerId, movements]) => {
         const container = containers.find((c: any) => c.id === containerId);
         const containerName = container?.name || containerId;
-        // Get all positions for this container
-  const allPositions = movements.map(m => m.toPosition).filter((p): p is string => typeof p === 'string' && p.length > 1);
-  const columns = Array.from(new Set(allPositions.map(p => p[0]))).sort();
-  const rows = Array.from(new Set(allPositions.map(p => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+        // Pad grid based on container type
+        let columns: string[] = [];
+        let rows: string[] = [];
+        if (container?.containerType === '5x5-box') {
+          columns = ['A','B','C','D','E'];
+          rows = ['1','2','3','4','5'];
+        } else if (container?.containerType === '9x9-box') {
+          columns = ['A','B','C','D','E','F','G','H','I'];
+          rows = ['1','2','3','4','5','6','7','8','9'];
+        } else {
+          // Fallback: use detected positions
+          const allPositions = movements.map(m => m.toPosition).filter((p): p is string => typeof p === 'string' && p.length > 1);
+          columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
+          rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+        }
         // Header: container name
         csvSections.push(`${containerName}`);
         // First row: column labels
