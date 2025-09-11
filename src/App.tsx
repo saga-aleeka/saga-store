@@ -620,7 +620,10 @@ export default function App() {
                       className="w-full justify-start"
                       onClick={() => {
                         setShowSystemDialog(false);
-                        toast.info("Audit logs available in admin dashboard");
+                        const url = new URL(window.location.href);
+                        url.searchParams.set("admin", "true");
+                        url.searchParams.set("tab", "audit");
+                        window.location.href = url.toString();
                       }}
                     >
                       <FileText className="h-4 w-4 mr-2" />
