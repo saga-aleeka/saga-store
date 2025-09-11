@@ -116,22 +116,24 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     const importedContainers = containerPreview.data.map((container: any, idx: number) => {
       // Assign a unique id if not present
       const id = container.id || `${container.name.replace(/\s+/g, '_')}_${idx}`;
-      // Save samples for this container
-      if (Array.isArray(container.samples)) {
+      // Extract samples from grid if present
+      let samplesArr: any[] = [];
+      if (Array.isArray(container.samples) && container.samples.length > 0) {
+        samplesArr = container.samples.map((sample: any) => ({
+          ...sample,
+          sampleId: sample.id
+        }));
+        // Save samples to localStorage
         const samplesObj: Record<string, any> = {};
-        container.samples.forEach((sample: any) => {
-          // Ensure sampleId is present
-          const sampleObj = {
-            ...sample,
-            sampleId: sample.id
-          };
-          if (sample.position) samplesObj[sample.position] = sampleObj;
+        samplesArr.forEach((sample: any) => {
+          if (sample.position) samplesObj[sample.position] = sample;
         });
         localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
       }
       return {
         ...container,
         id,
+        samples: samplesArr
       };
     });
     localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
