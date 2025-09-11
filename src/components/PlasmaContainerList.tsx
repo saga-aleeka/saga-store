@@ -621,13 +621,14 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         onCreateContainer={handleCreateContainer}
       />
       
-      <EditContainerDialog
-        open={isEditDialogOpen}
-        onOpenChange={handleEditDialogClose}
-        container={containerToEdit}
-        onUpdateContainer={handleContainerUpdate}
-        // Force re-render when container changes
-      />
+      {containerToEdit && (
+        <EditContainerDialog
+          open={isEditDialogOpen}
+          onOpenChange={handleEditDialogClose}
+          container={containerToEdit}
+          onUpdateContainer={handleContainerUpdate}
+        />
+      )}
 
       {/* Main Content with Tabs */}
       {containers.length === 0 ? (
