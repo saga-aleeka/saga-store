@@ -414,70 +414,194 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     onContainersChange(updatedContainers);
   };
 
-
-  // Edit container logic
   const handleEditContainer = (container: PlasmaContainer) => {
-    setContainerToEdit(container);
-    setIsEditDialogOpen(true);
-  };
-
-
   // ...existing code...
+    // Helper to get today's nightly snapshot
+    const getTodayNightlySnapshot = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const backupKey = `nightly-backup-${today}`;
+      const backupDataRaw = localStorage.getItem(backupKey);
+      if (!backupDataRaw) return [];
+      try {
+        return JSON.parse(backupDataRaw);
+      } catch {
+        return [];
+      }
+    };
 
-  // Render container card with edit button
-  const renderContainerCard = (container) => (
-    <Card key={container.id} className="mb-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h4>{container.name}</h4>
-          <p className="text-xs text-muted-foreground">Location: {container.location}</p>
-        </div>
-        <div className="flex gap-2">
+    // Render admin nightly snapshot
+    const renderAdminNightlySnapshot = () => {
+      return (
+        <Card className="p-4 mb-6">
+          <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+          <div className="flex gap-2 mb-4">
+            <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
+            <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Snapshot</Button>
+          </div>
+          {todaySnapshot.length === 0 ? (
+            <p className="text-muted-foreground">No snapshot found for today.</p>
+          ) : (
+            <div>
+              {todaySnapshot.map(({ container, samples }) => (
+                <Card key={container.id} className="mb-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4>{container.name}</h4>
+                      <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
+                      Revert to Last Nightly Save
+                    </Button>
+                  </div>
+                  {/* ...other container details... */}
+                </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      );
+    };
+
+    // Render container card
+    const renderContainerCard = (container) => (
+      <Card key={container.id} className="mb-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4>{container.name}</h4>
+            <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+          </div>
           <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
             Revert to Last Nightly Save
           </Button>
-          <Button size="sm" variant="outline" onClick={() => handleEditContainer(container)}>
-            Edit
-          </Button>
         </div>
-      </div>
-      {/* ...other container details... */}
-    </Card>
-  );
+        {/* ...other container details... */}
+      </Card>
+    );
 
-  // ...existing code...
+    const todaySnapshot = getTodayNightlySnapshot();
+    const isAdmin = true; // Replace with your actual admin check
 
-  // Main render logic
-  if (selectedContainer) {
+    // Main render logic
+    if (selectedContainer) {
+      return (
+        <div className="h-screen flex flex-col">
+          <div className="p-6">
+            <Header 
+              actions={(
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create New Container
+                </Button>
+              )}
+            />
+          </div>
+          <div className="flex-1">
+            <PlasmaBoxDashboard 
+              container={selectedContainer} 
+              onContainerUpdate={handleContainerUpdate}
+              initialSelectedSample={selectedSampleForView}
+              onSampleSelectionHandled={() => setSelectedSampleForView(null)}
+              highlightSampleIds={
+                sampleSearchMode === 'worklist' ? worklistSampleIds : 
+                sampleSearchMode === 'bulk' ? bulkSearchSampleIds : 
+                manualSearchSampleIds
+              }
+            />
+          </div>
+          {/* Revert Confirmation Dialog */}
+          <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Revert Container?</DialogTitle>
+                <DialogDescription>
+                  This will restore the container's samples to the last nightly backup. This action cannot be undone.<br />
+                  Are you sure you want to revert?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={confirmRevertContainer}>Revert</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      );
+    }
+
     return (
-      <div className="h-screen flex flex-col">
-        <div className="p-6">
-          <div className="flex items-center mb-4">
-            <Header />
-            <div className="flex-1" />
-            <Button variant="ghost" onClick={() => setSelectedContainer(null)} className="ml-auto">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Containers
+      <div className="p-6">
+        <Header 
+          actions={(
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Container
             </Button>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <Badge variant="outline">{selectedContainer.sampleType}</Badge>
-            <Badge variant="outline">Last Updated: {selectedContainer.lastUpdated}</Badge>
-          </div>
-        </div>
-        <div className="flex-1">
-          <PlasmaBoxDashboard 
-            container={selectedContainer} 
-            onContainerUpdate={handleContainerUpdate}
-            initialSelectedSample={selectedSampleForView}
-            onSampleSelectionHandled={() => setSelectedSampleForView(null)}
-            highlightSampleIds={
-              sampleSearchMode === 'worklist' ? worklistSampleIds : 
-              sampleSearchMode === 'bulk' ? bulkSearchSampleIds : 
-              manualSearchSampleIds
-            }
-          />
-        </div>
+          )}
+        />
+
+        {/* Dialogs */}
+        <CreateContainerDialog
+          open={isCreateDialogOpen}
+          onOpenChange={setIsCreateDialogOpen}
+          onCreateContainer={handleCreateContainer}
+        />
+        <EditContainerDialog
+          open={isEditDialogOpen}
+          onOpenChange={handleEditDialogClose}
+          container={containerToEdit}
+          onUpdateContainer={handleContainerUpdate}
+        />
+
+        {/* Admin Nightly Snapshot View */}
+        {isAdmin && renderAdminNightlySnapshot()}
+
+        {/* Render all containers with revert button */}
+        {containers.map(renderContainerCard)}
+
+        {/* Main Content with Tabs */}
+        {containers.length === 0 ? (
+          <Card className="p-12 text-center">
+            <div className="text-muted-foreground">
+              <Thermometer className="w-16 h-16 mx-auto mb-6 opacity-30" />
+              <h3 className="mb-3">Welcome to Plasma Storage Management</h3>
+              <p className="text-sm mb-6 max-w-md mx-auto">
+                Get started by creating your first storage container. You can organize different sample types 
+                including DP Pools, cfDNA Tubes, DTC Tubes, MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.
+              </p>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First Container
+              </Button>
+            </div>
+          </Card>
+        ) : (
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'containers' | 'archive' | 'samples')}>
+            <TabsList className="grid w-full grid-cols-3 max-w-lg mb-6">
+              <TabsTrigger value="containers" className="flex items-center gap-2">
+                <Thermometer className="w-4 h-4" />
+                Containers ({activeContainers.length})
+              </TabsTrigger>
+              <TabsTrigger value="archive" className="flex items-center gap-2">
+                <Archive className="w-4 h-4" />
+                Archive ({archivedContainers.length})
+              </TabsTrigger>
+              <TabsTrigger value="samples" className="flex items-center gap-2">
+                <TestTube className="w-4 h-4" />
+                Samples ({totalSampleCount})
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="containers" className="space-y-6">
+              {/* ...container tab content... */}
+            </TabsContent>
+            <TabsContent value="archive" className="space-y-6">
+              {/* ...archive tab content... */}
+            </TabsContent>
+            <TabsContent value="samples" className="space-y-6">
+              {/* ...samples tab content... */}
+            </TabsContent>
+          </Tabs>
+        )}
+
         {/* Revert Confirmation Dialog */}
         <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
           <DialogContent>
@@ -496,65 +620,22 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         </Dialog>
       </div>
     );
-  }
 
-  return (
-    <div className="p-6">
-      <Header 
-        actions={(
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Container
-          </Button>
-        )}
-      />
 
-      {/* Dialogs */}
-      <CreateContainerDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onCreateContainer={handleCreateContainer}
-      />
-      {/* Move handleEditDialogClose above this usage */}
-      <EditContainerDialog
-        open={isEditDialogOpen}
-        onOpenChange={() => {
-          setIsEditDialogOpen(false);
-          setContainerToEdit(null);
-        }}
-        container={containerToEdit}
-        onUpdateContainer={handleContainerUpdate}
-      />
+  {/* Render all containers with revert button */}
+  {containers.map(renderContainerCard)}
 
-      {/* Admin Nightly Snapshot View */}
-      {/* ...existing code for admin snapshot... */}
+  // Add revert button to each container card (example, adapt to your UI)
+  // Example usage in your container rendering:
+  // <Button onClick={() => handleRevertContainer(container.id)} variant="outline" size="sm">Revert to Last Nightly Save</Button>
+    setContainerToEdit(container);
+    setIsEditDialogOpen(true);
+  };
 
-      {/* Render all containers with revert and edit buttons */}
-      {containers.map(renderContainerCard)}
-
-      {/* Main Content with Tabs */}
-      {/* ...existing code for tabs... */}
-
-      {/* Revert Confirmation Dialog */}
-      <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Revert Container?</DialogTitle>
-            <DialogDescription>
-              This will restore the container's samples to the last nightly backup. This action cannot be undone.<br />
-              Are you sure you want to revert?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmRevertContainer}>Revert</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-
-  // Removed duplicate handleEditDialogClose
+  const handleEditDialogClose = () => {
+    setIsEditDialogOpen(false);
+    setContainerToEdit(null);
+  };
 
   const handleNavigateToSample = (containerId: string, sampleId: string) => {
     const container = containers.find(c => c.id === containerId);
@@ -690,10 +771,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       
       <EditContainerDialog
         open={isEditDialogOpen}
-        onOpenChange={() => {
-          setIsEditDialogOpen(false);
-          setContainerToEdit(null);
-        }}
+        onOpenChange={handleEditDialogClose}
         container={containerToEdit}
         onUpdateContainer={handleContainerUpdate}
         // Force re-render when container changes
