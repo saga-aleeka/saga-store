@@ -280,7 +280,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           const matchesSearch = searchQuery === '' ||
             movement.sampleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
             movement.actionType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            movement.toContainer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            movement.toContainerId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             movement.notes?.toLowerCase().includes(searchQuery.toLowerCase());
 
           return matchesSearch;
@@ -602,7 +602,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                             </Badge>
                           </TableCell>
                           <TableCell className="font-mono text-sm">
-                            {movement.toContainer || movement.fromContainer || '-'}
+                            {movement.toContainerId || movement.fromContainerName || '-'}
                           </TableCell>
                           <TableCell className="font-mono text-sm">
                             {movement.toPosition || movement.fromPosition || '-'}

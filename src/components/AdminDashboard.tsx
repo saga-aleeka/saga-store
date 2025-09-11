@@ -1,4 +1,11 @@
 import React, { useState, useRef } from 'react';
+// Types for preview objects
+interface Preview<T> {
+  valid: boolean;
+  data: T[];
+  errors: string[];
+}
+import GridSnapshotView from './GridSnapshotView';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -33,7 +40,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       reader.readAsText(file);
     }
   };
-  const [containerPreview, setContainerPreview] = useState(null);
+  const [containerPreview, setContainerPreview] = useState<Preview<any> | null>(null);
 
   const handleSampleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -47,7 +54,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       reader.readAsText(file);
     }
   };
-  const [samplePreview, setSamplePreview] = useState(null);
+  const [samplePreview, setSamplePreview] = useState<Preview<any> | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState('');
   const containerFileRef = useRef(null);
@@ -144,7 +151,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     // Parse backupDataRaw and convert to CSV
     const backupData = JSON.parse(backupDataRaw);
     let rows = ['containerId,containerName,location,containerType,sampleType,temperature,sampleId,position'];
-    backupData.forEach(entry => {
+    backupData.forEach((entry: any) => {
       const c = entry.container;
       const samples = entry.samples || [];
       if (samples && Object.keys(samples).length > 0) {
@@ -317,7 +324,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
                           <ul className="list-disc list-inside space-y-1">
-                            {containerPreview.errors.map((error, index) => (
+                            {containerPreview.errors.map((error: string, index: number) => (
                               <li key={index} className="text-xs">{error}</li>
                             ))}
                           </ul>
@@ -413,7 +420,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
                           <ul className="list-disc list-inside space-y-1">
-                            {samplePreview.errors.map((error, index) => (
+                            {samplePreview.errors.map((error: string, index: number) => (
                               <li key={index} className="text-xs">{error}</li>
                             ))}
                           </ul>
@@ -461,6 +468,26 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                   </Button>
                 </div>
               </div>
+            </Card>
+            <Card className="p-6 mt-6">
+              <h3 className="mb-4">Snapshot Grid View</h3>
+              <GridSnapshotView containers={containers.map(container => {
+                const storageKey = `samples-${container.id}`;
+                const savedSamples = localStorage.getItem(storageKey);
+                let samples = [];
+                if (savedSamples) {
+                  try {
+                    samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
+                      ...sample,
+                      position,
+                    }));
+                  } catch (e) {}
+                }
+                return {
+                  ...container,
+                  samples,
+                };
+              })} />
             </Card>
           </TabsContent>
           <TabsContent value="manage" className="space-y-6">
