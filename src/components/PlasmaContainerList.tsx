@@ -1,4 +1,13 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from './ui/dialog';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -83,6 +92,44 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+  // Use props if provided, otherwise use local state
+
+  // Manual backup logic for admin
+  const handleManualBackup = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const containersToBackup = Array.isArray(containers) ? containers : [];
+    const backupData = containersToBackup.map(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      return {
+        container,
+        samples: savedSamples ? JSON.parse(savedSamples) : []
+      };
+    });
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
+  };
+
+  // Download snapshot as JSON
+  const handleDownloadSnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) {
+      alert('No snapshot found for today.');
+      return;
+    }
+    const blob = new Blob([backupDataRaw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshot-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   // Local state for containers if not provided by props
   const [localContainers, setLocalContainers] = useState([]);
   const STORAGE_KEY = 'plasma-containers';
@@ -133,23 +180,35 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   }, [propsContainers, localContainers]);
 
   // Revert container to last nightly backup
+  const [revertDialogOpen, setRevertDialogOpen] = useState(false);
+  const [containerIdToRevert, setContainerIdToRevert] = useState<string | null>(null);
+
   const handleRevertContainer = (containerId: string) => {
+    setContainerIdToRevert(containerId);
+    setRevertDialogOpen(true);
+  };
+
+  const confirmRevertContainer = () => {
+    if (!containerIdToRevert) return;
     const today = new Date().toISOString().slice(0, 10);
     const backupKey = `nightly-backup-${today}`;
     const backupDataRaw = localStorage.getItem(backupKey);
     if (!backupDataRaw) {
       alert('No nightly backup found for today.');
+      setRevertDialogOpen(false);
       return;
     }
     const backupData = JSON.parse(backupDataRaw);
-    const containerBackup = backupData.find((b: any) => b.container.id === containerId);
+    const containerBackup = backupData.find((b: any) => b.container.id === containerIdToRevert);
     if (!containerBackup) {
       alert('No backup found for this container.');
+      setRevertDialogOpen(false);
       return;
     }
     // Restore samples for this container
-    const storageKey = `samples-${containerId}`;
+    const storageKey = `samples-${containerIdToRevert}`;
     localStorage.setItem(storageKey, JSON.stringify(containerBackup.samples));
+    setRevertDialogOpen(false);
     alert('Container reverted to last nightly save. Please refresh to see changes.');
   };
 
@@ -357,115 +416,211 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   const handleEditContainer = (container: PlasmaContainer) => {
   // ...existing code...
-  // Helper to get today's nightly snapshot
-  const getTodayNightlySnapshot = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const backupDataRaw = localStorage.getItem(backupKey);
-    if (!backupDataRaw) return [];
-    try {
-      return JSON.parse(backupDataRaw);
-    } catch {
-      return [];
-    }
-  };
+    // Helper to get today's nightly snapshot
+    const getTodayNightlySnapshot = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const backupKey = `nightly-backup-${today}`;
+      const backupDataRaw = localStorage.getItem(backupKey);
+      if (!backupDataRaw) return [];
+      try {
+        return JSON.parse(backupDataRaw);
+      } catch {
+        return [];
+      }
+    };
 
-  // Example: Add revert button to each container card
-  // (Replace with your actual container card rendering logic)
-  const renderContainerCard = (container) => (
-    <Card key={container.id} className="mb-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h4>{container.name}</h4>
-          <p className="text-xs text-muted-foreground">Location: {container.location}</p>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
-          Revert to Last Nightly Save
-        </Button>
-      </div>
-      {/* ...other container details... */}
-    </Card>
-  );
-
-  // Admin view: Show nightly snapshot
-  const isAdmin = true; // Replace with your actual admin check
-  // Manual backup logic for admin
-  const handleManualBackup = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const containersToBackup = Array.isArray(containers) ? containers : [];
-    const backupData = containersToBackup.map(container => {
-      const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
-      return {
-        container,
-        samples: savedSamples ? JSON.parse(savedSamples) : []
-      };
-    });
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
-    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
-  };
-
-  // Download snapshot as JSON
-  const handleDownloadSnapshot = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const backupDataRaw = localStorage.getItem(backupKey);
-    if (!backupDataRaw) {
-      alert('No snapshot found for today.');
-      return;
-    }
-    const blob = new Blob([backupDataRaw], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `snapshot-${today}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-  const todaySnapshot = getTodayNightlySnapshot();
-
-  const renderAdminNightlySnapshot = () => (
-    <Card className="p-4 mb-6">
-      <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
-      <div className="flex gap-2 mb-4">
-        <Button size="sm" variant="outline" onClick={handleManualBackup}>
-          Manual Backup
-        </Button>
-        <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>
-          Download Snapshot
-        </Button>
-      </div>
-      {todaySnapshot.length === 0 ? (
-        <p className="text-muted-foreground">No snapshot found for today.</p>
-      ) : (
-        todaySnapshot.map(({ container, samples }) => (
-          <div key={container.id} className="mb-4">
-            <h4>{container.name} <span className="text-xs text-muted-foreground">({container.location})</span></h4>
-            <div className="text-xs text-muted-foreground">Samples: {Array.isArray(samples) ? samples.length : Object.keys(samples || {}).length}</div>
-            <ScrollArea className="border rounded p-2 mt-1 h-24">
-              <div className="flex flex-wrap gap-1">
-                {Array.isArray(samples)
-                  ? samples.map((s: any, i: number) => {
-                      const sample = s as { sampleId?: string; id?: string; position?: string };
-                      return <Badge key={i} className="text-xs">{sample.sampleId || sample.id || sample.position}</Badge>;
-                    })
-                  : Object.entries(samples || {}).map(([pos, s]: [string, any]) => {
-                      const sample = s as { sampleId?: string; id?: string; position?: string };
-                      return <Badge key={pos} className="text-xs">{sample.sampleId || sample.id || pos}</Badge>;
-                    })}
-              </div>
-            </ScrollArea>
+    // Render admin nightly snapshot
+    const renderAdminNightlySnapshot = () => {
+      return (
+        <Card className="p-4 mb-6">
+          <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+          <div className="flex gap-2 mb-4">
+            <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
+            <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Snapshot</Button>
           </div>
-        ))
-      )}
-    </Card>
-  );
+          {todaySnapshot.length === 0 ? (
+            <p className="text-muted-foreground">No snapshot found for today.</p>
+          ) : (
+            <div>
+              {todaySnapshot.map(({ container, samples }) => (
+                <Card key={container.id} className="mb-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4>{container.name}</h4>
+                      <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
+                      Revert to Last Nightly Save
+                    </Button>
+                  </div>
+                  {/* ...other container details... */}
+                </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      );
+    };
 
-  {/* Admin Nightly Snapshot View */}
-  {isAdmin && renderAdminNightlySnapshot()}
+    // Render container card
+    const renderContainerCard = (container) => (
+      <Card key={container.id} className="mb-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4>{container.name}</h4>
+            <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
+            Revert to Last Nightly Save
+          </Button>
+        </div>
+        {/* ...other container details... */}
+      </Card>
+    );
+
+    const todaySnapshot = getTodayNightlySnapshot();
+    const isAdmin = true; // Replace with your actual admin check
+
+    // Main render logic
+    if (selectedContainer) {
+      return (
+        <div className="h-screen flex flex-col">
+          <div className="p-6">
+            <Header 
+              actions={(
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create New Container
+                </Button>
+              )}
+            />
+          </div>
+          <div className="flex-1">
+            <PlasmaBoxDashboard 
+              container={selectedContainer} 
+              onContainerUpdate={handleContainerUpdate}
+              initialSelectedSample={selectedSampleForView}
+              onSampleSelectionHandled={() => setSelectedSampleForView(null)}
+              highlightSampleIds={
+                sampleSearchMode === 'worklist' ? worklistSampleIds : 
+                sampleSearchMode === 'bulk' ? bulkSearchSampleIds : 
+                manualSearchSampleIds
+              }
+            />
+          </div>
+          {/* Revert Confirmation Dialog */}
+          <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Revert Container?</DialogTitle>
+                <DialogDescription>
+                  This will restore the container's samples to the last nightly backup. This action cannot be undone.<br />
+                  Are you sure you want to revert?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={confirmRevertContainer}>Revert</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6">
+        <Header 
+          actions={(
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Container
+            </Button>
+          )}
+        />
+
+        {/* Dialogs */}
+        <CreateContainerDialog
+          open={isCreateDialogOpen}
+          onOpenChange={setIsCreateDialogOpen}
+          onCreateContainer={handleCreateContainer}
+        />
+        <EditContainerDialog
+          open={isEditDialogOpen}
+          onOpenChange={handleEditDialogClose}
+          container={containerToEdit}
+          onUpdateContainer={handleContainerUpdate}
+        />
+
+        {/* Admin Nightly Snapshot View */}
+        {isAdmin && renderAdminNightlySnapshot()}
+
+        {/* Render all containers with revert button */}
+        {containers.map(renderContainerCard)}
+
+        {/* Main Content with Tabs */}
+        {containers.length === 0 ? (
+          <Card className="p-12 text-center">
+            <div className="text-muted-foreground">
+              <Thermometer className="w-16 h-16 mx-auto mb-6 opacity-30" />
+              <h3 className="mb-3">Welcome to Plasma Storage Management</h3>
+              <p className="text-sm mb-6 max-w-md mx-auto">
+                Get started by creating your first storage container. You can organize different sample types 
+                including DP Pools, cfDNA Tubes, DTC Tubes, MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.
+              </p>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First Container
+              </Button>
+            </div>
+          </Card>
+        ) : (
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'containers' | 'archive' | 'samples')}>
+            <TabsList className="grid w-full grid-cols-3 max-w-lg mb-6">
+              <TabsTrigger value="containers" className="flex items-center gap-2">
+                <Thermometer className="w-4 h-4" />
+                Containers ({activeContainers.length})
+              </TabsTrigger>
+              <TabsTrigger value="archive" className="flex items-center gap-2">
+                <Archive className="w-4 h-4" />
+                Archive ({archivedContainers.length})
+              </TabsTrigger>
+              <TabsTrigger value="samples" className="flex items-center gap-2">
+                <TestTube className="w-4 h-4" />
+                Samples ({totalSampleCount})
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="containers" className="space-y-6">
+              {/* ...container tab content... */}
+            </TabsContent>
+            <TabsContent value="archive" className="space-y-6">
+              {/* ...archive tab content... */}
+            </TabsContent>
+            <TabsContent value="samples" className="space-y-6">
+              {/* ...samples tab content... */}
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {/* Revert Confirmation Dialog */}
+        <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Revert Container?</DialogTitle>
+              <DialogDescription>
+                This will restore the container's samples to the last nightly backup. This action cannot be undone.<br />
+                Are you sure you want to revert?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmRevertContainer}>Revert</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+
 
   {/* Render all containers with revert button */}
   {containers.map(renderContainerCard)}
@@ -549,42 +704,19 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   if (selectedContainer) {
     return (
       <div className="h-screen flex flex-col">
-        <div className="p-6 border-b">
+        <div className="p-6">
           <Header 
-            actions={
-              <>
-                {/* @ts-ignore: Button is a function component, not a constructor */}
-                <Button
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setSelectedContainer(null)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Containers
-                </Button>
-                {selectedContainer.isArchived && (
-                  <Badge className="text-xs bg-archive text-archive-foreground">
-                    <Archive className="w-3 h-3 mr-1" />
-                    Archived
-                  </Badge>
-                )}
-                {selectedContainer.isTraining && (
-                  <Badge className="text-xs bg-training text-training-foreground">
-                    <GraduationCap className="w-3 h-3 mr-1" />
-                    Training
-                  </Badge>
-                )}
-                <Badge 
-                  className={`text-xs ${getSampleTypeColor(selectedContainer.sampleType)}`}
-                >
-                  {selectedContainer.sampleType}
-                </Badge>
-                <Badge variant="outline">
-                  Last Updated: {selectedContainer.lastUpdated}
-                </Badge>
-              </>
-            }
+            actions={(
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Container
+              </Button>
+            )}
           />
+          <div className="flex gap-2 mt-4">
+            <Badge variant="outline">{selectedContainer.sampleType}</Badge>
+            <Badge variant="outline">Last Updated: {selectedContainer.lastUpdated}</Badge>
+          </div>
         </div>
         <div className="flex-1">
           <PlasmaBoxDashboard 
@@ -599,6 +731,22 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             }
           />
         </div>
+        {/* Revert Confirmation Dialog */}
+        <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Revert Container?</DialogTitle>
+              <DialogDescription>
+                This will restore the container's samples to the last nightly backup. This action cannot be undone.<br />
+                Are you sure you want to revert?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRevertDialogOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmRevertContainer}>Revert</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
