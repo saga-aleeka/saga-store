@@ -269,6 +269,16 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                   <p className="text-xs text-muted-foreground">
                     Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
                   </p>
+                  {/* Button to complete file upload, shown after file is selected */}
+                  <Button
+                    variant="default"
+                    className="mt-2"
+                    onClick={importContainers}
+                    disabled={isImporting}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {isImporting ? 'Importing...' : 'Complete Upload'}
+                  </Button>
                 </div>
                 <Tabs defaultValue="grid" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
