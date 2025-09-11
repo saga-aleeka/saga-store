@@ -41,13 +41,13 @@ function getPositions(containers: Container[]): GridPositions {
   const type = containers[0].containerType;
   if (type === '5x5-box') {
     return {
-      columns: ['A','B','C','D','E'],
-      rows: ['1','2','3','4','5']
+      columns: ['1','2','3','4','5'],
+      rows: ['A','B','C','D','E']
     };
   } else if (type === '9x9-box') {
     return {
-      columns: ['A','B','C','D','E','F','G','H','I'],
-      rows: ['1','2','3','4','5','6','7','8','9']
+      columns: ['1','2','3','4','5','6','7','8','9'],
+      rows: ['A','B','C','D','E','F','G','H','I']
     };
   } else {
     // Fallback: use detected positions
@@ -99,7 +99,7 @@ const GridSnapshotView: React.FC<GridSnapshotViewProps> = ({ containers }: GridS
                       <tr key={rowNum}>
                         <td style={{ fontWeight: "bold" }}>{rowNum}</td>
                         {columns.map((col: string) => {
-                          const pos = `${col}${rowNum}`;
+                          const pos = `${rowNum}${col}`;
                           const sample = container.samples.find(s => s.position === pos);
                           return (
                             <td key={pos} style={{ border: "1px solid #ccc", textAlign: "center" }}>

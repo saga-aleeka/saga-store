@@ -349,11 +349,11 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
         let columns: string[] = [];
         let rows: string[] = [];
         if (container?.containerType === '5x5-box') {
-          columns = ['A','B','C','D','E'];
-          rows = ['1','2','3','4','5'];
+          columns = ['1','2','3','4','5'];
+          rows = ['A','B','C','D','E'];
         } else if (container?.containerType === '9x9-box') {
-          columns = ['A','B','C','D','E','F','G','H','I'];
-          rows = ['1','2','3','4','5','6','7','8','9'];
+          columns = ['1','2','3','4','5','6','7','8','9'];
+          rows = ['A','B','C','D','E','F','G','H','I'];
         } else {
           // Fallback: use detected positions
           const allPositions = movements.map(m => m.toPosition).filter((p): p is string => typeof p === 'string' && p.length > 1);
@@ -364,11 +364,11 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
         csvSections.push(`${containerName}`);
         // First row: column labels
         csvSections.push(["", ...columns].join(","));
-        // For each row number, output row label and sample IDs for each column
-        rows.forEach(rowNum => {
-          const row = [rowNum];
-          columns.forEach(col => {
-            const pos = `${col}${rowNum}`;
+        // For each row letter, output row label and sample IDs for each column number
+        rows.forEach(rowLetter => {
+          const row = [rowLetter];
+          columns.forEach(colNum => {
+            const pos = `${rowLetter}${colNum}`;
             const sample = movements.find((m: any) => m.toPosition === pos);
             row.push(sample ? sample.sampleId : "");
           });
