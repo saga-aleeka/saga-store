@@ -54,9 +54,11 @@ interface SampleMovement {
   userName: string;
   sampleId: string;
   actionType: 'check-in' | 'check-out' | 'move' | 'update';
-  fromContainer?: string;
+  fromContainerId?: string;
+  fromContainerName?: string;
   fromPosition?: string;
-  toContainer?: string;
+  toContainerId?: string;
+  toContainerName?: string;
   toPosition?: string;
   notes?: string;
   success: boolean;
@@ -159,7 +161,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
   // Enhanced sample movements from all sources
   const sampleMovements = useMemo(() => {
     const movements: SampleMovement[] = [];
-    
     // Extract from audit logs
     logs.forEach(log => {
       if (log.action.includes('sample') || log.action.includes('scan') || log.action.includes('check')) {
@@ -172,9 +173,11 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           actionType: log.action.includes('check-out') ? 'check-out' : 
                      log.action.includes('move') ? 'move' : 
                      log.action.includes('update') ? 'update' : 'check-in',
-          fromContainer: log.details.metadata?.fromContainer,
+          fromContainerId: log.details.metadata?.fromContainerId,
+          fromContainerName: log.details.metadata?.fromContainerName,
           fromPosition: log.details.metadata?.fromPosition,
-          toContainer: log.details.metadata?.toContainer || log.details.metadata?.containerId,
+          toContainerId: log.details.metadata?.toContainerId || log.details.metadata?.containerId,
+          toContainerName: log.details.metadata?.toContainerName,
           toPosition: log.details.metadata?.toPosition || log.details.metadata?.position,
           notes: log.details.description,
           success: log.success
@@ -182,17 +185,14 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
         movements.push(movement);
       }
     });
-
     // Also check sample history from containers
     try {
       const containers = JSON.parse(localStorage.getItem('saga-containers') || '[]') as PlasmaContainer[];
       containers.forEach(container => {
         const samplesKey = `samples-${container.id}`;
         const savedSamples = localStorage.getItem(samplesKey);
-        
         if (savedSamples) {
           const samplesData = JSON.parse(savedSamples);
-          
           // Handle both object and array formats
           const samples = Array.isArray(samplesData) ? samplesData : 
             Object.entries(samplesData).map(([position, data]: [string, any]) => ({
@@ -200,7 +200,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
               sampleId: data.id || data.sampleId,
               history: data.history || []
             }));
-
           samples.forEach((sample: any) => {
             if (sample.history && Array.isArray(sample.history)) {
               sample.history.forEach((historyEntry: any) => {
@@ -211,12 +210,12 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   userName: historyEntry.userInitials || 'Unknown',
                   sampleId: sample.sampleId,
                   actionType: historyEntry.action,
-                  toContainer: container.id,
+                  toContainerId: container.id,
+                  toContainerName: container.name,
                   toPosition: sample.position,
                   notes: historyEntry.notes,
                   success: true
                 };
-                
                 // Avoid duplicates
                 if (!movements.find(m => m.id === movement.id)) {
                   movements.push(movement);
@@ -229,7 +228,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
     } catch (error) {
       console.error('Error loading sample movements:', error);
     }
-
     return Array.isArray(movements) ? movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) : [];
   }, [logs]);
 

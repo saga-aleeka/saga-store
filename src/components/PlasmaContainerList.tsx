@@ -46,9 +46,7 @@ export interface PlasmaContainer {
     timestamp: string;
     action: string;
     user: string;
-    containerName: string;
     notes?: string;
-    state?: PlasmaContainer;
   }>;
 }
 
@@ -101,8 +99,7 @@ interface PlasmaContainerListProps {
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
   // Example: get current user (replace with your actual logic)
-  // Get current user from localStorage, context, or props (replace with your actual logic)
-  const currentUser = localStorage.getItem('currentUser') || 'Lab User';
+  const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
 
   // Manual backup logic for admin
@@ -409,16 +406,15 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleContainerUpdate = (updatedContainer: PlasmaContainer) => {
-    // Add audit trail entry with container name and user
+    // Add audit trail entry
     const now = new Date().toISOString();
     const auditEntry = {
       timestamp: now,
       action: 'edit',
       user: currentUser,
-      containerName: updatedContainer.name,
-      notes: 'Container edited',
-      state: { ...updatedContainer }
+      notes: 'Container edited'
     };
+    // Defensive: ensure history exists
     let updatedHistory = Array.isArray(updatedContainer.history) ? [...updatedContainer.history] : [];
     updatedHistory.push(auditEntry);
     const containerWithAudit = {
@@ -433,57 +429,6 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       container.id === updatedContainer.id ? containerWithAudit : container
     );
     onContainersChange(updatedContainers);
-  };
-  // Audit trail UI state
-  const [selectedAuditIndex, setSelectedAuditIndex] = useState<number | null>(null);
-
-  // Render audit trail for selected container
-  const renderAuditTrail = (container: PlasmaContainer) => {
-    if (!container.history || container.history.length === 0) return <p className="text-muted-foreground">No audit history.</p>;
-    return (
-      <Card className="p-4 mb-4">
-        <h4 className="mb-2">Audit Trail</h4>
-        <ul className="mb-4">
-          {container.history.map((entry, idx) => (
-            <li key={idx} className={`mb-2 p-2 rounded ${selectedAuditIndex === idx ? 'bg-gray-100' : ''}`}>
-              <button
-                className="w-full text-left"
-                onClick={() => setSelectedAuditIndex(idx)}
-              >
-                <span className="font-semibold">{entry.action}</span> by <span className="text-blue-700">{entry.user}</span> on <span className="text-xs">{new Date(entry.timestamp).toLocaleString()}</span> (<span className="text-green-700">{entry.containerName}</span>)
-              </button>
-              {selectedAuditIndex === idx && (
-                <div className="mt-2">
-                  <pre className="bg-gray-50 p-2 text-xs rounded border">{JSON.stringify(entry.state, null, 2)}</pre>
-                  <Button size="sm" variant="outline" className="mt-2" onClick={() => handleRevertToAudit(container, idx)}>
-                    Revert to this audit
-                  </Button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Card>
-    );
-  };
-
-  // Revert container to a specific audit entry
-  const handleRevertToAudit = (container: PlasmaContainer, auditIdx: number) => {
-    if (!container.history || !container.history[auditIdx]) return;
-    const auditState = container.history[auditIdx].state;
-    // Defensive: preserve audit history up to this point
-    const revertedHistory = container.history.slice(0, auditIdx + 1);
-    const revertedContainer = {
-      ...auditState,
-      history: revertedHistory
-    };
-    if (typeof onContainersChange !== 'function') return;
-    const updatedContainers = containers.map(c =>
-      c.id === container.id ? revertedContainer : c
-    );
-    onContainersChange(updatedContainers);
-    alert(`Reverted to audit entry #${auditIdx + 1} for container '${container.name}'.`);
-    setSelectedAuditIndex(null);
   };
 
   // ...existing code...
@@ -641,8 +586,6 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             <Badge variant="outline">{selectedContainer.sampleType}</Badge>
             <Badge variant="outline">Last Updated: {selectedContainer.lastUpdated}</Badge>
           </div>
-          {/* Audit Trail UI */}
-          {renderAuditTrail(selectedContainer)}
         </div>
         <div className="flex-1">
           <PlasmaBoxDashboard 
