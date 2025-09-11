@@ -150,39 +150,33 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     }
     // Parse backupDataRaw and convert to grid CSV format
     const backupData = JSON.parse(backupDataRaw);
-    // Group by sampleType and container
+    // For each container, output grid: first row is A,B,C..., then each row is 1,sampleID,sampleID...
     let csvSections: string[] = [];
-    const containersByType: { [sampleType: string]: { [containerName: string]: any } } = {};
     backupData.forEach((entry: any) => {
       const c = entry.container;
       const samples = Array.isArray(entry.samples)
         ? entry.samples
         : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
-      const sampleType = c.sampleType || 'Unknown';
-      const containerName = c.name || c.id || 'Unknown';
-      if (!containersByType[sampleType]) containersByType[sampleType] = {};
-      containersByType[sampleType][containerName] = { samples, container: c };
-    });
-    Object.entries(containersByType).forEach(([sampleType, containersObj]) => {
-      csvSections.push(`${sampleType}`);
-      Object.entries(containersObj).forEach(([containerName, { samples, container }]) => {
-        // Get all positions for this container
-        const positions = Array.from(new Set(samples.map((s: any) => s.position))).sort();
-        // Header row: container name
-        csvSections.push(`${containerName},,,`);
-        // Second row: positions
-        csvSections.push(["", ...positions].join(","));
-        // Third row: sample IDs at each position
-        const row = ["Contents"];
-        positions.forEach(pos => {
+      // Build grid: columns are A,B,C..., rows are 1,2,...
+      // Map positions to grid: position like 'A1', 'B2', etc.
+      const allPositions = samples.map((s: any) => s.position).filter(Boolean);
+      const columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
+      const rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+      // Header: container name
+      csvSections.push(`${c.name}`);
+      // First row: column labels
+      csvSections.push(["", ...columns].join(","));
+      // For each row number, output row label and sample IDs for each column
+      rows.forEach(rowNum => {
+        const row = [rowNum];
+        columns.forEach(col => {
+          const pos = `${col}${rowNum}`;
           const sample = samples.find((s: any) => s.position === pos);
           row.push(sample ? sample.id || sample.sampleId : "");
         });
         csvSections.push(row.join(","));
-        // Blank line between containers
-        csvSections.push("");
       });
-      // Blank line between sample types
+      // Blank line between containers
       csvSections.push("");
     });
     const csvContent = csvSections.join("\n");
