@@ -448,7 +448,10 @@ export default function App() {
           </div>
         </div>
 
-        <Tabs defaultValue="containers" className="p-6">
+        <Tabs defaultValue={(() => {
+          const urlParams = new URLSearchParams(window.location.search);
+          return urlParams.get("tab") || "containers";
+        })()} className="p-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="containers" className="flex items-center gap-2">
               <Database className="h-4 w-4" />
