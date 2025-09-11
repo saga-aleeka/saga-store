@@ -131,7 +131,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
-  // Helper: Download snapshot
+  // Helper: Download snapshot as CSV
   const handleDownloadSnapshot = () => {
     const today = new Date().toISOString().slice(0, 10);
     const backupKey = `nightly-backup-${today}`;
@@ -140,11 +140,27 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
       alert('No snapshot found for today.');
       return;
     }
-    const blob = new Blob([backupDataRaw], { type: 'application/json' });
+    // Parse backupDataRaw and convert to CSV
+    const backupData = JSON.parse(backupDataRaw);
+    let rows = ['containerId,containerName,location,containerType,sampleType,temperature,sampleId,position'];
+    backupData.forEach(entry => {
+      const c = entry.container;
+      const samples = entry.samples || [];
+      if (samples && Object.keys(samples).length > 0) {
+        Object.entries(samples).forEach(([position, sample]) => {
+          const s = sample as any;
+          rows.push(`"${c.id}","${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}","${s.id}","${position}"`);
+        });
+      } else {
+        rows.push(`"${c.id}","${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}",,""`);
+      }
+    });
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `snapshot-${today}.json`;
+    a.download = `snapshot-${today}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
