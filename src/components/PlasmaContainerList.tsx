@@ -42,6 +42,12 @@ export interface PlasmaContainer {
   sampleType: SampleType;
   isTraining?: boolean;
   isArchived?: boolean; // New field for archival containers
+  history?: Array<{
+    timestamp: string;
+    action: string;
+    user: string;
+    notes?: string;
+  }>;
 }
 
 export const getGridDimensions = (containerType: ContainerType, sampleType?: SampleType) => {
@@ -92,6 +98,8 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+  // Example: get current user (replace with your actual logic)
+  const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
 
   // Manual backup logic for admin
@@ -398,19 +406,28 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleContainerUpdate = (updatedContainer: PlasmaContainer) => {
-    console.log('handleContainerUpdate called with:', updatedContainer);
-    console.log('onContainersChange type:', typeof onContainersChange);
-    
+    // Add audit trail entry
+    const now = new Date().toISOString();
+    const auditEntry = {
+      timestamp: now,
+      action: 'edit',
+      user: currentUser,
+      notes: 'Container edited'
+    };
+    // Defensive: ensure history exists
+    let updatedHistory = Array.isArray(updatedContainer.history) ? [...updatedContainer.history] : [];
+    updatedHistory.push(auditEntry);
+    const containerWithAudit = {
+      ...updatedContainer,
+      history: updatedHistory
+    };
     if (typeof onContainersChange !== 'function') {
       console.error('onContainersChange is not a function:', onContainersChange);
       return;
     }
-    
-    const updatedContainers = containers.map(container => 
-      container.id === updatedContainer.id ? updatedContainer : container
+    const updatedContainers = containers.map(container =>
+      container.id === updatedContainer.id ? containerWithAudit : container
     );
-    
-    console.log('Calling onContainersChange with:', updatedContainers);
     onContainersChange(updatedContainers);
   };
 
