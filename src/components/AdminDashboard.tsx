@@ -157,25 +157,27 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
       const samples = Array.isArray(entry.samples)
         ? entry.samples
         : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
-      // Build grid: columns are A,B,C..., rows are 1,2,...
-      // Map positions to grid: position like 'A1', 'B2', etc.
-  const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
-  const columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
-  const rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+      // Build full grid: columns are A,B,C..., rows are 1,2,...
+      // Find max columns and rows for this container type
+      const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
+      const columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
+      const rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
+      // Optionally pad columns/rows to a fixed size if desired (e.g., always show A-E, 1-5)
       // Header: container name
       csvSections.push(`${c.name}`);
       // First row: column labels
       csvSections.push(["", ...columns].join(","));
       // For each row number, output row label and sample IDs for each column
-      rows.forEach(rowNum => {
+      (rows as string[]).forEach(rowNum => {
         const row = [rowNum];
-        columns.forEach(col => {
+        (columns as string[]).forEach(col => {
           const pos = `${col}${rowNum}`;
           const sample = samples.find((s: any) => s.position === pos);
           row.push(sample ? sample.id || sample.sampleId : "");
         });
         csvSections.push(row.join(","));
       });
+      // Fill in missing rows/columns with blanks if needed
       // Blank line between containers
       csvSections.push("");
     });
