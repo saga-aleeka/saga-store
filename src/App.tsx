@@ -475,7 +475,24 @@ export default function App() {
             <AdminDashboard
               onExitAdmin={handleExitAdmin}
               containers={containers}
-              onContainersChange={handleContainersChange}
+              onContainersChange={(containers) => {
+                // Remove mapping for occupiedSlots and totalSlots if not present in PlasmaContainer type
+                const plasmaContainers = containers.map((container) => {
+                  // Only add lastUpdated if it exists in the container object
+                  if ("lastUpdated" in container) {
+                  return container;
+                  }
+                  return { ...container };
+                });
+                handleContainersChange(
+                  plasmaContainers.map((container) => ({
+                    ...container,
+                    occupiedSlots: "occupiedSlots" in container && typeof container.occupiedSlots === "number" ? container.occupiedSlots : 0,
+                    totalSlots: "totalSlots" in container && typeof container.totalSlots === "number" ? container.totalSlots : 0,
+                    lastUpdated: "lastUpdated" in container && typeof container.lastUpdated === "string" ? container.lastUpdated : new Date().toISOString(),
+                  })) as PlasmaContainer[]
+                );
+              }}
               {...collaborationProps}
             />
           </TabsContent>
