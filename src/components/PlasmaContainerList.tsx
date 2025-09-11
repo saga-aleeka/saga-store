@@ -705,21 +705,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     return (
       <div className="h-screen flex flex-col">
         <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <Header 
-              actions={(
-                <>
-                  <Button variant="ghost" onClick={() => setSelectedContainer(null)} className="ml-2">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Containers
-                  </Button>
-                  <Button onClick={() => setIsCreateDialogOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create New Container
-                  </Button>
-                </>
-              )}
-            />
+          <div className="flex items-center mb-4">
+            <Header />
+            <div className="flex-1" />
+            <Button variant="ghost" onClick={() => setSelectedContainer(null)} className="ml-auto">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Containers
+            </Button>
           </div>
           <div className="flex gap-2 mt-4">
             <Badge variant="outline">{selectedContainer.sampleType}</Badge>
