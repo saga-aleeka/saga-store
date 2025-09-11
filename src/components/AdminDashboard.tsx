@@ -225,6 +225,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
   };
 
   // Helper: Manual backup
+  // Only save snapshot on manual backup or at 2am ET (handled elsewhere)
   const handleManualBackup = () => {
     const today = new Date().toISOString().slice(0, 10);
     const backupKey = `nightly-backup-${today}`;
@@ -352,15 +353,14 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
             <TabsTrigger value="manage">Manage</TabsTrigger>
           </TabsList>
           <TabsContent value="import" className="space-y-6">
-            {/* Import Containers Card */}
             <Card className="p-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5" />
-                  <h3>Import Containers</h3>
+                  <h3>Unified Grid Import</h3>
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="containerFile">Upload Container CSV</Label>
+                  <Label htmlFor="containerFile">Upload Grid CSV</Label>
                   <Input
                     ref={containerFileRef}
                     id="containerFile"
@@ -368,65 +368,35 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     accept=".csv"
                     onChange={handleContainerFileUpload}
                   />
-                  {/* Removed Complete Upload button. Import logic is now connected to Import # Containers button below. */}
                   <p className="text-xs text-muted-foreground">
-                    Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
+                    Upload a grid-format CSV to import containers and all samples in one step. The grid format auto-detects sample type and container size. <br />
+                    <b>All samples will be visible in every view after import.</b>
                   </p>
                 </div>
-                <Tabs defaultValue="grid" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="grid">Grid Format</TabsTrigger>
-                    <TabsTrigger value="standard">Standard CSV</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="grid" className="space-y-2">
-                    <Label>Grid CSV Template (Your Format)</Label>
-                    <Textarea
-                      value={gridTemplate}
-                      readOnly
-                      className="font-mono text-xs h-32"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const blob = new Blob([gridTemplate], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'grid-template.csv';
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download Grid Template
-                    </Button>
-                  </TabsContent>
-                  <TabsContent value="standard" className="space-y-2">
-                    <Label>Standard CSV Template</Label>
-                    <Textarea
-                      value={containerTemplate}
-                      readOnly
-                      className="font-mono text-xs h-20"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const blob = new Blob([containerTemplate], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'container-template.csv';
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download Standard Template
-                    </Button>
-                  </TabsContent>
-                </Tabs>
+                <div className="space-y-2">
+                  <Label>Grid CSV Template</Label>
+                  <Textarea
+                    value={gridTemplate}
+                    readOnly
+                    className="font-mono text-xs h-32"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const blob = new Blob([gridTemplate], { type: 'text/csv' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'grid-template.csv';
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Grid Template
+                  </Button>
+                </div>
                 {containerPreview && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -446,7 +416,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-blue-600" />
                         <span className="text-sm text-blue-600">
-                          + {samplePreview.data.length} samples detected in grid
+                          {samplePreview.data.length} samples detected in grid
                         </span>
                       </div>
                     )}
@@ -470,103 +440,14 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                           className="w-full"
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          {isImporting ? 'Importing...' : 
-                            samplePreview && samplePreview.data.length > 0 
-                              ? `Import ${containerPreview.data.length} Containers + ${samplePreview.data.length} Samples`
-                              : `Import ${containerPreview.data.length} Containers`
-                          }
+                          {isImporting ? 'Importing...' : `Import ${containerPreview.data.length} Containers & Samples`}
                         </Button>
                         {samplePreview && samplePreview.data.length > 0 && (
                           <p className="text-xs text-muted-foreground text-center">
-                            ✨ Samples from grid will be imported automatically with containers
+                            ✨ All samples from the grid will be imported and visible in every view
                           </p>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Card>
-            {/* Import Samples Card */}
-            <Card className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  <h3>Import Samples</h3>
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="sampleFile">Upload Sample CSV</Label>
-                  <Input
-                    ref={sampleFileRef}
-                    id="sampleFile"
-                    type="file"
-                    accept=".csv"
-                    onChange={handleSampleFileUpload}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    CSV format: containerId, sampleId, position
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>CSV Template</Label>
-                  <Textarea
-                    value={sampleTemplate}
-                    readOnly
-                    className="font-mono text-xs h-16"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const blob = new Blob([sampleTemplate], { type: 'text/csv' });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'sample-template.csv';
-                      a.click();
-                      window.URL.revokeObjectURL(url);
-                    }}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Template
-                  </Button>
-                </div>
-                {samplePreview && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      {samplePreview.valid ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-red-600" />
-                      )}
-                      <span className="text-sm">
-                        {samplePreview.valid 
-                          ? `${samplePreview.data.length} samples ready to import`
-                          : `${samplePreview.errors.length} errors found`
-                        }
-                      </span>
-                    </div>
-                    {!samplePreview.valid && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <ul className="list-disc list-inside space-y-1">
-                            {samplePreview.errors.map((error: string, index: number) => (
-                              <li key={index} className="text-xs">{error}</li>
-                            ))}
-                          </ul>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    {samplePreview.valid && (
-                      <Button 
-                        onClick={importSamples}
-                        disabled={isImporting}
-                        className="w-full"
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        {isImporting ? 'Importing...' : 'Import Samples'}
-                      </Button>
                     )}
                   </div>
                 )}
