@@ -130,10 +130,26 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         });
         localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
       }
+      // Calculate occupiedSlots and totalSlots
+      const containerType = container.containerType || '5x5-box';
+      const sampleType = container.sampleType || 'Plasma Tubes';
+      const totalSlots = (() => {
+        if (containerType === '9x9-box') return 81;
+        if (containerType === '5x5-box') return 25;
+        if (containerType === '5x4-rack') return 20;
+        if (containerType === '9x9-rack') return 81;
+        if (containerType === '7x14-rack') return 98;
+        return 25;
+      })();
+      const occupiedSlots = samplesArr.length;
       return {
         ...container,
         id,
-        samples: samplesArr
+        samples: samplesArr,
+        occupiedSlots,
+        totalSlots,
+        lastUpdated: new Date().toISOString(),
+        sampleType,
       };
     });
     localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
