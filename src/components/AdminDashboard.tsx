@@ -109,8 +109,32 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    console.log('Importing containers...');
-    // Add logic to handle container import here
+    if (!containerPreview || !containerPreview.valid || !containerPreview.data.length) return;
+    setIsImporting(true);
+    // Save containers to localStorage
+    const importedContainers = containerPreview.data.map((container: any, idx: number) => {
+      // Assign a unique id if not present
+      const id = container.id || `${container.name.replace(/\s+/g, '_')}_${idx}`;
+      // Save samples for this container
+      if (Array.isArray(container.samples)) {
+        const samplesObj: Record<string, any> = {};
+        container.samples.forEach((sample: any) => {
+          if (sample.position) samplesObj[sample.position] = sample;
+        });
+        localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
+      }
+      return {
+        ...container,
+        id,
+      };
+    });
+    localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
+    if (typeof onContainersChange === 'function') onContainersChange(importedContainers);
+    setIsImporting(false);
+    setImportResults(`Imported ${importedContainers.length} containers.`);
+    // Optionally clear preview
+    // setContainerPreview(null);
+    // setSamplePreview(null);
   };
 
   // Templates
