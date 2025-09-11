@@ -160,7 +160,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         sampleType,
       };
     });
+    // Save containers and samples to localStorage
     localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
+    // Propagate to main app state so all views update after leaving admin dashboard
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('saga-container-update', { detail: { containers: importedContainers } }));
+    }
     if (typeof onContainersChange === 'function') onContainersChange(importedContainers);
     setIsImporting(false);
     setImportResults(`Imported ${importedContainers.length} containers.`);
