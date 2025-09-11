@@ -7,8 +7,9 @@ import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft } from 'lucide-react';
+import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft, Trash2 } from 'lucide-react';
 import { Header } from './Header';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 
 interface Container {
   id: string;
@@ -190,6 +191,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  const [showClearDialog, setShowClearDialog] = useState(false);
 
   return (
     <div className="p-6 min-h-screen bg-background">
@@ -460,7 +463,49 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
               </div>
             </Card>
           </TabsContent>
-          {/* Add TabsContent for manage tab if needed */}
+          <TabsContent value="manage" className="space-y-6">
+            <Card className="p-6">
+              <div className="space-y-4">
+                <h3>Danger Zone</h3>
+                <p className="text-sm text-muted-foreground">
+                  This will permanently delete all containers and samples from the database. This action cannot be undone.
+                </p>
+                <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Clear All Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Confirm Data Deletion</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to delete <b>ALL</b> containers and samples? This cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowClearDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={() => {
+                        Object.keys(localStorage).forEach(key => {
+                          if (key.startsWith('samples-') || key.startsWith('nightly-backup-')) {
+                            localStorage.removeItem(key);
+                          }
+                        });
+                        if (typeof onContainersChange === 'function') onContainersChange([]);
+                        setShowClearDialog(false);
+                        alert('All data cleared.');
+                      }}>
+                        Yes, Delete Everything
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </div>
