@@ -397,22 +397,25 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     Download Grid Template
                   </Button>
                 </div>
-                {containerPreview && (
+                {/* Always show preview summary if preview exists */}
+                {(containerPreview || samplePreview) && (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      {containerPreview.valid ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-red-600" />
-                      )}
-                      <span className="text-sm">
-                        {containerPreview.valid 
-                          ? `${containerPreview.data.length} containers ready to import`
-                          : `${containerPreview.errors.length} errors found`
-                        }
-                      </span>
-                    </div>
-                    {samplePreview && samplePreview.data.length > 0 && (
+                    {containerPreview && (
+                      <div className="flex items-center gap-2">
+                        {containerPreview.valid ? (
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                        )}
+                        <span className="text-sm">
+                          {containerPreview.valid 
+                            ? `${containerPreview.data.length} containers detected`
+                            : `${containerPreview.errors.length} errors found`
+                          }
+                        </span>
+                      </div>
+                    )}
+                    {samplePreview && (
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-blue-600" />
                         <span className="text-sm text-blue-600">
@@ -420,7 +423,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                         </span>
                       </div>
                     )}
-                    {!containerPreview.valid && (
+                    {/* Error details if invalid */}
+                    {containerPreview && !containerPreview.valid && (
                       <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
@@ -432,7 +436,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                         </AlertDescription>
                       </Alert>
                     )}
-                    {containerPreview.valid && (
+                    {/* Import button only if valid */}
+                    {containerPreview && containerPreview.valid && (
                       <div className="space-y-2">
                         <Button 
                           onClick={importContainers}

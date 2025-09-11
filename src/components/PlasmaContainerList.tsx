@@ -139,7 +139,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     URL.revokeObjectURL(url);
   };
   // Local state for containers if not provided by props
-  const [localContainers, setLocalContainers] = useState([]);
+  const [localContainers, setLocalContainers] = useState<PlasmaContainer[]>([]);
   const STORAGE_KEY = 'plasma-containers';
 
   // Use props if provided, otherwise use local state
@@ -248,22 +248,22 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     }
   }, [localContainers, propsContainers]);
 
-  const [selectedContainer, setSelectedContainer] = useState(null);
-  const [selectedSampleForView, setSelectedSampleForView] = useState(null);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [containerToEdit, setContainerToEdit] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sampleSearchQuery, setSampleSearchQuery] = useState('');
-  const [selectedSampleType, setSelectedSampleType] = useState(null);
-  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
-  const [showTrainingOnly, setShowTrainingOnly] = useState(false);
-  const [activeTab, setActiveTab] = useState('containers');
-  const [worklistSampleIds, setWorklistSampleIds] = useState([]);
-  const [worklistDuplicateIds, setWorklistDuplicateIds] = useState([]);
-  const [sampleSearchMode, setSampleSearchMode] = useState('manual');
-  const [manualSearchSampleIds, setManualSearchSampleIds] = useState([]);
-  const [bulkSearchSampleIds, setBulkSearchSampleIds] = useState([]);
+  const [selectedContainer, setSelectedContainer] = useState<PlasmaContainer | null>(null);
+  const [selectedSampleForView, setSelectedSampleForView] = useState<string | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState<boolean>(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
+  const [containerToEdit, setContainerToEdit] = useState<PlasmaContainer | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sampleSearchQuery, setSampleSearchQuery] = useState<string>('');
+  const [selectedSampleType, setSelectedSampleType] = useState<SampleType | null>(null);
+  const [showAvailableOnly, setShowAvailableOnly] = useState<boolean>(false);
+  const [showTrainingOnly, setShowTrainingOnly] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'containers' | 'archive' | 'samples'>('containers');
+  const [worklistSampleIds, setWorklistSampleIds] = useState<string[]>([]);
+  const [worklistDuplicateIds, setWorklistDuplicateIds] = useState<string[]>([]);
+  const [sampleSearchMode, setSampleSearchMode] = useState<'manual' | 'worklist' | 'bulk'>('manual');
+  const [manualSearchSampleIds, setManualSearchSampleIds] = useState<string[]>([]);
+  const [bulkSearchSampleIds, setBulkSearchSampleIds] = useState<string[]>([]);
 
   // Separate active and archived containers
   const activeContainers = useMemo(() => (Array.isArray(containers) ? containers : []).filter(container => !container.isArchived), [containers]);
@@ -460,7 +460,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           <p className="text-muted-foreground">No snapshot found for today.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }) => (
+            {todaySnapshot.map(({ container, samples }: { container: PlasmaContainer; samples: any[] }) => (
               <Card key={container.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>
@@ -481,7 +481,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   // Render container card
-  const renderContainerCard = (container) => (
+  const renderContainerCard = (container: PlasmaContainer) => (
     <Card key={container.id} className="mb-4">
       <div className="flex justify-between items-center">
         <div>
@@ -583,8 +583,8 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             </Button>
           </div>
           <div className="flex gap-2 mt-4">
-            <Badge variant="outline">{selectedContainer.sampleType}</Badge>
-            <Badge variant="outline">Last Updated: {selectedContainer.lastUpdated}</Badge>
+            <Badge variant="outline">{selectedContainer?.sampleType}</Badge>
+            <Badge variant="outline">Last Updated: {selectedContainer?.lastUpdated}</Badge>
           </div>
         </div>
         <div className="flex-1">
@@ -652,7 +652,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         <Card className="p-12 text-center">
           <div className="text-muted-foreground">
             <Thermometer className="w-16 h-16 mx-auto mb-6 opacity-30" />
-            <h3 className="mb-3">Welcome to Plasma Storage Management</h3>
+            <h3 className="mb-3">Welcome to SAGA Storage Management</h3>
             <p className="text-sm mb-6 max-w-md mx-auto">
               Get started by creating your first storage container. You can organize different sample types 
               including DP Pools, cfDNA Tubes, DTC Tubes, MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.
