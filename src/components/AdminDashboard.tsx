@@ -123,12 +123,13 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           ...sample,
           sampleId: sample.id
         }));
-        // Save samples to localStorage
+        // Save samples to localStorage in both array and object format for compatibility
         const samplesObj: Record<string, any> = {};
         samplesArr.forEach((sample: any) => {
           if (sample.position) samplesObj[sample.position] = sample;
         });
         localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
+        localStorage.setItem(`samples-array-${id}`, JSON.stringify(samplesArr));
       }
       // Calculate occupiedSlots and totalSlots
       const containerType = container.containerType || '5x5-box';
