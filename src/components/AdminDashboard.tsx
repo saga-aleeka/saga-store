@@ -112,7 +112,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   const importContainers = () => {
     if (!containerPreview || !containerPreview.valid || !containerPreview.data.length) return;
     setIsImporting(true);
-    // Save containers to localStorage
+    // Save containers and samples to localStorage
     const importedContainers = containerPreview.data.map((container: any, idx: number) => {
       // Assign a unique id if not present
       const id = container.id || `${container.name.replace(/\s+/g, '_')}_${idx}`;
@@ -162,6 +162,16 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     });
     // Save containers and samples to localStorage
     localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
+    // Force reload of samples for all containers after import
+    importedContainers.forEach((container: any) => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        container.samples = Object.values(JSON.parse(savedSamples));
+      } else {
+        container.samples = [];
+      }
+    });
     // Propagate to main app state so all views update after leaving admin dashboard
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('saga-container-update', { detail: { containers: importedContainers } }));
