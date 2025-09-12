@@ -98,24 +98,6 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
-  // Helper: Manually import a sample grid for a container (for testing)
-  const handleTestImportGrid = (containerId: string) => {
-    // Example: 9x9 grid, row headers A-I, columns 1-9
-    const rows = 9;
-    const cols = 9;
-    const grid: string[][] = [];
-    for (let r = 0; r < rows; r++) {
-      const row: string[] = [];
-      row.push(String.fromCharCode(65 + r)); // Row header: 'A', 'B', ...
-      for (let c = 1; c <= cols; c++) {
-        // For demo, fill every cell with a sample ID like SAMPLE_A1, SAMPLE_B2, ...
-        row.push(`SAMPLE_${String.fromCharCode(65 + r)}${c}`);
-      }
-      grid.push(row);
-    }
-    localStorage.setItem(`samples-${containerId}`, JSON.stringify(grid));
-    alert(`Test grid imported for container ${containerId}. Please refresh or switch tabs to see samples.`);
-  };
   // Example: get current user (replace with your actual logic)
   const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
@@ -157,7 +139,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     URL.revokeObjectURL(url);
   };
   // Local state for containers if not provided by props
-  const [localContainers, setLocalContainers] = useState<PlasmaContainer[]>([]);
+  const [localContainers, setLocalContainers] = useState([]);
   const STORAGE_KEY = 'plasma-containers';
 
   // Use props if provided, otherwise use local state
@@ -266,22 +248,22 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     }
   }, [localContainers, propsContainers]);
 
-  const [selectedContainer, setSelectedContainer] = useState<PlasmaContainer | null>(null);
-  const [selectedSampleForView, setSelectedSampleForView] = useState<string | null>(null);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState<boolean>(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
-  const [containerToEdit, setContainerToEdit] = useState<PlasmaContainer | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sampleSearchQuery, setSampleSearchQuery] = useState<string>('');
-  const [selectedSampleType, setSelectedSampleType] = useState<SampleType | null>(null);
-  const [showAvailableOnly, setShowAvailableOnly] = useState<boolean>(false);
-  const [showTrainingOnly, setShowTrainingOnly] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'containers' | 'archive' | 'samples'>('containers');
-  const [worklistSampleIds, setWorklistSampleIds] = useState<string[]>([]);
-  const [worklistDuplicateIds, setWorklistDuplicateIds] = useState<string[]>([]);
-  const [sampleSearchMode, setSampleSearchMode] = useState<'manual' | 'worklist' | 'bulk'>('manual');
-  const [manualSearchSampleIds, setManualSearchSampleIds] = useState<string[]>([]);
-  const [bulkSearchSampleIds, setBulkSearchSampleIds] = useState<string[]>([]);
+  const [selectedContainer, setSelectedContainer] = useState(null);
+  const [selectedSampleForView, setSelectedSampleForView] = useState(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [containerToEdit, setContainerToEdit] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sampleSearchQuery, setSampleSearchQuery] = useState('');
+  const [selectedSampleType, setSelectedSampleType] = useState(null);
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
+  const [showTrainingOnly, setShowTrainingOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState('containers');
+  const [worklistSampleIds, setWorklistSampleIds] = useState([]);
+  const [worklistDuplicateIds, setWorklistDuplicateIds] = useState([]);
+  const [sampleSearchMode, setSampleSearchMode] = useState('manual');
+  const [manualSearchSampleIds, setManualSearchSampleIds] = useState([]);
+  const [bulkSearchSampleIds, setBulkSearchSampleIds] = useState([]);
 
   // Separate active and archived containers
   const activeContainers = useMemo(() => (Array.isArray(containers) ? containers : []).filter(container => !container.isArchived), [containers]);
@@ -311,48 +293,51 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     });
   }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
 
-  // New logic: Import any value found in the cells to the right of the row headers as a sample
-  // For this, assume that for each container, the grid is stored in localStorage as a 2D array (rows x columns)
-  // Each cell to the right of the row header (i.e., columns 1+) is checked for a value; if present, it's a sample
+  // Defensive: always arrays
   const allSamples = useMemo(() => {
     const samples: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
     (Array.isArray(containers) ? containers : []).forEach(container => {
       const storageKey = `samples-${container.id}`;
-      const savedGrid = localStorage.getItem(storageKey);
-      if (savedGrid) {
+      const savedSamples = localStorage.getItem(storageKey);
+
+      if (savedSamples) {
         try {
-          const grid = JSON.parse(savedGrid); // Expecting a 2D array: grid[row][col]
-          if (Array.isArray(grid)) {
-            for (let rowIdx = 0; rowIdx < grid.length; rowIdx++) {
-              const row = grid[rowIdx];
-              if (Array.isArray(row)) {
-                for (let colIdx = 1; colIdx < row.length; colIdx++) { // skip col 0 (row header)
-                  const cellValue = row[colIdx];
-                  if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {
-                    // Construct position label, e.g., 'A1', 'B2', etc.
-                    const position = String.fromCharCode(65 + rowIdx) + colIdx;
-                    const sample: PlasmaSample = {
-                      position,
-                      sampleId: cellValue,
-                      storageDate: new Date().toISOString().split('T')[0],
-                      lastAccessed: undefined,
-                      history: [{
-                        timestamp: new Date().toISOString(),
-                        action: 'check-in',
-                        notes: `Imported from grid at position ${position}`
-                      }]
-                    };
-                    samples.push({ sample, container });
-                  }
-                }
-              }
-            }
+          const parsedData = JSON.parse(savedSamples);
+
+          if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
+            Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
+              const sample: PlasmaSample = {
+                position,
+                sampleId: data.id,
+                storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
+                lastAccessed: data.lastAccessed,
+                history: data.history || [{
+                  timestamp: data.timestamp || new Date().toISOString(),
+                  action: 'check-in',
+                  notes: `Initial storage in position ${position}`
+                }]
+              };
+              samples.push({ sample, container });
+            });
+          } else if (Array.isArray(parsedData)) {
+            parsedData.forEach((sample: any) => {
+              const sampleWithHistory = {
+                ...sample,
+                history: sample.history || [{
+                  timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
+                  action: 'check-in' as const,
+                  notes: `Initial storage in position ${sample.position}`
+                }]
+              };
+              samples.push({ sample: sampleWithHistory, container });
+            });
           }
         } catch (error) {
-          console.error(`Error loading grid for container ${container.id}:`, error);
+          console.error(`Error loading samples for container ${container.id}:`, error);
         }
       }
     });
+
     return samples;
   }, [containers]);
 
@@ -475,7 +460,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           <p className="text-muted-foreground">No snapshot found for today.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }: { container: PlasmaContainer; samples: any[] }) => (
+            {todaySnapshot.map(({ container, samples }) => (
               <Card key={container.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>
@@ -496,7 +481,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   // Render container card
-  const renderContainerCard = (container: PlasmaContainer) => (
+  const renderContainerCard = (container) => (
     <Card key={container.id} className="mb-4">
       <div className="flex justify-between items-center">
         <div>
@@ -598,13 +583,12 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             </Button>
           </div>
           <div className="flex gap-2 mt-4">
-            <Badge variant="outline">{selectedContainer?.sampleType}</Badge>
-            <Badge variant="outline">Last Updated: {selectedContainer?.lastUpdated}</Badge>
+            <Badge variant="outline">{selectedContainer.sampleType}</Badge>
+            <Badge variant="outline">Last Updated: {selectedContainer.lastUpdated}</Badge>
           </div>
         </div>
         <div className="flex-1">
           <PlasmaBoxDashboard 
-            key={selectedContainer.id + '-' + (Date.now())}
             container={selectedContainer} 
             onContainerUpdate={handleContainerUpdate}
             initialSelectedSample={selectedSampleForView}
@@ -640,27 +624,10 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     <div className="p-6">
       <Header 
         actions={(
-          <>
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Container
-            </Button>
-            {/* Test Import Button: Only show if containers exist */}
-            {containers.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="ml-2">Test Import Grid</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {containers.map(container => (
-                    <DropdownMenuItem key={container.id} onClick={() => handleTestImportGrid(container.id)}>
-                      Import grid for {container.name} ({container.id})
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Container
+          </Button>
         )}
       />
 
@@ -685,7 +652,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         <Card className="p-12 text-center">
           <div className="text-muted-foreground">
             <Thermometer className="w-16 h-16 mx-auto mb-6 opacity-30" />
-            <h3 className="mb-3">Welcome to SAGA Storage Management</h3>
+            <h3 className="mb-3">Welcome to Plasma Storage Management</h3>
             <p className="text-sm mb-6 max-w-md mx-auto">
               Get started by creating your first storage container. You can organize different sample types 
               including DP Pools, cfDNA Tubes, DTC Tubes, MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.

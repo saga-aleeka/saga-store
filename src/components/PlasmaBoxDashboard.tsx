@@ -53,92 +53,46 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const storageKey = `samples-${container.id}`;
 
   // Load samples from localStorage on mount
-  // Always parse the latest grid format from localStorage
   useEffect(() => {
-    const loadSamples = () => {
-      const savedSamples = localStorage.getItem(storageKey);
-      if (savedSamples) {
-        try {
-          const parsedData = JSON.parse(savedSamples);
-          // Support new grid import format: 2D array with row headers and sample IDs in columns 1+
-          if (Array.isArray(parsedData) && Array.isArray(parsedData[0])) {
-            // Parse grid and extract samples
-            const sampleArray: PlasmaSample[] = [];
-            for (let rowIdx = 0; rowIdx < parsedData.length; rowIdx++) {
-              const row = parsedData[rowIdx];
-              if (Array.isArray(row)) {
-                for (let colIdx = 1; colIdx < row.length; colIdx++) { // skip col 0 (row header)
-                  const cellValue = row[colIdx];
-                  if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {
-                    const position = String.fromCharCode(65 + rowIdx) + colIdx;
-                    sampleArray.push({
-                      position,
-                      sampleId: cellValue,
-                      storageDate: new Date().toISOString().split('T')[0],
-                      lastAccessed: undefined,
-                      history: [{
-                        timestamp: new Date().toISOString(),
-                        action: 'check-in',
-                        notes: `Imported from grid at position ${position}`
-                      }]
-                    });
-                  }
-                }
-              }
-            }
-            setSamples(sampleArray);
-            return;
-          } else if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-            const sampleArray: PlasmaSample[] = Object.entries(parsedData).map(([position, data]: [string, any]) => ({
-              position,
-              sampleId: data.id,
-              storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
-              lastAccessed: data.lastAccessed,
-              history: data.history || [{
-                timestamp: data.timestamp || new Date().toISOString(),
-                action: 'check-in',
-                notes: `Initial storage in position ${position}`
-              }]
-            }));
-            setSamples(sampleArray);
-            return;
-          } else if (Array.isArray(parsedData)) {
-            // Ensure all samples have history arrays
-            const samplesWithHistory = parsedData.map((sample: any) => ({
-              ...sample,
-              history: sample.history || [{
-                timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
-                action: 'check-in' as const,
-                notes: `Initial storage in position ${sample.position}`
-              }]
-            }));
-            setSamples(samplesWithHistory);
-            return;
-          } else {
-            setSamples([]);
-            return;
-          }
-        } catch (error) {
-          console.error('Error loading samples:', error);
+    const savedSamples = localStorage.getItem(storageKey);
+    if (savedSamples) {
+      try {
+        const parsedData = JSON.parse(savedSamples);
+        // Convert from admin import format {position: {id, timestamp}} to PlasmaSample format
+        if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
+          const sampleArray: PlasmaSample[] = Object.entries(parsedData).map(([position, data]: [string, any]) => ({
+            position,
+            sampleId: data.id,
+            storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
+            lastAccessed: data.lastAccessed,
+            history: data.history || [{
+              timestamp: data.timestamp || new Date().toISOString(),
+              action: 'check-in',
+              notes: `Initial storage in position ${position}`
+            }]
+          }));
+          setSamples(sampleArray);
+        } else if (Array.isArray(parsedData)) {
+          // Ensure all samples have history arrays
+          const samplesWithHistory = parsedData.map((sample: any) => ({
+            ...sample,
+            history: sample.history || [{
+              timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
+              action: 'check-in' as const,
+              notes: `Initial storage in position ${sample.position}`
+            }]
+          }));
+          setSamples(samplesWithHistory);
+        } else {
           setSamples([]);
         }
-      } else {
+      } catch (error) {
+        console.error('Error loading samples:', error);
         setSamples([]);
       }
-    };
-
-    loadSamples();
-
-    // Listen for changes to the storage key and reload samples
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === storageKey) {
-        loadSamples();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
+    } else {
+      setSamples([]);
+    }
   }, [container.id, storageKey]);
 
   // Auto-save samples whenever they change

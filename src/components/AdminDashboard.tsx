@@ -15,7 +15,6 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Header } from './Header';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 
@@ -35,51 +34,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       const reader = new FileReader();
       reader.onload = () => {
         const content = reader.result;
-        if (typeof content !== 'string') return;
-        // Parse CSV lines
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-        let containers: any[] = [];
-        let currentContainer: any = null;
-        lines.forEach((line, idx) => {
-          const cols = line.split(',');
-          // Detect new container when 'Box Name:' appears in column B
-          if (cols[1] && cols[1].trim() === 'Box Name:') {
-            // Save previous container if exists
-            if (currentContainer) containers.push(currentContainer);
-            // Start new container
-            currentContainer = {
-              location: cols[0]?.trim(),
-              name: cols[2]?.trim(),
-              containerType: cols.length - 3 > 5 ? '9x9-box' : '5x5-box',
-              sampleType: cols[2]?.trim(), // Will refine below
-              samples: []
-            };
-            // Try to detect sampleType from container name
-            if (currentContainer.name) {
-              if (/plasma/i.test(currentContainer.name)) currentContainer.sampleType = 'Plasma';
-              else if (/cfDNA/i.test(currentContainer.name)) currentContainer.sampleType = 'cfDNA';
-              else if (/dp pool/i.test(currentContainer.name)) currentContainer.sampleType = 'DP Pool';
-              else currentContainer.sampleType = currentContainer.name;
-            }
-          } else if (currentContainer && cols[0] && /^[A-I]$/.test(cols[0].trim())) {
-            // Grid row: cols[0] is row letter, cols[2+] are sample IDs
-            const rowLetter = cols[0].trim();
-            for (let i = 2; i < cols.length; i++) {
-              const sampleId = cols[i].trim();
-              if (sampleId) {
-                const colNum = (i - 1).toString();
-                currentContainer.samples.push({
-                  id: sampleId,
-                  position: `${rowLetter}${colNum}`
-                });
-              }
-            }
-          }
-        });
-        // Push last container
-        if (currentContainer) containers.push(currentContainer);
-        setContainerPreview({ valid: true, data: containers, errors: [] });
-        setSamplePreview({ valid: true, data: containers.flatMap(c => c.samples), errors: [] });
+        console.log('Container file content:', content);
+        // Add logic to process the file content
       };
       reader.readAsText(file);
     }
@@ -110,76 +66,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    if (!containerPreview || !containerPreview.valid || !containerPreview.data.length) return;
-    setIsImporting(true);
-    // Save containers and samples to localStorage
-    const importedContainers = containerPreview.data.map((container: any, idx: number) => {
-      // Assign a unique id if not present
-      const id = container.id || `${container.name.replace(/\s+/g, '_')}_${idx}`;
-      // Extract samples from grid if present
-      let samplesObj: Record<string, any> = {};
-      let samplesArr: any[] = [];
-      if (Array.isArray(container.samples) && container.samples.length > 0) {
-        samplesArr = container.samples.map((sample: any) => ({
-          ...sample,
-          sampleId: sample.id
-        }));
-        samplesArr.forEach((sample: any) => {
-          if (sample.position) samplesObj[sample.position] = sample;
-        });
-        localStorage.setItem(`samples-${id}`, JSON.stringify(samplesObj));
-      }
-      // Calculate occupiedSlots and totalSlots
-      const containerType = container.containerType || '5x5-box';
-      const sampleType = container.sampleType || 'Plasma Tubes';
-      const totalSlots = (() => {
-        if (containerType === '9x9-box') return 81;
-        if (containerType === '5x5-box') return 25;
-        if (containerType === '5x4-rack') return 20;
-        if (containerType === '9x9-rack') return 81;
-        if (containerType === '7x14-rack') return 98;
-        return 25;
-      })();
-      const occupiedSlots = samplesArr.length;
-      // After import, always load samples from localStorage for dashboard/grid views
-      let loadedSamples: any[] = [];
-      try {
-        const saved = localStorage.getItem(`samples-${id}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          loadedSamples = Object.values(parsed);
-        }
-      } catch {}
-      return {
-        ...container,
-        id,
-        samples: loadedSamples,
-        occupiedSlots,
-        totalSlots,
-        lastUpdated: new Date().toISOString(),
-        sampleType,
-      };
-    });
-    // Save containers and samples to localStorage
-    localStorage.setItem('saga-containers', JSON.stringify(importedContainers));
-    // Force reload of samples for all containers after import
-    importedContainers.forEach((container: any) => {
-      const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
-      if (savedSamples) {
-        container.samples = Object.values(JSON.parse(savedSamples));
-      } else {
-        container.samples = [];
-      }
-    });
-    // Propagate to main app state so all views update after leaving admin dashboard
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('saga-container-update', { detail: { containers: importedContainers } }));
-    }
-    if (typeof onContainersChange === 'function') onContainersChange(importedContainers);
-    setIsImporting(false);
-    setImportResults(`Imported ${importedContainers.length} containers.`);
-    toast.success(`Successfully imported ${importedContainers.length} containers and samples.`);
+    console.log('Importing containers...');
+    // Add logic to handle container import here
   };
 
   // Templates
@@ -235,7 +123,6 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
   };
 
   // Helper: Manual backup
-  // Only save snapshot on manual backup or at 2am ET (handled elsewhere)
   const handleManualBackup = () => {
     const today = new Date().toISOString().slice(0, 10);
     const backupKey = `nightly-backup-${today}`;
@@ -363,14 +250,15 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
             <TabsTrigger value="manage">Manage</TabsTrigger>
           </TabsList>
           <TabsContent value="import" className="space-y-6">
+            {/* Import Containers Card */}
             <Card className="p-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5" />
-                  <h3>Unified Grid Import</h3>
+                  <h3>Import Containers</h3>
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="containerFile">Upload Grid CSV</Label>
+                  <Label htmlFor="containerFile">Upload Container CSV</Label>
                   <Input
                     ref={containerFileRef}
                     id="containerFile"
@@ -379,62 +267,87 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     onChange={handleContainerFileUpload}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Upload a grid-format CSV to import containers and all samples in one step. The grid format auto-detects sample type and container size. <br />
-                    <b>All samples will be visible in every view after import.</b>
+                    Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label>Grid CSV Template</Label>
-                  <Textarea
-                    value={gridTemplate}
-                    readOnly
-                    className="font-mono text-xs h-32"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const blob = new Blob([gridTemplate], { type: 'text/csv' });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'grid-template.csv';
-                      a.click();
-                      window.URL.revokeObjectURL(url);
-                    }}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Grid Template
-                  </Button>
-                </div>
-                {/* Always show preview summary if preview exists */}
-                {(containerPreview || samplePreview) && (
+                <Tabs defaultValue="grid" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="grid">Grid Format</TabsTrigger>
+                    <TabsTrigger value="standard">Standard CSV</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="grid" className="space-y-2">
+                    <Label>Grid CSV Template (Your Format)</Label>
+                    <Textarea
+                      value={gridTemplate}
+                      readOnly
+                      className="font-mono text-xs h-32"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const blob = new Blob([gridTemplate], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'grid-template.csv';
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Grid Template
+                    </Button>
+                  </TabsContent>
+                  <TabsContent value="standard" className="space-y-2">
+                    <Label>Standard CSV Template</Label>
+                    <Textarea
+                      value={containerTemplate}
+                      readOnly
+                      className="font-mono text-xs h-20"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const blob = new Blob([containerTemplate], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'container-template.csv';
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Standard Template
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+                {containerPreview && (
                   <div className="space-y-3">
-                    {containerPreview && (
-                      <div className="flex items-center gap-2">
-                        {containerPreview.valid ? (
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4 text-red-600" />
-                        )}
-                        <span className="text-sm">
-                          {containerPreview.valid 
-                            ? `${containerPreview.data.length} containers detected`
-                            : `${containerPreview.errors.length} errors found`
-                          }
-                        </span>
-                      </div>
-                    )}
-                    {samplePreview && (
+                    <div className="flex items-center gap-2">
+                      {containerPreview.valid ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span className="text-sm">
+                        {containerPreview.valid 
+                          ? `${containerPreview.data.length} containers ready to import`
+                          : `${containerPreview.errors.length} errors found`
+                        }
+                      </span>
+                    </div>
+                    {samplePreview && samplePreview.data.length > 0 && (
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-blue-600" />
                         <span className="text-sm text-blue-600">
-                          {samplePreview.data.length} samples detected in grid
+                          + {samplePreview.data.length} samples detected in grid
                         </span>
                       </div>
                     )}
-                    {/* Error details if invalid */}
-                    {containerPreview && !containerPreview.valid && (
+                    {!containerPreview.valid && (
                       <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
@@ -446,8 +359,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                         </AlertDescription>
                       </Alert>
                     )}
-                    {/* Import button only if valid */}
-                    {containerPreview && containerPreview.valid && (
+                    {containerPreview.valid && (
                       <div className="space-y-2">
                         <Button 
                           onClick={importContainers}
@@ -455,14 +367,103 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                           className="w-full"
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          {isImporting ? 'Importing...' : `Import ${containerPreview.data.length} Containers & Samples`}
+                          {isImporting ? 'Importing...' : 
+                            samplePreview && samplePreview.data.length > 0 
+                              ? `Import ${containerPreview.data.length} Containers + ${samplePreview.data.length} Samples`
+                              : `Import ${containerPreview.data.length} Containers`
+                          }
                         </Button>
                         {samplePreview && samplePreview.data.length > 0 && (
                           <p className="text-xs text-muted-foreground text-center">
-                            ✨ All samples from the grid will be imported and visible in every view
+                            ✨ Samples from grid will be imported automatically with containers
                           </p>
                         )}
                       </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+            {/* Import Samples Card */}
+            <Card className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  <h3>Import Samples</h3>
+                </div>
+                <div className="space-y-3">
+                  <Label htmlFor="sampleFile">Upload Sample CSV</Label>
+                  <Input
+                    ref={sampleFileRef}
+                    id="sampleFile"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleSampleFileUpload}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    CSV format: containerId, sampleId, position
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>CSV Template</Label>
+                  <Textarea
+                    value={sampleTemplate}
+                    readOnly
+                    className="font-mono text-xs h-16"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const blob = new Blob([sampleTemplate], { type: 'text/csv' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sample-template.csv';
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template
+                  </Button>
+                </div>
+                {samplePreview && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {samplePreview.valid ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span className="text-sm">
+                        {samplePreview.valid 
+                          ? `${samplePreview.data.length} samples ready to import`
+                          : `${samplePreview.errors.length} errors found`
+                        }
+                      </span>
+                    </div>
+                    {!samplePreview.valid && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <ul className="list-disc list-inside space-y-1">
+                            {samplePreview.errors.map((error: string, index: number) => (
+                              <li key={index} className="text-xs">{error}</li>
+                            ))}
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {samplePreview.valid && (
+                      <Button 
+                        onClick={importSamples}
+                        disabled={isImporting}
+                        className="w-full"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        {isImporting ? 'Importing...' : 'Import Samples'}
+                      </Button>
                     )}
                   </div>
                 )}
