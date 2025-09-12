@@ -293,51 +293,48 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     });
   }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
 
-  // Defensive: always arrays
+  // New logic: Import any value found in the cells to the right of the row headers as a sample
+  // For this, assume that for each container, the grid is stored in localStorage as a 2D array (rows x columns)
+  // Each cell to the right of the row header (i.e., columns 1+) is checked for a value; if present, it's a sample
   const allSamples = useMemo(() => {
     const samples: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
     (Array.isArray(containers) ? containers : []).forEach(container => {
       const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
-
-      if (savedSamples) {
+      const savedGrid = localStorage.getItem(storageKey);
+      if (savedGrid) {
         try {
-          const parsedData = JSON.parse(savedSamples);
-
-          if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-            Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
-              const sample: PlasmaSample = {
-                position,
-                sampleId: data.id,
-                storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
-                lastAccessed: data.lastAccessed,
-                history: data.history || [{
-                  timestamp: data.timestamp || new Date().toISOString(),
-                  action: 'check-in',
-                  notes: `Initial storage in position ${position}`
-                }]
-              };
-              samples.push({ sample, container });
-            });
-          } else if (Array.isArray(parsedData)) {
-            parsedData.forEach((sample: any) => {
-              const sampleWithHistory = {
-                ...sample,
-                history: sample.history || [{
-                  timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
-                  action: 'check-in' as const,
-                  notes: `Initial storage in position ${sample.position}`
-                }]
-              };
-              samples.push({ sample: sampleWithHistory, container });
-            });
+          const grid = JSON.parse(savedGrid); // Expecting a 2D array: grid[row][col]
+          if (Array.isArray(grid)) {
+            for (let rowIdx = 0; rowIdx < grid.length; rowIdx++) {
+              const row = grid[rowIdx];
+              if (Array.isArray(row)) {
+                for (let colIdx = 1; colIdx < row.length; colIdx++) { // skip col 0 (row header)
+                  const cellValue = row[colIdx];
+                  if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {
+                    // Construct position label, e.g., 'A1', 'B2', etc.
+                    const position = String.fromCharCode(65 + rowIdx) + colIdx;
+                    const sample: PlasmaSample = {
+                      position,
+                      sampleId: cellValue,
+                      storageDate: new Date().toISOString().split('T')[0],
+                      lastAccessed: undefined,
+                      history: [{
+                        timestamp: new Date().toISOString(),
+                        action: 'check-in',
+                        notes: `Imported from grid at position ${position}`
+                      }]
+                    };
+                    samples.push({ sample, container });
+                  }
+                }
+              }
+            }
           }
         } catch (error) {
-          console.error(`Error loading samples for container ${container.id}:`, error);
+          console.error(`Error loading grid for container ${container.id}:`, error);
         }
       }
     });
-
     return samples;
   }, [containers]);
 
