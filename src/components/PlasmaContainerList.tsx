@@ -98,6 +98,24 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+  // Helper: Manually import a sample grid for a container (for testing)
+  const handleTestImportGrid = (containerId: string) => {
+    // Example: 9x9 grid, row headers A-I, columns 1-9
+    const rows = 9;
+    const cols = 9;
+    const grid: string[][] = [];
+    for (let r = 0; r < rows; r++) {
+      const row: string[] = [];
+      row.push(String.fromCharCode(65 + r)); // Row header: 'A', 'B', ...
+      for (let c = 1; c <= cols; c++) {
+        // For demo, fill every cell with a sample ID like SAMPLE_A1, SAMPLE_B2, ...
+        row.push(`SAMPLE_${String.fromCharCode(65 + r)}${c}`);
+      }
+      grid.push(row);
+    }
+    localStorage.setItem(`samples-${containerId}`, JSON.stringify(grid));
+    alert(`Test grid imported for container ${containerId}. Please refresh or switch tabs to see samples.`);
+  };
   // Example: get current user (replace with your actual logic)
   const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
@@ -621,10 +639,27 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     <div className="p-6">
       <Header 
         actions={(
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Container
-          </Button>
+          <>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Container
+            </Button>
+            {/* Test Import Button: Only show if containers exist */}
+            {containers.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="ml-2">Test Import Grid</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {containers.map(container => (
+                    <DropdownMenuItem key={container.id} onClick={() => handleTestImportGrid(container.id)}>
+                      Import grid for {container.name} ({container.id})
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </>
         )}
       />
 
