@@ -604,6 +604,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         </div>
         <div className="flex-1">
           <PlasmaBoxDashboard 
+            key={selectedContainer.id + '-' + (Date.now())}
             container={selectedContainer} 
             onContainerUpdate={handleContainerUpdate}
             initialSelectedSample={selectedSampleForView}
