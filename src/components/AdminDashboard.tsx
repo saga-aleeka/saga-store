@@ -172,13 +172,16 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           const samplesObj: Record<string, any> = {};
           // Only assign samples that belong to this container
           samplePreview.data.forEach((s: any) => {
-            if (s.containerName === container.name && s.position) {
+            // Accept both containerName and containerId for compatibility
+            if ((s.containerName === container.name || s.containerId === container.id) && s.position) {
               if (s.id) {
-                samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp };
+                samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp, containerName: container.name };
               } // If no sample ID, leave cell empty
             }
           });
+          // Save using both container.name and container.id for compatibility with search and other features
           localStorage.setItem(`samples-${container.name}`, JSON.stringify(samplesObj));
+          localStorage.setItem(`samples-${container.id}`, JSON.stringify(samplesObj));
         });
       }
       if (typeof onContainersChange === 'function') onContainersChange(mergedContainers);
