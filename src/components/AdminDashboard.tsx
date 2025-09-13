@@ -170,9 +170,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       if (samplePreview && samplePreview.data.length > 0) {
         containerPreview.data.forEach(container => {
           const samplesObj: Record<string, any> = {};
+          // Only assign samples that belong to this container
           samplePreview.data.forEach((s: any) => {
-            if (s.position && s.id) {
-              samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp };
+            if (s.containerName === container.name && s.position) {
+              if (s.id) {
+                samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp };
+              } // If no sample ID, leave cell empty
             }
           });
           localStorage.setItem(`samples-${container.name}`, JSON.stringify(samplesObj));
