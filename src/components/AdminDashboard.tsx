@@ -132,8 +132,35 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    console.log('Importing containers...');
-    // Add logic to handle container import here
+    if (!containerPreview || !containerPreview.valid) {
+      alert('No valid container data to import. Please upload a valid grid CSV first.');
+      return;
+    }
+    setIsImporting(true);
+    try {
+      // Save containers to localStorage
+      localStorage.setItem('saga-containers', JSON.stringify(containerPreview.data));
+      // Save samples for each container
+      if (samplePreview && samplePreview.data.length > 0) {
+        containerPreview.data.forEach(container => {
+          // Find all samples for this container
+          const samples = samplePreview.data.filter((s: any) => s.position && s.id && s.position.startsWith && s.position.startsWith(container.name));
+          // If not found by position prefix, fallback to all samples for this container name
+          const samplesObj: Record<string, any> = {};
+          samplePreview.data.forEach((s: any) => {
+            if (s.position && s.id) {
+              samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp };
+            }
+          });
+          localStorage.setItem(`samples-${container.name}`, JSON.stringify(samplesObj));
+        });
+      }
+      if (typeof onContainersChange === 'function') onContainersChange(containerPreview.data);
+      alert('Import complete!');
+    } catch (err: any) {
+      alert('Import failed: ' + (typeof err === 'object' && err && 'message' in err ? err.message : String(err)));
+    }
+    setIsImporting(false);
   };
 
   // Templates
