@@ -138,14 +138,31 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     }
     setIsImporting(true);
     try {
-      // Save containers to localStorage
-      localStorage.setItem('saga-containers', JSON.stringify(containerPreview.data));
-      // Save samples for each container
+      // Get existing containers from localStorage
+      const existingContainersRaw = localStorage.getItem('saga-containers');
+      const existingContainers = existingContainersRaw ? JSON.parse(existingContainersRaw) : [];
+      const existingNames = new Set(existingContainers.map((c: any) => c.name));
+      // Find duplicates
+      const importedNames = new Set(containerPreview.data.map((c: any) => c.name));
+      const duplicates = Array.from(importedNames).filter(name => existingNames.has(name));
+      let proceed = true;
+      if (duplicates.length > 0) {
+        proceed = window.confirm(`Duplicate container(s) detected: ${duplicates.join(', ')}.\nDo you want to overwrite the existing containers and their samples?`);
+      }
+      if (!proceed) {
+        setIsImporting(false);
+        alert('Import cancelled. No data was overwritten.');
+        return;
+      }
+      // Merge containers: overwrite duplicates, keep others
+      const mergedContainers = [
+        ...existingContainers.filter((c: any) => !importedNames.has(c.name)),
+        ...containerPreview.data
+      ];
+      localStorage.setItem('saga-containers', JSON.stringify(mergedContainers));
+      // Save samples for each imported container (only overwrite for imported containers)
       if (samplePreview && samplePreview.data.length > 0) {
         containerPreview.data.forEach(container => {
-          // Find all samples for this container
-          const samples = samplePreview.data.filter((s: any) => s.position && s.id && s.position.startsWith && s.position.startsWith(container.name));
-          // If not found by position prefix, fallback to all samples for this container name
           const samplesObj: Record<string, any> = {};
           samplePreview.data.forEach((s: any) => {
             if (s.position && s.id) {
@@ -155,7 +172,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           localStorage.setItem(`samples-${container.name}`, JSON.stringify(samplesObj));
         });
       }
-      if (typeof onContainersChange === 'function') onContainersChange(containerPreview.data);
+      if (typeof onContainersChange === 'function') onContainersChange(mergedContainers);
       alert('Import complete!');
     } catch (err: any) {
       alert('Import failed: ' + (typeof err === 'object' && err && 'message' in err ? err.message : String(err)));
