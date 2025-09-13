@@ -33,75 +33,9 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        const content = reader.result as string;
-        // Parse CSV into lines
-        const lines = content.split(/\r?\n/).map(line => line.trim());
-        let containers: any[] = [];
-        let samplesByContainer: Record<string, any> = {};
-        let errors: string[] = [];
-
-        let i = 0;
-        while (i < lines.length) {
-          const line = lines[i];
-          // Look for header: location, "Box Name:", container_name
-          const headerMatch = line.match(/^([^,]+),\s*Box Name:\s*,([^,]+),/);
-          if (headerMatch) {
-            const location = headerMatch[1].replace(/"/g, '').trim();
-            const containerName = headerMatch[2].replace(/"/g, '').trim();
-            // Find next non-empty line for column headers
-            let colHeaderIdx = i + 1;
-            while (colHeaderIdx < lines.length && lines[colHeaderIdx].replace(/,/g, '').trim() === '') colHeaderIdx++;
-            const colHeaderLine = lines[colHeaderIdx];
-            // Column headers: skip first two columns, then numbers
-            const colHeaders = colHeaderLine.split(',').slice(2).map(h => h.trim()).filter(Boolean);
-            // Now parse grid rows
-            let gridRows: any[] = [];
-            let rowIdx = colHeaderIdx + 1;
-            while (rowIdx < lines.length) {
-              const rowLine = lines[rowIdx];
-              // Stop if next container header or blank line
-              if (/Box Name:/.test(rowLine) || rowLine.replace(/,/g, '').trim() === '') break;
-              const rowParts = rowLine.split(',');
-              const rowLetter = rowParts[1]?.trim();
-              if (!rowLetter || !/^[A-Z]$/.test(rowLetter)) { rowIdx++; continue; }
-              // Sample IDs start at col 2
-              for (let c = 0; c < colHeaders.length; c++) {
-                const sampleId = rowParts[c + 2]?.trim();
-                if (sampleId && sampleId !== '') {
-                  const position = `${rowLetter}${colHeaders[c]}`;
-                  if (!samplesByContainer[containerName]) samplesByContainer[containerName] = {};
-                  samplesByContainer[containerName][position] = {
-                    id: sampleId,
-                    position,
-                    timestamp: new Date().toISOString(),
-                  };
-                }
-              }
-              rowIdx++;
-            }
-            // Add container object
-            containers.push({
-              id: containerName,
-              name: containerName,
-              location,
-              containerType: colHeaders.length === 5 ? '5x5-box' : '9x9-box',
-              sampleType: '',
-              temperature: '',
-            });
-            i = rowIdx;
-          } else {
-            i++;
-          }
-        }
-        // Save containers and samples to localStorage
-        localStorage.setItem('saga-containers', JSON.stringify(containers));
-        containers.forEach(container => {
-          const sampleData = samplesByContainer[container.name] || {};
-          localStorage.setItem(`samples-${container.name}`, JSON.stringify(sampleData));
-        });
-        setContainerPreview({ valid: errors.length === 0, data: containers, errors });
-        setSamplePreview({ valid: true, data: Object.values(samplesByContainer).flatMap(obj => Object.values(obj)), errors: [] });
-        alert(`Imported ${containers.length} containers and ${Object.values(samplesByContainer).flatMap(obj => Object.values(obj)).length} samples.`);
+        const content = reader.result;
+        console.log('Container file content:', content);
+        // Add logic to process the file content
       };
       reader.readAsText(file);
     }
@@ -128,68 +62,41 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
 
   const importSamples = () => {
     console.log('Importing samples...');
-    // Add logic to handle sample import here
+    // Example: Assume samplePreview.data is [{ containerName, sampleId, position }]
+    if (!samplePreview || !samplePreview.valid) {
+      alert('No valid sample data to import.');
+      return;
+    }
+    // Map container names to IDs
+    const nameToId: { [name: string]: string } = {};
+    containers.forEach(c => {
+      nameToId[c.name] = c.id;
+    });
+    let importedCount = 0;
+    samplePreview.data.forEach((sample: any) => {
+      const containerId = nameToId[sample.containerName];
+      if (!containerId) {
+        console.warn(`No container found for name: ${sample.containerName}`);
+        return;
+      }
+      // Load samples for this container
+      const storageKey = `samples-${containerId}`;
+      let samples: Record<string, any> = {};
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        samples = JSON.parse(savedSamples);
+      }
+      // Assign sample to position
+      samples[sample.position] = { id: sample.sampleId, ...sample };
+      localStorage.setItem(storageKey, JSON.stringify(samples));
+      importedCount++;
+    });
+    alert(`Imported ${importedCount} samples by container name.`);
   };
 
   const importContainers = () => {
-    if (!containerPreview || !containerPreview.valid) {
-      alert('No valid container data to import. Please upload a valid grid CSV first.');
-      return;
-    }
-    setIsImporting(true);
-    try {
-      // Get existing containers from localStorage
-      const existingContainersRaw = localStorage.getItem('saga-containers');
-      const existingContainers = existingContainersRaw ? JSON.parse(existingContainersRaw) : [];
-      const existingNames = new Set(existingContainers.map((c: any) => c.name));
-      // Find duplicates
-      const importedNames = new Set(containerPreview.data.map((c: any) => c.name));
-      const duplicates = Array.from(importedNames).filter(name => existingNames.has(name));
-      let proceed = true;
-      if (duplicates.length > 0) {
-        proceed = window.confirm(`Duplicate container(s) detected: ${duplicates.join(', ')}.\nDo you want to overwrite the existing containers and their samples?`);
-      }
-      if (!proceed) {
-        setIsImporting(false);
-        alert('Import cancelled. No data was overwritten.');
-        return;
-      }
-      // Merge containers: update duplicates, keep all others
-      const mergedContainers = existingContainers.map((c: any) => {
-        const imported = containerPreview.data.find((ic: any) => ic.name === c.name);
-        return imported ? imported : c;
-      });
-      // Add any new containers from import that don't exist yet
-      containerPreview.data.forEach((ic: any) => {
-        if (!existingContainers.find((c: any) => c.name === ic.name)) {
-          mergedContainers.push(ic);
-        }
-      });
-      localStorage.setItem('saga-containers', JSON.stringify(mergedContainers));
-      // Save samples for each imported container (only overwrite for imported containers)
-      if (samplePreview && samplePreview.data.length > 0) {
-        containerPreview.data.forEach(container => {
-          const samplesObj: Record<string, any> = {};
-          // Only assign samples that belong to this container
-          samplePreview.data.forEach((s: any) => {
-            // Accept both containerName and containerId for compatibility
-            if ((s.containerName === container.name || s.containerId === container.id) && s.position) {
-              if (s.id) {
-                samplesObj[s.position] = { id: s.id, position: s.position, timestamp: s.timestamp, containerName: container.name };
-              } // If no sample ID, leave cell empty
-            }
-          });
-          // Save using both container.name and container.id for compatibility with search and other features
-          localStorage.setItem(`samples-${container.name}`, JSON.stringify(samplesObj));
-          localStorage.setItem(`samples-${container.id}`, JSON.stringify(samplesObj));
-        });
-      }
-      if (typeof onContainersChange === 'function') onContainersChange(mergedContainers);
-      alert('Import complete!');
-    } catch (err: any) {
-      alert('Import failed: ' + (typeof err === 'object' && err && 'message' in err ? err.message : String(err)));
-    }
-    setIsImporting(false);
+    console.log('Importing containers...');
+    // Add logic to handle container import here
   };
 
   // Templates
