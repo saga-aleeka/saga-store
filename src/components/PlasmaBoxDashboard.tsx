@@ -54,7 +54,16 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
 
   // Load samples from localStorage on mount
   useEffect(() => {
-    const savedSamples = localStorage.getItem(storageKey);
+    // Try to load samples by container name first (for import)
+    let savedSamples = null;
+    // Try localStorage by container name
+    if (container.name) {
+      savedSamples = localStorage.getItem(`samples-${container.name}`);
+    }
+    // Fallback to container ID if not found
+    if (!savedSamples) {
+      savedSamples = localStorage.getItem(storageKey);
+    }
     if (savedSamples) {
       try {
         const parsedData = JSON.parse(savedSamples);
@@ -93,7 +102,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     } else {
       setSamples([]);
     }
-  }, [container.id, storageKey]);
+  }, [container.name, container.id, storageKey]);
 
   // Auto-save samples whenever they change
   useEffect(() => {
@@ -1160,7 +1169,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               ) : (
                 <div>
                   <p className="mb-2">Select a sample to view its details and history</p>
-                  {viewMode === 'edit' && scannedBarcode.trim() && (
+                  {(viewMode as ViewMode) === 'edit' && scannedBarcode.trim() && (
                     <div className="text-sm text-muted-foreground">
                       {samples.find(s => s.sampleId === scannedBarcode.trim()) ? (
                         <p>⚠️ Sample exists - will be moved to new position</p>

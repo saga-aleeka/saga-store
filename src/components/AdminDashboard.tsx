@@ -33,9 +33,75 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        const content = reader.result;
-        console.log('Container file content:', content);
-        // Add logic to process the file content
+        const content = reader.result as string;
+        // Parse CSV into lines
+        const lines = content.split(/\r?\n/).map(line => line.trim());
+        let containers: any[] = [];
+        let samplesByContainer: Record<string, any> = {};
+        let errors: string[] = [];
+
+        let i = 0;
+        while (i < lines.length) {
+          const line = lines[i];
+          // Look for header: location, "Box Name:", container_name
+          const headerMatch = line.match(/^([^,]+),\s*Box Name:\s*,([^,]+),/);
+          if (headerMatch) {
+            const location = headerMatch[1].replace(/"/g, '').trim();
+            const containerName = headerMatch[2].replace(/"/g, '').trim();
+            // Find next non-empty line for column headers
+            let colHeaderIdx = i + 1;
+            while (colHeaderIdx < lines.length && lines[colHeaderIdx].replace(/,/g, '').trim() === '') colHeaderIdx++;
+            const colHeaderLine = lines[colHeaderIdx];
+            // Column headers: skip first two columns, then numbers
+            const colHeaders = colHeaderLine.split(',').slice(2).map(h => h.trim()).filter(Boolean);
+            // Now parse grid rows
+            let gridRows: any[] = [];
+            let rowIdx = colHeaderIdx + 1;
+            while (rowIdx < lines.length) {
+              const rowLine = lines[rowIdx];
+              // Stop if next container header or blank line
+              if (/Box Name:/.test(rowLine) || rowLine.replace(/,/g, '').trim() === '') break;
+              const rowParts = rowLine.split(',');
+              const rowLetter = rowParts[1]?.trim();
+              if (!rowLetter || !/^[A-Z]$/.test(rowLetter)) { rowIdx++; continue; }
+              // Sample IDs start at col 2
+              for (let c = 0; c < colHeaders.length; c++) {
+                const sampleId = rowParts[c + 2]?.trim();
+                if (sampleId && sampleId !== '') {
+                  const position = `${rowLetter}${colHeaders[c]}`;
+                  if (!samplesByContainer[containerName]) samplesByContainer[containerName] = {};
+                  samplesByContainer[containerName][position] = {
+                    id: sampleId,
+                    position,
+                    timestamp: new Date().toISOString(),
+                  };
+                }
+              }
+              rowIdx++;
+            }
+            // Add container object
+            containers.push({
+              id: containerName,
+              name: containerName,
+              location,
+              containerType: colHeaders.length === 5 ? '5x5-box' : '9x9-box',
+              sampleType: '',
+              temperature: '',
+            });
+            i = rowIdx;
+          } else {
+            i++;
+          }
+        }
+        // Save containers and samples to localStorage
+        localStorage.setItem('saga-containers', JSON.stringify(containers));
+        containers.forEach(container => {
+          const sampleData = samplesByContainer[container.name] || {};
+          localStorage.setItem(`samples-${container.name}`, JSON.stringify(sampleData));
+        });
+        setContainerPreview({ valid: errors.length === 0, data: containers, errors });
+        setSamplePreview({ valid: true, data: Object.values(samplesByContainer).flatMap(obj => Object.values(obj)), errors: [] });
+        alert(`Imported ${containers.length} containers and ${Object.values(samplesByContainer).flatMap(obj => Object.values(obj)).length} samples.`);
       };
       reader.readAsText(file);
     }
