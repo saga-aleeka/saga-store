@@ -154,11 +154,17 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         alert('Import cancelled. No data was overwritten.');
         return;
       }
-      // Merge containers: overwrite duplicates, keep others
-      const mergedContainers = [
-        ...existingContainers.filter((c: any) => !importedNames.has(c.name)),
-        ...containerPreview.data
-      ];
+      // Merge containers: update duplicates, keep all others
+      const mergedContainers = existingContainers.map((c: any) => {
+        const imported = containerPreview.data.find((ic: any) => ic.name === c.name);
+        return imported ? imported : c;
+      });
+      // Add any new containers from import that don't exist yet
+      containerPreview.data.forEach((ic: any) => {
+        if (!existingContainers.find((c: any) => c.name === ic.name)) {
+          mergedContainers.push(ic);
+        }
+      });
       localStorage.setItem('saga-containers', JSON.stringify(mergedContainers));
       // Save samples for each imported container (only overwrite for imported containers)
       if (samplePreview && samplePreview.data.length > 0) {
