@@ -37,7 +37,10 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     while (i < lines.length) {
       // Find start of a block (must have at least 3 columns, e.g. rack, 'Box Name:', box)
       if (lines[i] && lines[i].includes('Box Name:')) {
-        const [rackId, , containerName] = lines[i].split(/\t|\s{2,}/);
+        // Support both comma and tab/space delimited
+        let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
+        const rackId = parts[0];
+        const containerName = parts[2];
         let location = rackId;
         let samples: any[] = [];
         i++;
@@ -45,11 +48,21 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         while (i < lines.length && lines[i].trim() === '') i++;
         // Next line: column headers (should start with two empty columns, then numbers)
         const colHeaderLine = lines[i] || '';
-        const colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).filter(Boolean);
+        let colHeaders: string[] = [];
+        if (colHeaderLine.includes(',')) {
+          colHeaders = colHeaderLine.split(',').slice(2).map(h => h.trim()).filter(Boolean);
+        } else {
+          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).filter(Boolean);
+        }
         i++;
         // Parse rows (A, B, ...)
         while (i < lines.length && lines[i] && /^[A-I]/.test(lines[i])) {
-          const rowParts = lines[i].split(/\t|\s{2,}/);
+          let rowParts: string[] = [];
+          if (lines[i].includes(',')) {
+            rowParts = lines[i].split(',');
+          } else {
+            rowParts = lines[i].split(/\t|\s{2,}/);
+          }
           const rowLetter = rowParts[0];
           for (let c = 1; c < rowParts.length; c++) {
             const sampleId = rowParts[c]?.trim();
@@ -158,67 +171,75 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       alert('No valid container data to import.');
       return;
     }
-    // For each container, create or update in saga-containers
-    const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
-    let containers = Array.isArray(savedContainers) ? savedContainers : [];
-    let importedCount = 0;
-    let retainedCount = 0;
-    containerPreview.data.forEach((c: any) => {
-      // Use containerName as unique name, location as location
-      let existing = containers.find((x: any) => x.name === c.containerName);
-      if (!existing) {
-        // Guess containerType from sample count
-        const type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
-        existing = {
-          id: `${c.containerName.replace(/\s+/g, '_')}_${Date.now()}`,
-          name: c.containerName,
-          location: c.location,
-          containerType: type,
-          sampleType: 'Unknown',
-          temperature: '-80°C',
-        };
-        containers.push(existing);
-      }
-      // Save samples for this container
-      const storageKey = `samples-${existing.id}`;
-      let samples: Record<string, any> = {};
-      // Load existing samples for this container (if any)
-      const savedSamples = localStorage.getItem(storageKey);
-      if (savedSamples) {
-        try {
-          samples = JSON.parse(savedSamples);
-        } catch {}
-      }
-      c.samples.forEach((sample: any) => {
-        // If a sample already exists at this position and has the same ID, retain it
-        const existingSample = samples[sample.position];
-        if (existingSample && existingSample.id === sample.sampleId) {
-          retainedCount++;
-          // Retain the existing sample object (including history)
-          return;
+    setIsImporting(true);
+    setTimeout(() => {
+      // For each container, create or update in saga-containers
+      const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
+      let containers = Array.isArray(savedContainers) ? savedContainers : [];
+      let importedCount = 0;
+      let retainedCount = 0;
+      containerPreview.data.forEach((c: any) => {
+        // Use containerName as unique name, location as location
+        let existing = containers.find((x: any) => x.name === c.containerName);
+        if (!existing) {
+          // Guess containerType from sample count
+          const type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
+          existing = {
+            id: `${c.containerName.replace(/\s+/g, '_')}_${Date.now()}`,
+            name: c.containerName,
+            location: c.location,
+            containerType: type,
+            sampleType: 'Unknown',
+            temperature: '-80°C',
+          };
+          containers.push(existing);
         }
-        // Otherwise, overwrite or add new
-        samples[sample.position] = {
-          id: sample.sampleId,
-          position: sample.position,
-          containerName: c.containerName,
-          location: c.location,
-          timestamp: new Date().toISOString(),
-          history: [{
+        // Save samples for this container
+        const storageKey = `samples-${existing.id}`;
+        let samples: Record<string, any> = {};
+        // Load existing samples for this container (if any)
+        const savedSamples = localStorage.getItem(storageKey);
+        if (savedSamples) {
+          try {
+            samples = JSON.parse(savedSamples);
+          } catch {}
+        }
+        c.samples.forEach((sample: any) => {
+          // If a sample already exists at this position and has the same ID, retain it
+          const existingSample = samples[sample.position];
+          if (existingSample && existingSample.id === sample.sampleId) {
+            retainedCount++;
+            // Retain the existing sample object (including history)
+            return;
+          }
+          // Otherwise, overwrite or add new
+          samples[sample.position] = {
+            id: sample.sampleId,
+            position: sample.position,
+            containerName: c.containerName,
+            location: c.location,
             timestamp: new Date().toISOString(),
-            action: 'check-in',
-            notes: `Imported from grid at position ${sample.position}`
-          }]
-        };
-        importedCount++;
+            history: [{
+              timestamp: new Date().toISOString(),
+              action: 'check-in',
+              notes: `Imported from grid at position ${sample.position}`
+            }]
+          };
+          importedCount++;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(samples));
       });
-      localStorage.setItem(storageKey, JSON.stringify(samples));
-    });
-    localStorage.setItem('saga-containers', JSON.stringify(containers));
-    // Show confirmation dialog
-    if (window.confirm(`Import complete! ${importedCount} samples imported. ${retainedCount} samples retained in their original positions.\n\nClick OK to continue.`)) {
-      // Optionally, you could trigger a UI refresh or close a dialog here
-    }
+      localStorage.setItem('saga-containers', JSON.stringify(containers));
+      // Update containers state/UI after import
+      if (typeof onContainersChange === 'function') {
+        onContainersChange(containers);
+      }
+      setIsImporting(false);
+      // Show confirmation dialog
+      window.setTimeout(() => {
+        window.confirm(`Import complete! ${importedCount} samples imported. ${retainedCount} samples retained in their original positions.\n\nClick OK to continue.`);
+      }, 100);
+    }, 100);
   };
 
   // Templates
@@ -247,7 +268,6 @@ PLASMA_RACK_001,Box Name:,PLASMA_BOX_001,,,,,
 
 
 DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
-
 ,,1,2,3,4,5,6,7,8,9
 ,A,C01039DPP1B,C01040DPP2B,C01041DPP3B,C01042DPP4B,C01043DPP5B,C01044DPP6B,C01045DPP7B,C01046DPP8B,C01047DPP9B
 ,B,C01048DPP10B,C01049DPP11B,C01050DPP12B,C01051DPP13B,C01052DPP14B,C01053DPP15B,C01054DPP16B,C01055DPP17B,C01056DPP18B
