@@ -35,13 +35,20 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     const containers: any[] = [];
     let i = 0;
     while (i < lines.length) {
-      // Find start of a block (must have at least 3 columns, e.g. rack, 'Box Name:', box)
+      // Find start of a block (must have 'Box Name:')
       if (lines[i] && lines[i].includes('Box Name:')) {
-        // Support both comma and tab/space delimited
+        // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
         let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
-        const rackId = parts[0];
-        const containerName = parts[2];
-        let location = rackId;
+        let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
+        let containerName = '';
+        // Find the part after 'Box Name:'
+        const boxNameIdx = parts.findIndex(p => p.includes('Box Name:'));
+        if (boxNameIdx !== -1 && parts.length > boxNameIdx + 1) {
+          containerName = parts[boxNameIdx + 1];
+        } else if (parts.length > 2) {
+          containerName = parts[2];
+        }
+        let location = rackId || '';
         let samples: any[] = [];
         i++;
         // Skip empty lines
@@ -64,8 +71,9 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             rowParts = lines[i].split(/\t|\s{2,}/);
           }
           const rowLetter = rowParts[0];
-          for (let c = 1; c < rowParts.length; c++) {
-            const sampleId = rowParts[c]?.trim();
+          for (let c = 1; c <= colHeaders.length; c++) {
+            // rowParts may be shorter than colHeaders if trailing blanks
+            const sampleId = rowParts[c]?.trim() || '';
             if (sampleId) {
               const colNum = colHeaders[c - 1] || String(c);
               samples.push({
@@ -75,6 +83,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
                 location,
               });
             }
+            // If blank, do not add a sample (leave position empty)
           }
           i++;
         }
