@@ -1160,7 +1160,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               ) : (
                 <div>
                   <p className="mb-2">Select a sample to view its details and history</p>
-                  {viewMode === 'edit' && scannedBarcode.trim() && (
+                    {viewMode === 'edit' && scannedBarcode.trim() !== '' && (
                     <div className="text-sm text-muted-foreground">
                       {samples.find(s => s.sampleId === scannedBarcode.trim()) ? (
                         <p>⚠️ Sample exists - will be moved to new position</p>

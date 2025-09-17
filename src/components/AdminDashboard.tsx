@@ -28,14 +28,73 @@ interface Container {
 }
 
 export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
+  // Utility: Parse grid-style import template
+  function parseGridImport(content: string) {
+    // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
+    const lines = content.split(/\r?\n/).map(l => l.trimEnd());
+    const containers: any[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      // Find start of a block (must have at least 3 columns, e.g. rack, 'Box Name:', box)
+      if (lines[i] && lines[i].includes('Box Name:')) {
+        const [rackId, , containerName] = lines[i].split(/\t|\s{2,}/);
+        let location = rackId;
+        let samples: any[] = [];
+        i++;
+        // Skip empty lines
+        while (i < lines.length && lines[i].trim() === '') i++;
+        // Next line: column headers (should start with two empty columns, then numbers)
+        const colHeaderLine = lines[i] || '';
+        const colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).filter(Boolean);
+        i++;
+        // Parse rows (A, B, ...)
+        while (i < lines.length && lines[i] && /^[A-I]/.test(lines[i])) {
+          const rowParts = lines[i].split(/\t|\s{2,}/);
+          const rowLetter = rowParts[0];
+          for (let c = 1; c < rowParts.length; c++) {
+            const sampleId = rowParts[c]?.trim();
+            if (sampleId) {
+              const colNum = colHeaders[c - 1] || String(c);
+              samples.push({
+                sampleId,
+                position: `${rowLetter}${colNum}`,
+                containerName,
+                location,
+              });
+            }
+          }
+          i++;
+        }
+        containers.push({
+          rackId,
+          containerName,
+          location,
+          samples,
+        });
+      } else {
+        i++;
+      }
+    }
+    return { containers };
+  }
+
   const handleContainerFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        const content = reader.result;
-        console.log('Container file content:', content);
-        // Add logic to process the file content
+        const content = reader.result as string;
+        // Try to parse as grid import
+        const parsed = parseGridImport(content);
+        if (parsed.containers.length > 0) {
+          // Preview for user
+          setContainerPreview({ valid: true, data: parsed.containers, errors: [] });
+          // Also set sample preview for all samples
+          const allSamples = parsed.containers.flatMap(c => c.samples);
+          setSamplePreview({ valid: true, data: allSamples, errors: [] });
+        } else {
+          setContainerPreview({ valid: false, data: [], errors: ['No containers found in grid import.'] });
+        }
       };
       reader.readAsText(file);
     }
@@ -95,14 +154,57 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   };
 
   const importContainers = () => {
-    console.log('Importing containers...');
-    // Add logic to handle container import here
+    if (!containerPreview || !containerPreview.valid) {
+      alert('No valid container data to import.');
+      return;
+    }
+    // For each container, create or update in saga-containers
+    const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
+    let containers = Array.isArray(savedContainers) ? savedContainers : [];
+    let importedCount = 0;
+    containerPreview.data.forEach((c: any) => {
+      // Use containerName as unique name, location as location
+      let existing = containers.find((x: any) => x.name === c.containerName);
+      if (!existing) {
+        // Guess containerType from sample count
+        const type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
+        existing = {
+          id: `${c.containerName.replace(/\s+/g, '_')}_${Date.now()}`,
+          name: c.containerName,
+          location: c.location,
+          containerType: type,
+          sampleType: 'Unknown',
+          temperature: '-80°C',
+        };
+        containers.push(existing);
+      }
+      // Save samples for this container
+      const storageKey = `samples-${existing.id}`;
+      let samples: Record<string, any> = {};
+      c.samples.forEach((sample: any) => {
+        samples[sample.position] = {
+          id: sample.sampleId,
+          position: sample.position,
+          containerName: c.containerName,
+          location: c.location,
+          timestamp: new Date().toISOString(),
+          history: [{
+            timestamp: new Date().toISOString(),
+            action: 'check-in',
+            notes: `Imported from grid at position ${sample.position}`
+          }]
+        };
+      });
+      localStorage.setItem(storageKey, JSON.stringify(samples));
+      importedCount++;
+    });
+    localStorage.setItem('saga-containers', JSON.stringify(containers));
+    alert(`Imported ${importedCount} containers and their samples from grid template.`);
   };
 
   // Templates
   const containerTemplate = `name,location,containerType,sampleType,temperature\n"Plasma Box Alpha","Freezer A - Rack 1","5x5-box","DP Pools","-80°C"\n"cfDNA Storage Unit","Freezer B - Rack 2","9x9-box","cfDNA Tubes","-80°C"`;
   const gridTemplate = `cfDNA_RACK_001,Box Name:,cfDNA_BOX_001,,,,,,,,,,
-
 ,,1,2,3,4,5,6,7,8,9
 ,A,C00388cD010,C00395cD008,C00304cD005,C00397cD036,C00402cD006,C00411cD016,C00554cD002,C00405cD018,C00394cD016
 ,B,C00552cD001,C00394cD008,C00411cD014,C00375cD016,C00403cD006,C00386cD014,C00397cD014,C00403cD018,C00386cD018
