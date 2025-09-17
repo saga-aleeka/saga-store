@@ -162,6 +162,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
     let containers = Array.isArray(savedContainers) ? savedContainers : [];
     let importedCount = 0;
+    let retainedCount = 0;
     containerPreview.data.forEach((c: any) => {
       // Use containerName as unique name, location as location
       let existing = containers.find((x: any) => x.name === c.containerName);
@@ -181,7 +182,22 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       // Save samples for this container
       const storageKey = `samples-${existing.id}`;
       let samples: Record<string, any> = {};
+      // Load existing samples for this container (if any)
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        try {
+          samples = JSON.parse(savedSamples);
+        } catch {}
+      }
       c.samples.forEach((sample: any) => {
+        // If a sample already exists at this position and has the same ID, retain it
+        const existingSample = samples[sample.position];
+        if (existingSample && existingSample.id === sample.sampleId) {
+          retainedCount++;
+          // Retain the existing sample object (including history)
+          return;
+        }
+        // Otherwise, overwrite or add new
         samples[sample.position] = {
           id: sample.sampleId,
           position: sample.position,
@@ -194,12 +210,15 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             notes: `Imported from grid at position ${sample.position}`
           }]
         };
+        importedCount++;
       });
       localStorage.setItem(storageKey, JSON.stringify(samples));
-      importedCount++;
     });
     localStorage.setItem('saga-containers', JSON.stringify(containers));
-    alert(`Imported ${importedCount} containers and their samples from grid template.`);
+    // Show confirmation dialog
+    if (window.confirm(`Import complete! ${importedCount} samples imported. ${retainedCount} samples retained in their original positions.\n\nClick OK to continue.`)) {
+      // Optionally, you could trigger a UI refresh or close a dialog here
+    }
   };
 
   // Templates
