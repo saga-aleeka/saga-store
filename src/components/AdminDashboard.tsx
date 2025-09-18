@@ -188,14 +188,14 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       let importedCount = 0;
       let retainedCount = 0;
       containerPreview.data.forEach((c: any) => {
-        // Use containerName as unique name, location as location
+        // Use containerName as unique name, location as location (preserve all input, including underscores/symbols)
         let existing = containers.find((x: any) => x.name === c.containerName);
         if (!existing) {
           // Guess containerType from sample count
           const type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
           existing = {
-            id: `${c.containerName.replace(/\s+/g, '_')}_${Date.now()}`,
-            name: c.containerName,
+            id: `${c.containerName}_${Date.now()}`,
+            name: c.containerName, // preserve exactly as input
             location: c.location,
             containerType: type,
             sampleType: 'Unknown',
