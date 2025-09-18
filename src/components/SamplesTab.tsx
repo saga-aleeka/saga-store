@@ -124,9 +124,14 @@ export function SamplesTab({
           </Card>
 
           {/* Manual Search Results */}
-          {filteredSamples.length > 0 && sampleSearchMode === 'manual' && (
+          {sampleSearchMode === 'manual' && (
             <SampleSearchResults
-              samples={filteredSamples}
+              samples={(sampleSearchQuery ? filteredSamples : allSamples).map(({ sample, container }) => ({
+                ...sample,
+                containerId: container.id,
+                containerName: container.name,
+                containerLocation: container.location
+              }))}
               onNavigateToSample={handleNavigateToSample}
               searchQuery={sampleSearchQuery}
             />
