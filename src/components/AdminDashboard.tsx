@@ -237,7 +237,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           }
           // Otherwise, overwrite or add new
           samples[sample.position] = {
-            id: sample.sampleId,
+            id: sample.sampleId, // PlasmaBoxDashboard expects 'id' property
             position: sample.position,
             containerName: c.containerName,
             location: c.location,
