@@ -30,16 +30,19 @@ interface Container {
 export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
   // Utility: Parse grid-style import template
   function parseGridImport(content: string) {
+  console.log('--- Grid Import Debug Start ---');
     // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
   const lines = content.split(/\r?\n/).map(l => l.trimEnd());
     const containers: any[] = [];
     let i = 0;
-    while (i < lines.length) {
+  while (i < lines.length) {
       // Find start of a block (must have 'Box Name:')
       if (lines[i] && lines[i].includes('Box Name:')) {
+        console.log(`Parsing container block at line ${i}:`, lines[i]);
         // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
-        let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
-        parts = parts.map(p => (p || '').trim());
+  let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
+  parts = parts.map(p => (p || '').trim());
+  console.log('Header parts:', parts);
         let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
         let containerName = '';
         // Find the part after 'Box Name:'
@@ -62,6 +65,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         } else {
           colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (h || '').trim()).filter(Boolean);
         }
+        console.log('Column headers:', colHeaders);
         i++;
         // Parse rows (A, B, ...)
         while (i < lines.length && lines[i] && /^[A-I]/.test(lines[i])) {
@@ -72,6 +76,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             rowParts = lines[i].split(/\t|\s{2,}/);
           }
           rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim()); // also remove non-breaking spaces
+          console.log(`Row ${i} (${lines[i]}):`, rowParts);
           const rowLetter = rowParts[0];
           for (let c = 1; c <= colHeaders.length; c++) {
             // rowParts may be shorter than colHeaders if trailing blanks
@@ -85,9 +90,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
                 containerName,
                 location,
               });
+              console.log(`Parsed sample: ${sampleId} at ${rowLetter}${colNum} in ${containerName}`);
             } else if (rowParts[c] && rowParts[c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[c].length > 0) {
               // Log skipped cell with only spaces or invisible chars
               console.log(`Skipped cell at ${rowLetter}${colHeaders[c-1] || c}: only spaces/invisible chars`);
+            } else {
+              console.log(`Empty cell at ${rowLetter}${colHeaders[c-1] || c}`);
             }
           }
           i++;
@@ -98,10 +106,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           location,
           samples,
         });
+        console.log(`Parsed ${samples.length} samples for container ${containerName}`);
       } else {
         i++;
       }
     }
+    console.log('--- Grid Import Debug End ---');
     return { containers };
   }
 
