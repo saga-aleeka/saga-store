@@ -67,35 +67,34 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         }
         console.log('Column headers:', colHeaders);
         i++;
-        // Parse rows (A, B, ...)
-        while (i < lines.length && lines[i] && /^[A-I]/.test(lines[i])) {
+        // Parse all rows until next container or end of file
+        while (i < lines.length && lines[i] && !lines[i].includes('Box Name:')) {
           let rowParts: string[] = [];
           if (lines[i].includes(',')) {
             rowParts = lines[i].split(',');
           } else {
             rowParts = lines[i].split(/\t|\s{2,}/);
           }
-          rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim()); // also remove non-breaking spaces
+          rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
-          const rowLetter = rowParts[0];
+          // Use first cell as row label if present, else use blank or row number
+          const rowLabel = rowParts[0] || String(i);
           for (let c = 1; c <= colHeaders.length; c++) {
-            // rowParts may be shorter than colHeaders if trailing blanks
             let sampleId = rowParts[c] || '';
             sampleId = sampleId.replace(/\u00A0/g, '').trim();
             if (sampleId) {
               const colNum = colHeaders[c - 1] || String(c);
               samples.push({
                 sampleId,
-                position: `${rowLetter}${colNum}`,
+                position: `${rowLabel}${colNum}`,
                 containerName,
                 location,
               });
-              console.log(`Parsed sample: ${sampleId} at ${rowLetter}${colNum} in ${containerName}`);
+              console.log(`Parsed sample: ${sampleId} at ${rowLabel}${colNum} in ${containerName}`);
             } else if (rowParts[c] && rowParts[c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[c].length > 0) {
-              // Log skipped cell with only spaces or invisible chars
-              console.log(`Skipped cell at ${rowLetter}${colHeaders[c-1] || c}: only spaces/invisible chars`);
+              console.log(`Skipped cell at ${rowLabel}${colHeaders[c-1] || c}: only spaces/invisible chars`);
             } else {
-              console.log(`Empty cell at ${rowLetter}${colHeaders[c-1] || c}`);
+              console.log(`Empty cell at ${rowLabel}${colHeaders[c-1] || c}`);
             }
           }
           i++;
