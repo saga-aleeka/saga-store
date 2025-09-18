@@ -282,9 +282,9 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
 ,B,C01048DPP10B,C01049DPP11B,C01050DPP12B,C01051DPP13B,C01052DPP14B,C01053DPP15B,C01054DPP16B,C01055DPP17B,C01056DPP18B
 ,C,C01057DPP19B,C01058DPP20B,C01059DPP21B,C01060DPP22B,C01061DPP23B,C01062DPP24B,C01063DPP25B,C01064DPP26B,C01065DPP27B`;
 
-  const sampleTemplate = `containerId,sampleId,position
-"PB001","C01039DPP1B","A1"
-"PB001","C01040DPP2B","A2"`;
+  const sampleTemplate = `containerName,sampleId,position
+"cfDNA_BOX_001","C01039DPP1B","A1"
+"cfDNA_BOX_001","C01040DPP2B","A2"`;
 
   // Helper: Export containers as CSV
   const exportContainers = () => {
@@ -546,17 +546,11 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                           className="w-full"
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          {isImporting ? 'Importing...' : 
-                            samplePreview && samplePreview.data.length > 0 
-                              ? `Import ${containerPreview.data.length} Containers + ${samplePreview.data.length} Samples`
-                              : `Import ${containerPreview.data.length} Containers`
-                          }
+                          {isImporting ? 'Importing...' : `Import All (Containers + Samples)`}
                         </Button>
-                        {samplePreview && samplePreview.data.length > 0 && (
-                          <p className="text-xs text-muted-foreground text-center">
-                            ✨ Samples from grid will be imported automatically with containers
-                          </p>
-                        )}
+                        <p className="text-xs text-blue-700 text-center font-semibold">
+                          This will import <b>all containers and all samples</b> from the grid file in one step.
+                        </p>
                       </div>
                     )}
                   </div>
