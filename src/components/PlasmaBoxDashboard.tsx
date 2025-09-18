@@ -71,6 +71,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               notes: `Initial storage in position ${position}`
             }]
           }));
+          console.log('Loaded samples for grid:', sampleArray.map(s => ({ position: s.position, sampleId: s.sampleId })));
           setSamples(sampleArray);
         } else if (Array.isArray(parsedData)) {
           // Ensure all samples have history arrays
@@ -82,6 +83,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               notes: `Initial storage in position ${sample.position}`
             }]
           }));
+          console.log('Loaded samples for grid (array):', samplesWithHistory.map(s => ({ position: s.position, sampleId: s.sampleId })));
           setSamples(samplesWithHistory);
         } else {
           setSamples([]);
