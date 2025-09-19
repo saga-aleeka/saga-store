@@ -22,10 +22,10 @@ interface ParsedWorklistData {
 }
 
 export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className }: WorklistUploadProps) {
-  const [parsedData, setParsedData] = useState(null);
+  const [parsedData, setParsedData] = useState<ParsedWorklistData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
-  const fileInputRef = useRef(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -65,7 +65,6 @@ export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className 
 
   const parseWorklistFile = (content: string, fileName: string): ParsedWorklistData => {
     const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
     if (lines.length === 0) {
       throw new Error('File appears to be empty');
     }
@@ -73,25 +72,33 @@ export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className 
     // Try to detect if it's CSV or tab-separated
     const firstLine = lines[0];
     const separator = firstLine.includes('\t') ? '\t' : ',';
-    
-    // Parse header row to find sample ID column
     const headers = firstLine.split(separator).map(h => h.trim().replace(/"/g, ''));
-    
-    // Look for common sample ID column names
-    const sampleIdColumnNames = [
-      'Sample_SampleID', 'SampleID', 'Sample ID', 'Sample_ID', 'sampleid', 'sample_id',
-      'ID', 'Sample', 'Barcode', 'sample_barcode', 'Sample_Barcode'
-    ];
-    
+
+    // Special logic: If fileName contains DPQ or DPc, use column P (index 15) for sample IDs
+    const isDPQorDPc = /dpq|dpc/i.test(fileName);
     let sampleIdColumnIndex = -1;
-    for (const columnName of sampleIdColumnNames) {
-      const index = headers.findIndex(h => 
-        h.toLowerCase() === columnName.toLowerCase() || 
-        h.toLowerCase().includes(columnName.toLowerCase())
-      );
-      if (index !== -1) {
-        sampleIdColumnIndex = index;
-        break;
+    if (isDPQorDPc) {
+      // Use column P (16th column, index 15)
+      if (headers.length > 15) {
+        sampleIdColumnIndex = 15;
+      } else {
+        throw new Error('Expected at least 16 columns (A-P) for DPQ/DPc worklists');
+      }
+    } else {
+      // Look for common sample ID column names
+      const sampleIdColumnNames = [
+        'Sample_SampleID', 'SampleID', 'Sample ID', 'Sample_ID', 'sampleid', 'sample_id',
+        'ID', 'Sample', 'Barcode', 'sample_barcode', 'Sample_Barcode'
+      ];
+      for (const columnName of sampleIdColumnNames) {
+        const index = headers.findIndex(h => 
+          h.toLowerCase() === columnName.toLowerCase() || 
+          h.toLowerCase().includes(columnName.toLowerCase())
+        );
+        if (index !== -1) {
+          sampleIdColumnIndex = index;
+          break;
+        }
       }
     }
 
@@ -289,7 +296,7 @@ M00H4FCD,Plasma,MagPlate,A3,M00H4FAFP,A3,`;
                 </div>
                 <ScrollArea className="h-20 border rounded p-2">
                   <div className="flex flex-wrap gap-1">
-                    {parsedData.duplicateIds.map((id, index) => (
+                    {parsedData.duplicateIds.map((id: string, index: number) => (
                       <Badge key={index} variant="secondary" className="text-xs">
                         {id}
                       </Badge>
@@ -303,7 +310,7 @@ M00H4FCD,Plasma,MagPlate,A3,M00H4FAFP,A3,`;
               <h4 className="mb-2">Sample IDs to Search ({parsedData.sampleIds.length})</h4>
               <ScrollArea className="h-32 border rounded p-2">
                 <div className="flex flex-wrap gap-1">
-                  {parsedData.sampleIds.map((id, index) => (
+                  {parsedData.sampleIds.map((id: string, index: number) => (
                     <Badge key={index} variant="secondary" className="text-xs">
                       {id}
                     </Badge>
