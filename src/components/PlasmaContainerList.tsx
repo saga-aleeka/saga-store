@@ -345,16 +345,27 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Defensive: always arrays
   const filteredSamples = useMemo(() => {
+    // Helper: check if sample is present in its container grid
+    function isSamplePresentInGrid(sample: PlasmaSample, container: PlasmaContainer) {
+      try {
+        const samplesObj = JSON.parse(localStorage.getItem(`samples-${container.id}`) || '{}');
+        return Object.values(samplesObj).some((s: any) => s && (s.sampleId === sample.sampleId || s.id === sample.sampleId));
+      } catch {
+        return false;
+      }
+    }
+    const filterOutCheckedOut = (arr: Array<{ sample: PlasmaSample; container: PlasmaContainer }>) =>
+      arr.filter(({ sample, container }) => isSamplePresentInGrid(sample, container));
     if (sampleSearchMode === 'worklist') {
       if (!Array.isArray(worklistSampleIds) || worklistSampleIds.length === 0) return [];
-      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+      return filterOutCheckedOut((Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
         (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId)
-      );
+      ));
     } else if (sampleSearchMode === 'bulk') {
       if (!Array.isArray(bulkSearchSampleIds) || bulkSearchSampleIds.length === 0) return [];
-      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+      return filterOutCheckedOut((Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
         (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId)
-      );
+      ));
     } else {
       if (!sampleSearchQuery.trim()) {
         setManualSearchSampleIds([]);
@@ -373,9 +384,9 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           );
         });
       });
-      const sampleIds = results.map(({ sample }) => sample.sampleId);
-      setManualSearchSampleIds(sampleIds);
-      return results;
+      const presentFiltered = filterOutCheckedOut(results);
+      setManualSearchSampleIds(presentFiltered.map(({ sample }) => sample.sampleId));
+      return presentFiltered;
     }
   }, [allSamples, sampleSearchQuery, sampleSearchMode, worklistSampleIds, bulkSearchSampleIds]);
 
