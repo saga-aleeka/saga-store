@@ -78,19 +78,24 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
           // Use first cell as row label if present, else use blank or row number
-          const rowLabel = rowParts[0] || String(i);
-          // Only treat the first column as a row header if it is a single uppercase letter (A-I)
+          // Detect offset: if first cell is empty and second is a single letter, use second as row label
+          let rowLabel = rowParts[0] || String(i);
+          let sampleStartIdx = 1;
+          if (rowParts[0] === '' && /^[A-I]$/.test(rowParts[1] || '')) {
+            rowLabel = rowParts[1];
+            sampleStartIdx = 2;
+          }
           const isRowHeader = /^[A-I]$/.test(rowLabel);
-          for (let c = 1; c <= colHeaders.length; c++) {
-            let sampleId = rowParts[c] || '';
+          for (let c = 0; c < colHeaders.length; c++) {
+            let sampleId = rowParts[sampleStartIdx + c] || '';
             sampleId = sampleId.replace(/\u00A0/g, '').trim();
             // Never import the row header as a sample ID
-            if (isRowHeader && c === 1 && sampleId === rowLabel) {
+            if (isRowHeader && c === 0 && sampleId === rowLabel) {
               // This is the row header, skip
               continue;
             }
             // Only allow row/column form for position (e.g., A1, B2)
-            const colNum = colHeaders[c - 1] || String(c);
+            const colNum = colHeaders[c] || String(c + 1);
             const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
             if (sampleId && position) {
               samples.push({
@@ -100,7 +105,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
                 location,
               });
               console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
-            } else if (rowParts[c] && rowParts[c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[c].length > 0) {
+            } else if (rowParts[sampleStartIdx + c] && rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[sampleStartIdx + c].length > 0) {
               console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
             } else {
               console.log(`Empty cell at ${rowLabel}${colNum}`);
