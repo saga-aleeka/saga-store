@@ -32,17 +32,17 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   function parseGridImport(content: string) {
   console.log('--- Grid Import Debug Start ---');
     // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
-  const lines = content.split(/\r?\n/).map(l => l.trimEnd());
+    const lines = content.split(/\r?\n/).map(l => l.trimEnd());
     const containers: any[] = [];
     let i = 0;
-  while (i < lines.length) {
+    while (i < lines.length) {
       // Find start of a block (must have 'Box Name:')
       if (lines[i] && lines[i].includes('Box Name:')) {
         console.log(`Parsing container block at line ${i}:`, lines[i]);
         // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
-  let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
-  parts = parts.map(p => (p || '').trim());
-  console.log('Header parts:', parts);
+        let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
+        parts = parts.map(p => (p || '').trim());
+        console.log('Header parts:', parts);
         let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
         let containerName = '';
         // Find the part after 'Box Name:'
@@ -57,15 +57,20 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         i++;
         // Skip empty lines
         while (i < lines.length && lines[i].trim() === '') i++;
-        // Next line: column headers (should start with two empty columns, then numbers)
-        const colHeaderLine = lines[i] || '';
-        let colHeaders: string[] = [];
-        if (colHeaderLine.includes(',')) {
-          colHeaders = colHeaderLine.split(',').slice(2).map(h => (h || '').trim()).filter(Boolean);
+        // Next line: column headers (should start with two empty columns, then numbers or letters)
+        const headerLine = lines[i] || '';
+        let headers: string[] = [];
+        if (headerLine.includes(',')) {
+          headers = headerLine.split(',').slice(2).map(h => (h || '').trim()).filter(Boolean);
         } else {
-          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (h || '').trim()).filter(Boolean);
+          headers = headerLine.split(/\t|\s{2,}/).slice(2).map(h => (h || '').trim()).filter(Boolean);
         }
-        console.log('Column headers:', colHeaders);
+        // Detect orientation: if headers are all numbers, columns are numbers, rows are letters; if all letters, columns are letters, rows are numbers
+        const isColNumber = headers.every(h => /^\d+$/.test(h));
+        const isColLetter = headers.every(h => /^[A-Za-z]$/.test(h));
+        const colHeaders = isColNumber ? headers : [];
+        const rowHeaders = isColLetter ? headers : [];
+        console.log('Headers:', headers, 'isColNumber:', isColNumber, 'isColLetter:', isColLetter);
         i++;
         // Parse all rows until next container or end of file
         while (i < lines.length && lines[i] && !lines[i].includes('Box Name:')) {
@@ -76,37 +81,53 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             rowParts = lines[i].split(/\t|\s{2,}/);
           }
           rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
-          console.log(`Row ${i} (${lines[i]}):`, rowParts);
-          // Use first cell as row label, force to single uppercase letter (A-I, etc)
-          let rowLabel = rowParts[0] || String(i);
-          // If rowLabel is not a single uppercase letter, try to extract first letter
-          if (typeof rowLabel === 'string') {
-            rowLabel = rowLabel.trim().toUpperCase();
-            if (rowLabel.length > 1) rowLabel = rowLabel[0];
-            if (!/[A-Z]/.test(rowLabel)) rowLabel = String.fromCharCode(65 + (i % 26));
+          // Skip empty lines
+          if (rowParts.length < 2 || rowParts.every(cell => !cell)) {
+            i++;
+            continue;
           }
-          for (let c = 1; c <= colHeaders.length; c++) {
-            let sampleId = rowParts[c] || '';
-            sampleId = sampleId.replace(/\u00A0/g, '').trim();
-            if (sampleId) {
-              // colNum should always be a number (1-based)
-              let colNum = colHeaders[c - 1] || String(c);
-              // If colNum is not a number, try to extract number
-              if (typeof colNum === 'string' && !/^\d+$/.test(colNum)) {
-                const match = colNum.match(/\d+/);
-                colNum = match ? match[0] : String(c);
+          // Determine row/col label orientation
+          let rowLabel = '';
+          let colCount = headers.length;
+          if (isColNumber) {
+            // Standard: row label is first cell (should be a letter), columns are numbers
+            rowLabel = (rowParts[0] || '').toUpperCase().replace(/[^A-Z]/g, '');
+            for (let c = 0; c < colCount; c++) {
+              let sampleId = rowParts[c + 1] || '';
+              sampleId = sampleId.replace(/\u00A0/g, '').trim();
+              if (sampleId) {
+                const colNum = headers[c];
+                // Only allow A-Z for rowLabel and 1+ for colNum
+                if (/^[A-Z]$/.test(rowLabel) && /^\d+$/.test(colNum)) {
+                  samples.push({
+                    sampleId,
+                    position: `${rowLabel}${colNum}`,
+                    containerName,
+                    location,
+                  });
+                  console.log(`Parsed sample: ${sampleId} at ${rowLabel}${colNum} in ${containerName}`);
+                }
               }
-              samples.push({
-                sampleId,
-                position: `${rowLabel}${colNum}`,
-                containerName,
-                location,
-              });
-              console.log(`Parsed sample: ${sampleId} at ${rowLabel}${colNum} in ${containerName}`);
-            } else if (rowParts[c] && rowParts[c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[c].length > 0) {
-              console.log(`Skipped cell at ${rowLabel}${colHeaders[c-1] || c}: only spaces/invisible chars`);
-            } else {
-              console.log(`Empty cell at ${rowLabel}${colHeaders[c-1] || c}`);
+            }
+          } else if (isColLetter) {
+            // Transposed: row label is first cell (should be a number), columns are letters
+            rowLabel = (rowParts[0] || '').replace(/[^0-9]/g, '');
+            for (let c = 0; c < colCount; c++) {
+              let sampleId = rowParts[c + 1] || '';
+              sampleId = sampleId.replace(/\u00A0/g, '').trim();
+              if (sampleId) {
+                const colLetter = headers[c].toUpperCase();
+                // Only allow 1+ for rowLabel and A-Z for colLetter
+                if (/^\d+$/.test(rowLabel) && /^[A-Z]$/.test(colLetter)) {
+                  samples.push({
+                    sampleId,
+                    position: `${colLetter}${rowLabel}`,
+                    containerName,
+                    location,
+                  });
+                  console.log(`Parsed sample: ${sampleId} at ${colLetter}${rowLabel} in ${containerName}`);
+                }
+              }
             }
           }
           i++;
