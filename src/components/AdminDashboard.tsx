@@ -218,18 +218,31 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       containerPreview.data.forEach((c: any) => {
         // Use containerName as unique name, location as location (preserve all input, including underscores/symbols)
         let existing = containers.find((x: any) => x.name === c.containerName);
+        // Determine sampleType from containerName (case-insensitive keyword match)
+        const nameLower = (c.containerName || '').toLowerCase();
+        let sampleType = 'Unknown';
+        if (nameLower.includes('dp pool') || nameLower.includes('dp_pools') || nameLower.includes('dp_pools') || nameLower.includes('dp')) sampleType = 'DP Pools';
+        else if (nameLower.includes('cfdna')) sampleType = 'cfDNA Tubes';
+        else if (nameLower.includes('dtc')) sampleType = 'DTC Tubes';
+        else if (nameLower.includes('mnc')) sampleType = 'MNC Tubes';
+        else if (nameLower.includes('pa pool')) sampleType = 'PA Pool Tubes';
+        else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
+        else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
+        else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
+        let type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
         if (!existing) {
-          // Guess containerType from sample count
-          const type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
           existing = {
             id: `${c.containerName}_${Date.now()}`,
             name: c.containerName, // preserve exactly as input
             location: c.location,
             containerType: type,
-            sampleType: 'Unknown',
+            sampleType,
             temperature: '-80°C',
           };
           containers.push(existing);
+        } else {
+          // Update sampleType if needed
+          existing.sampleType = sampleType;
         }
         // Save samples for this container
         const storageKey = `samples-${existing.id}`;
