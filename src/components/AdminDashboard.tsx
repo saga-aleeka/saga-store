@@ -79,9 +79,16 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
           // Use first cell as row label if present, else use blank or row number
           const rowLabel = rowParts[0] || String(i);
+          // Only treat the first column as a row header if it is a single uppercase letter (A-I)
+          const isRowHeader = /^[A-I]$/.test(rowLabel);
           for (let c = 1; c <= colHeaders.length; c++) {
             let sampleId = rowParts[c] || '';
             sampleId = sampleId.replace(/\u00A0/g, '').trim();
+            // Never import the row header as a sample ID
+            if (isRowHeader && c === 1 && sampleId === rowLabel) {
+              // This is the row header, skip
+              continue;
+            }
             if (sampleId) {
               const colNum = colHeaders[c - 1] || String(c);
               samples.push({
