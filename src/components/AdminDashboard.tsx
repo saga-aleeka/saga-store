@@ -89,19 +89,21 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
               // This is the row header, skip
               continue;
             }
-            if (sampleId) {
-              const colNum = colHeaders[c - 1] || String(c);
+            // Only allow row/column form for position (e.g., A1, B2)
+            const colNum = colHeaders[c - 1] || String(c);
+            const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
+            if (sampleId && position) {
               samples.push({
                 sampleId,
-                position: `${rowLabel}${colNum}`,
-                containerName,
+                position,
+                containerName, // preserve all characters and symbols
                 location,
               });
-              console.log(`Parsed sample: ${sampleId} at ${rowLabel}${colNum} in ${containerName}`);
+              console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
             } else if (rowParts[c] && rowParts[c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[c].length > 0) {
-              console.log(`Skipped cell at ${rowLabel}${colHeaders[c-1] || c}: only spaces/invisible chars`);
+              console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
             } else {
-              console.log(`Empty cell at ${rowLabel}${colHeaders[c-1] || c}`);
+              console.log(`Empty cell at ${rowLabel}${colNum}`);
             }
           }
           i++;
