@@ -691,6 +691,30 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                 <p className="text-sm text-muted-foreground">
                   Download your current container and sample data, or perform a manual backup of the current state. Manual backup will be overwritten at the next 2am snapshot.
                 </p>
+                {/* Show last snapshot date/time */}
+                {(() => {
+                  // Find the latest nightly-backup key in localStorage
+                  const backupKeys = Object.keys(localStorage).filter(k => k.startsWith('nightly-backup-'));
+                  if (backupKeys.length === 0) return null;
+                  // Sort by date descending
+                  const latestKey = backupKeys.sort().reverse()[0];
+                  // Extract date from key
+                  const dateStr = latestKey.replace('nightly-backup-', '');
+                  // Try to get the time from the backup data if available
+                  let timeStr = '';
+                  try {
+                    const backupData = JSON.parse(localStorage.getItem(latestKey) || 'null');
+                    if (Array.isArray(backupData) && backupData.length > 0 && backupData[0].timestamp) {
+                      // Use the timestamp from the first container if present
+                      timeStr = backupData[0].timestamp;
+                    }
+                  } catch {}
+                  return (
+                    <div className="text-xs text-muted-foreground">
+                      Last snapshot: <b>{dateStr}</b>{timeStr ? `, time: ${timeStr}` : ''}
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-4 flex-wrap">
                   <Button onClick={exportContainers} disabled={containers.length === 0}>
                     <Download className="w-4 h-4 mr-2" />
