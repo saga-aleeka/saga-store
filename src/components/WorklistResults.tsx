@@ -45,7 +45,15 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 
   // State for selected samples to checkout
   const [selectedSamples, setSelectedSamples] = React.useState<string[]>([]);
-  const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>([]);
+  const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>(() => {
+    // Restore checked out samples from localStorage if available
+    try {
+      const stored = localStorage.getItem('checkedOutSamples');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Handle select/deselect
   const handleSelectSample = (sampleId: string) => {
@@ -56,17 +64,21 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 
   // Handle checkout
   const handleCheckout = (sampleIds: string[]) => {
-    setCheckedOutSamples((prev) => [...prev, ...sampleIds.filter(id => !prev.includes(id))]);
+    setCheckedOutSamples((prev) => {
+      const updated = [...prev, ...sampleIds.filter(id => !prev.includes(id))];
+      localStorage.setItem('checkedOutSamples', JSON.stringify(updated));
+      return updated;
+    });
     setSelectedSamples([]);
-    // Optionally: persist to localStorage
-    // localStorage.setItem('checkedOutSamples', JSON.stringify([...checkedOutSamples, ...sampleIds]));
   };
 
   // Handle undo checkout
   const handleUndoCheckout = (sampleIds: string[]) => {
-    setCheckedOutSamples((prev) => prev.filter((id) => !sampleIds.includes(id)));
-    // Optionally: update localStorage
-    // localStorage.setItem('checkedOutSamples', JSON.stringify(checkedOutSamples.filter(id => !sampleIds.includes(id))));
+    setCheckedOutSamples((prev) => {
+      const updated = prev.filter((id) => !sampleIds.includes(id));
+      localStorage.setItem('checkedOutSamples', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
@@ -107,13 +119,28 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
               Found Samples ({foundSamples.length})
             </h3>
             <div className="flex gap-2 mb-4 flex-wrap">
-              <Button size="sm" variant="outline" onClick={() => handleCheckout(foundSamples.map((r: any) => r.sample.sampleId))}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCheckout(foundSamples.filter((r: any) => !checkedOutSamples.includes(r.sample.sampleId)).map((r: any) => r.sample.sampleId))}
+                disabled={foundSamples.every((r: any) => checkedOutSamples.includes(r.sample.sampleId))}
+              >
                 Check Out All
               </Button>
-              <Button size="sm" variant="outline" onClick={() => handleCheckout(selectedSamples)} disabled={selectedSamples.length === 0}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCheckout(selectedSamples)}
+                disabled={selectedSamples.length === 0}
+              >
                 Check Out Selected
               </Button>
-              <Button size="sm" variant="outline" onClick={() => handleUndoCheckout(checkedOutSamples)} disabled={checkedOutSamples.length === 0}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleUndoCheckout(checkedOutSamples)}
+                disabled={checkedOutSamples.length === 0}
+              >
                 Undo Checkout
               </Button>
             </div>
