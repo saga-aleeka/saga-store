@@ -77,13 +77,25 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           }
           rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
-          // Use first cell as row label if present, else use blank or row number
-          const rowLabel = rowParts[0] || String(i);
+          // Use first cell as row label, force to single uppercase letter (A-I, etc)
+          let rowLabel = rowParts[0] || String(i);
+          // If rowLabel is not a single uppercase letter, try to extract first letter
+          if (typeof rowLabel === 'string') {
+            rowLabel = rowLabel.trim().toUpperCase();
+            if (rowLabel.length > 1) rowLabel = rowLabel[0];
+            if (!/[A-Z]/.test(rowLabel)) rowLabel = String.fromCharCode(65 + (i % 26));
+          }
           for (let c = 1; c <= colHeaders.length; c++) {
             let sampleId = rowParts[c] || '';
             sampleId = sampleId.replace(/\u00A0/g, '').trim();
             if (sampleId) {
-              const colNum = colHeaders[c - 1] || String(c);
+              // colNum should always be a number (1-based)
+              let colNum = colHeaders[c - 1] || String(c);
+              // If colNum is not a number, try to extract number
+              if (typeof colNum === 'string' && !/^\d+$/.test(colNum)) {
+                const match = colNum.match(/\d+/);
+                colNum = match ? match[0] : String(c);
+              }
               samples.push({
                 sampleId,
                 position: `${rowLabel}${colNum}`,
