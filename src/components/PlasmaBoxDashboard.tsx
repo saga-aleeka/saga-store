@@ -963,7 +963,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         <Card className="p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h3>{dimensions.rows}×{dimensions.cols} Storage Grid</h3>
+              <h3 className="text-lg font-semibold">{container.name} <span className="text-sm text-muted-foreground">({container.location})</span></h3>
             </div>
             {selectedPosition && (
               <div className="flex items-center gap-2">
@@ -1160,7 +1160,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               ) : (
                 <div>
                   <p className="mb-2">Select a sample to view its details and history</p>
-                    {viewMode === 'edit' && scannedBarcode.trim() !== '' && (
+                    {isAddingSample && scannedBarcode.trim() !== '' && (
                     <div className="text-sm text-muted-foreground">
                       {samples.find(s => s.sampleId === scannedBarcode.trim()) ? (
                         <p>⚠️ Sample exists - will be moved to new position</p>
