@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -35,6 +35,11 @@ interface SampleSearchResultsProps {
 }
 
 export function SampleSearchResults({ samples, searchQuery, onNavigateToSample }: SampleSearchResultsProps) {
+  // Pagination state
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.ceil(samples.length / pageSize) || 1;
+  const paginatedSamples = samples.slice((page - 1) * pageSize, page * pageSize);
   // Parse search terms for better display
   const searchTerms = searchQuery.split(',').map(term => term.trim()).filter(term => term.length > 0);
   const isMultipleTerms = searchTerms.length > 1;
@@ -84,26 +89,44 @@ export function SampleSearchResults({ samples, searchQuery, onNavigateToSample }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3>
-          Search Results
-          <span className="text-muted-foreground ml-2">
-            ({samples.length} samples found{isMultipleTerms ? ` for ${searchTerms.length} search terms` : ''})
-          </span>
-        </h3>
-        {isMultipleTerms && (
-          <div className="text-sm text-muted-foreground">
-            Searching: {searchTerms.map((term, index) => (
-              <span key={index} className="bg-muted px-2 py-1 rounded mr-1">
-                {term}
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div>
+          <h3>
+            Search Results
+            <span className="text-muted-foreground ml-2">
+              ({samples.length} samples found{isMultipleTerms ? ` for ${searchTerms.length} search terms` : ''})
+            </span>
+          </h3>
+          {isMultipleTerms && (
+            <div className="text-sm text-muted-foreground mt-1">
+              Searching: {searchTerms.map((term, index) => (
+                <span key={index} className="bg-muted px-2 py-1 rounded mr-1">
+                  {term}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="page-size" className="text-sm text-muted-foreground">Per page:</label>
+          <select
+            id="page-size"
+            className="border rounded px-2 py-1 text-sm"
+            value={pageSize}
+            onChange={e => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid gap-4">
-        {samples.map((sample, index) => {
+        {paginatedSamples.map((sample, index) => {
           // Calculate days since storage
           const daysSinceStorage = Math.floor(
             (new Date().getTime() - new Date(sample.storageDate).getTime()) / (1000 * 60 * 60 * 24)
@@ -227,6 +250,17 @@ export function SampleSearchResults({ samples, searchQuery, onNavigateToSample }
           );
         })}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Button size="sm" variant="outline" onClick={() => setPage(1)} disabled={page === 1}>&laquo; First</Button>
+          <Button size="sm" variant="outline" onClick={() => setPage(page - 1)} disabled={page === 1}>&lsaquo; Prev</Button>
+          <span className="text-sm">Page {page} of {totalPages}</span>
+          <Button size="sm" variant="outline" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next &rsaquo;</Button>
+          <Button size="sm" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last &raquo;</Button>
+        </div>
+      )}
     </div>
   );
 }
