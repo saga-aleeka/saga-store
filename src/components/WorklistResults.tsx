@@ -66,29 +66,35 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   // Helper: get current user
   const getCurrentUser = () => localStorage.getItem('currentUser') || 'Unknown User';
 
+  // Helper: force reload for all listeners (including same tab)
+  function forceLocalStorageUpdate(key: string) {
+    // Update the value to itself to trigger storage event in other tabs
+    const value = localStorage.getItem(key);
+    localStorage.setItem(key, value || '');
+    // Dispatch a custom event for same-tab listeners
+    window.dispatchEvent(new CustomEvent('plasma-samples-changed', { detail: { key } }));
+  }
+
   // Handle checkout
   const handleCheckout = (sampleIds: string[]) => {
-    // Remove samples from their container grid and update history
     foundSamples.forEach((result: any) => {
       const { sample, container } = result;
       if (!sampleIds.includes(sample.sampleId)) return;
       const samplesObj = loadSamplesForContainer(container.id);
-      // Remove from grid
       if (samplesObj && samplesObj[sample.position] && samplesObj[sample.position].sampleId === sample.sampleId) {
-        // Add to history
         const now = new Date().toISOString();
         const user = getCurrentUser();
         const newHistory = [
           ...(samplesObj[sample.position].history || []),
           { timestamp: now, action: 'check-out', user }
         ];
-        // Remove from grid, but keep history for undo
-        samplesObj[sample.position] = { ...samplesObj[sample.position], history: newHistory, checkedOut: true };
-        delete samplesObj[sample.position];
-        // Save a backup for undo
+        // Save undo backup
         const undoKey = `undo-${container.id}-${sample.sampleId}`;
-        localStorage.setItem(undoKey, JSON.stringify({ ...sample, position: sample.position, containerId: container.id }));
+        localStorage.setItem(undoKey, JSON.stringify({ ...sample, position: sample.position, containerId: container.id, history: newHistory }));
+        // Remove the sample from the container (do not re-add it)
+        delete samplesObj[sample.position];
         saveSamplesForContainer(container.id, samplesObj);
+        forceLocalStorageUpdate(`samples-${container.id}`);
       }
     });
     setCheckedOutSamples((prev) => {
@@ -101,17 +107,14 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 
   // Handle undo checkout
   const handleUndoCheckout = (sampleIds: string[]) => {
-    // Restore samples to their original grid location and remove checkout history
     foundSamples.forEach((result: any) => {
       const { sample, container } = result;
       if (!sampleIds.includes(sample.sampleId)) return;
       const samplesObj = loadSamplesForContainer(container.id);
-      // Restore from backup
       const undoKey = `undo-${container.id}-${sample.sampleId}`;
       const backup = localStorage.getItem(undoKey);
       if (backup) {
         const restored = JSON.parse(backup);
-        // Remove last checkout from history
         const orig = samplesObj[restored.position] || {};
         let newHistory = Array.isArray(orig.history) ? [...orig.history] : [];
         if (newHistory.length > 0 && newHistory[newHistory.length - 1].action === 'check-out') {
@@ -120,6 +123,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
         samplesObj[restored.position] = { ...restored, history: newHistory };
         saveSamplesForContainer(container.id, samplesObj);
         localStorage.removeItem(undoKey);
+        forceLocalStorageUpdate(`samples-${container.id}`);
       }
     });
     setCheckedOutSamples((prev) => {
