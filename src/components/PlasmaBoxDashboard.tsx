@@ -95,6 +95,38 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     }
   }, [container.id, storageKey]);
 
+  // Listen for localStorage changes (e.g., from worklist checkout/undo) and reload samples
+  useEffect(() => {
+    function handleStorageChange(e: StorageEvent) {
+      if (e.key === storageKey) {
+        const savedSamples = localStorage.getItem(storageKey);
+        if (savedSamples) {
+          try {
+            const parsedData = JSON.parse(savedSamples);
+            if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
+              const sampleArray: PlasmaSample[] = Object.entries(parsedData).map(([position, data]: [string, any]) => ({
+                position,
+                sampleId: data.id,
+                storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
+                lastAccessed: data.lastAccessed,
+                history: data.history || [{
+                  timestamp: data.timestamp || new Date().toISOString(),
+                  action: 'check-in',
+                  notes: `Initial storage in position ${position}`
+                }]
+              }));
+              setSamples(sampleArray);
+            }
+          } catch {}
+        } else {
+          setSamples([]);
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [storageKey]);
+
   // Auto-save samples whenever they change
   useEffect(() => {
     if (samples.length >= 0) { // Allow saving empty arrays
