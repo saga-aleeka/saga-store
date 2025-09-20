@@ -1,5 +1,3 @@
-
-
 // Define or import the SampleSearchResult type
 interface SampleSearchResult {
   sample: {
@@ -79,7 +77,10 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   const handleCheckout = (sampleIds: string[]) => {
     foundSamples.forEach((result: any) => {
       const { sample, container } = result;
-      if (!sampleIds.includes(sample.sampleId)) return;
+      if (!sampleIds.includes(sample.sampleId)) {
+        console.debug('[Checkout] Skipping sample', sample.sampleId, '- not in provided sampleIds');
+        return;
+      }
       const samplesObj = loadSamplesForContainer(container.id);
       if (samplesObj && samplesObj[sample.position] && samplesObj[sample.position].sampleId === sample.sampleId) {
         const now = new Date().toISOString();
@@ -92,6 +93,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
             { timestamp: now, action: 'check-out', user, notes: `Sample checked out from position ${sample.position}` }
           ]
         };
+        console.debug('[Checkout] Checking out sample', sample.sampleId, 'from container', container.id, 'position', sample.position, 'Updated history:', updatedSample.history);
         // Store the sample with updated history in a separate storage for checked-out samples
         const checkedOutKey = `checked-out-samples`;
         const existingCheckedOut = localStorage.getItem(checkedOutKey);
@@ -113,6 +115,8 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
         delete samplesObj[sample.position];
         saveSamplesForContainer(container.id, samplesObj);
         forceLocalStorageUpdate(`samples-${container.id}`);
+      } else {
+        console.debug('[Checkout] Sample', sample.sampleId, 'not found in container', container.id, 'at position', sample.position, '- skipping');
       }
     });
     setCheckedOutSamples((prev) => {
@@ -197,14 +201,19 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
                   const availableSampleIds = foundSamples
                     .filter((r: any) => {
                       const samplesObj = loadSamplesForContainer(r.container.id);
-                      return samplesObj && samplesObj[r.sample.position] && samplesObj[r.sample.position].sampleId === r.sample.sampleId;
+                      const present = samplesObj && samplesObj[r.sample.position] && samplesObj[r.sample.position].sampleId === r.sample.sampleId;
+                      console.debug('[Check Out All] Sample', r.sample.sampleId, 'in container', r.container.id, 'present in grid:', present);
+                      return present;
                     })
                     .map((r: any) => r.sample.sampleId);
+                  console.debug('[Check Out All] Available sample IDs to checkout:', availableSampleIds);
                   handleCheckout(availableSampleIds);
                 }}
                 disabled={foundSamples.every((r: any) => {
                   const samplesObj = loadSamplesForContainer(r.container.id);
-                  return !samplesObj || !samplesObj[r.sample.position] || samplesObj[r.sample.position].sampleId !== r.sample.sampleId;
+                  const notPresent = !samplesObj || !samplesObj[r.sample.position] || samplesObj[r.sample.position].sampleId !== r.sample.sampleId;
+                  if (notPresent) console.debug('[Check Out All] Sample', r.sample.sampleId, 'in container', r.container.id, 'already checked out or missing');
+                  return notPresent;
                 })}
               >
                 Check Out All
