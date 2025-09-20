@@ -259,7 +259,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const [selectedSampleType, setSelectedSampleType] = useState<SampleType | null>(null);
   const [showAvailableOnly, setShowAvailableOnly] = useState<boolean>(false);
   const [showTrainingOnly, setShowTrainingOnly] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'containers' | 'archive' | 'samples'>('containers');
+  const [activeTab, setActiveTab] = useState<'containers' | 'archive'>('containers');
   const [worklistSampleIds, setWorklistSampleIds] = useState<string[]>([]);
   const [worklistDuplicateIds, setWorklistDuplicateIds] = useState<string[]>([]);
   const [sampleSearchMode, setSampleSearchMode] = useState<'manual' | 'worklist' | 'bulk'>('manual');
@@ -345,27 +345,16 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Defensive: always arrays
   const filteredSamples = useMemo(() => {
-    // Helper: check if sample is present in its container grid
-    function isSamplePresentInGrid(sample: PlasmaSample, container: PlasmaContainer) {
-      try {
-        const samplesObj = JSON.parse(localStorage.getItem(`samples-${container.id}`) || '{}');
-        return Object.values(samplesObj).some((s: any) => s && (s.sampleId === sample.sampleId || s.id === sample.sampleId));
-      } catch {
-        return false;
-      }
-    }
-    const filterOutCheckedOut = (arr: Array<{ sample: PlasmaSample; container: PlasmaContainer }>) =>
-      arr.filter(({ sample, container }) => isSamplePresentInGrid(sample, container));
     if (sampleSearchMode === 'worklist') {
       if (!Array.isArray(worklistSampleIds) || worklistSampleIds.length === 0) return [];
-      return filterOutCheckedOut((Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
         (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId)
-      ));
+      );
     } else if (sampleSearchMode === 'bulk') {
       if (!Array.isArray(bulkSearchSampleIds) || bulkSearchSampleIds.length === 0) return [];
-      return filterOutCheckedOut((Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
         (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId)
-      ));
+      );
     } else {
       if (!sampleSearchQuery.trim()) {
         setManualSearchSampleIds([]);
@@ -384,9 +373,9 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           );
         });
       });
-      const presentFiltered = filterOutCheckedOut(results);
-      setManualSearchSampleIds(presentFiltered.map(({ sample }) => sample.sampleId));
-      return presentFiltered;
+      const sampleIds = results.map(({ sample }) => sample.sampleId);
+      setManualSearchSampleIds(sampleIds);
+      return results;
     }
   }, [allSamples, sampleSearchQuery, sampleSearchMode, worklistSampleIds, bulkSearchSampleIds]);
 
@@ -473,7 +462,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           <p className="text-muted-foreground">No snapshot found for today.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }: { container: PlasmaContainer; samples: any[] }) => (
+            {todaySnapshot.map(({ container, samples }) => (
               <Card key={container.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>

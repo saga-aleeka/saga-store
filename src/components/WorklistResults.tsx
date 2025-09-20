@@ -1,3 +1,5 @@
+
+
 // Define or import the SampleSearchResult type
 interface SampleSearchResult {
   sample: {
@@ -12,7 +14,6 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
 import { TestTube, CheckCircle, XCircle, AlertTriangle, Download, MapPin, ArrowRight } from 'lucide-react';
-import { loadSamplesForContainer, saveSamplesForContainer } from '../utils/localStorage';
 
 interface WorklistResultsProps {
   searchedSampleIds: string[];
@@ -44,15 +45,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 
   // State for selected samples to checkout
   const [selectedSamples, setSelectedSamples] = React.useState<string[]>([]);
-  const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>(() => {
-    // Restore checked out samples from localStorage if available
-    try {
-      const stored = localStorage.getItem('checkedOutSamples');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>([]);
 
   // Handle select/deselect
   const handleSelectSample = (sampleId: string) => {
@@ -61,98 +54,19 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
     );
   };
 
-  // Helper: get current user
-  const getCurrentUser = () => localStorage.getItem('currentUser') || 'Unknown User';
-
-  // Helper: force reload for all listeners (including same tab)
-  function forceLocalStorageUpdate(key: string) {
-    // Update the value to itself to trigger storage event in other tabs
-    const value = localStorage.getItem(key);
-    localStorage.setItem(key, value || '');
-    // Dispatch a custom event for same-tab listeners
-    window.dispatchEvent(new CustomEvent('plasma-samples-changed', { detail: { key } }));
-  }
-
   // Handle checkout
   const handleCheckout = (sampleIds: string[]) => {
-    foundSamples.forEach((result: any) => {
-      const { sample, container } = result;
-      if (!sampleIds.includes(sample.sampleId)) {
-        console.debug('[Checkout] Skipping sample', sample.sampleId, '- not in provided sampleIds');
-        return;
-      }
-      const samplesObj = loadSamplesForContainer(container.id);
-      if (samplesObj && samplesObj[sample.position] && samplesObj[sample.position].sampleId === sample.sampleId) {
-        const now = new Date().toISOString();
-        const user = getCurrentUser();
-        // Add check-out entry to history before removing
-        const updatedSample = {
-          ...samplesObj[sample.position],
-          history: [
-            ...(samplesObj[sample.position].history || []),
-            { timestamp: now, action: 'check-out', user, notes: `Sample checked out from position ${sample.position}` }
-          ]
-        };
-        console.debug('[Checkout] Checking out sample', sample.sampleId, 'from container', container.id, 'position', sample.position, 'Updated history:', updatedSample.history);
-        // Store the sample with updated history in a separate storage for checked-out samples
-        const checkedOutKey = `checked-out-samples`;
-        const existingCheckedOut = localStorage.getItem(checkedOutKey);
-        let checkedOutSamples: any[] = [];
-        if (existingCheckedOut) {
-          try {
-            checkedOutSamples = JSON.parse(existingCheckedOut);
-          } catch (error) {
-            console.error('Error loading checked out samples:', error);
-          }
-        }
-        checkedOutSamples = checkedOutSamples.filter(s => s.sampleId !== updatedSample.sampleId);
-        checkedOutSamples.push(updatedSample);
-        localStorage.setItem(checkedOutKey, JSON.stringify(checkedOutSamples));
-        // Save undo backup
-        const undoKey = `undo-${container.id}-${sample.sampleId}`;
-        localStorage.setItem(undoKey, JSON.stringify({ ...sample, position: sample.position, containerId: container.id, history: updatedSample.history }));
-        // Remove the sample from the container
-        delete samplesObj[sample.position];
-        saveSamplesForContainer(container.id, samplesObj);
-        forceLocalStorageUpdate(`samples-${container.id}`);
-      } else {
-        console.debug('[Checkout] Sample', sample.sampleId, 'not found in container', container.id, 'at position', sample.position, '- skipping');
-      }
-    });
-    setCheckedOutSamples((prev) => {
-      const updated = [...prev, ...sampleIds.filter(id => !prev.includes(id))];
-      localStorage.setItem('checkedOutSamples', JSON.stringify(updated));
-      return updated;
-    });
+    setCheckedOutSamples((prev) => [...prev, ...sampleIds.filter(id => !prev.includes(id))]);
     setSelectedSamples([]);
+    // Optionally: persist to localStorage
+    // localStorage.setItem('checkedOutSamples', JSON.stringify([...checkedOutSamples, ...sampleIds]));
   };
 
   // Handle undo checkout
   const handleUndoCheckout = (sampleIds: string[]) => {
-    foundSamples.forEach((result: any) => {
-      const { sample, container } = result;
-      if (!sampleIds.includes(sample.sampleId)) return;
-      const samplesObj = loadSamplesForContainer(container.id);
-      const undoKey = `undo-${container.id}-${sample.sampleId}`;
-      const backup = localStorage.getItem(undoKey);
-      if (backup) {
-        const restored = JSON.parse(backup);
-        const orig = samplesObj[restored.position] || {};
-        let newHistory = Array.isArray(orig.history) ? [...orig.history] : [];
-        if (newHistory.length > 0 && newHistory[newHistory.length - 1].action === 'check-out') {
-          newHistory = newHistory.slice(0, -1);
-        }
-        samplesObj[restored.position] = { ...restored, history: newHistory };
-        saveSamplesForContainer(container.id, samplesObj);
-        localStorage.removeItem(undoKey);
-        forceLocalStorageUpdate(`samples-${container.id}`);
-      }
-    });
-    setCheckedOutSamples((prev) => {
-      const updated = prev.filter((id) => !sampleIds.includes(id));
-      localStorage.setItem('checkedOutSamples', JSON.stringify(updated));
-      return updated;
-    });
+    setCheckedOutSamples((prev) => prev.filter((id) => !sampleIds.includes(id)));
+    // Optionally: update localStorage
+    // localStorage.setItem('checkedOutSamples', JSON.stringify(checkedOutSamples.filter(id => !sampleIds.includes(id))));
   };
 
   return (
@@ -193,48 +107,13 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
               Found Samples ({foundSamples.length})
             </h3>
             <div className="flex gap-2 mb-4 flex-wrap">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  // Only check out samples that are still present in the grid (not already checked out)
-                  const availableSampleIds = foundSamples
-                    .filter((r: any) => {
-                      const samplesObj = loadSamplesForContainer(r.container.id);
-                      const present = samplesObj && samplesObj[r.sample.position] && samplesObj[r.sample.position].sampleId === r.sample.sampleId;
-                      console.debug('[Check Out All] Sample', r.sample.sampleId, 'in container', r.container.id, 'present in grid:', present);
-                      return present;
-                    })
-                    .map((r: any) => r.sample.sampleId);
-                  console.debug('[Check Out All] Available sample IDs to checkout:', availableSampleIds);
-                  handleCheckout(availableSampleIds);
-                }}
-                disabled={foundSamples.every((r: any) => {
-                  const samplesObj = loadSamplesForContainer(r.container.id);
-                  const notPresent = !samplesObj || !samplesObj[r.sample.position] || samplesObj[r.sample.position].sampleId !== r.sample.sampleId;
-                  if (notPresent) console.debug('[Check Out All] Sample', r.sample.sampleId, 'in container', r.container.id, 'already checked out or missing');
-                  return notPresent;
-                })}
-              >
+              <Button size="sm" variant="outline" onClick={() => handleCheckout(foundSamples.map((r: any) => r.sample.sampleId))}>
                 Check Out All
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleCheckout(selectedSamples)}
-                disabled={selectedSamples.length === 0}
-              >
+              <Button size="sm" variant="outline" onClick={() => handleCheckout(selectedSamples)} disabled={selectedSamples.length === 0}>
                 Check Out Selected
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleUndoCheckout(checkedOutSamples)}
-                disabled={checkedOutSamples.length === 0}
-              >
+              <Button size="sm" variant="outline" onClick={() => handleUndoCheckout(checkedOutSamples)} disabled={checkedOutSamples.length === 0}>
                 Undo Checkout
               </Button>
             </div>
