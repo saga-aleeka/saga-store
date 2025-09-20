@@ -259,7 +259,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const [selectedSampleType, setSelectedSampleType] = useState<SampleType | null>(null);
   const [showAvailableOnly, setShowAvailableOnly] = useState<boolean>(false);
   const [showTrainingOnly, setShowTrainingOnly] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'containers' | 'archive'>('containers');
+  const [activeTab, setActiveTab] = useState<'containers' | 'archive' | 'samples'>('containers');
   const [worklistSampleIds, setWorklistSampleIds] = useState<string[]>([]);
   const [worklistDuplicateIds, setWorklistDuplicateIds] = useState<string[]>([]);
   const [sampleSearchMode, setSampleSearchMode] = useState<'manual' | 'worklist' | 'bulk'>('manual');
@@ -450,7 +450,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Render admin nightly snapshot
   const renderAdminNightlySnapshot = () => {
-    const todaySnapshot = getTodayNightlySnapshot();
+    const todaySnapshot: Array<{ container: PlasmaContainer; samples: any[] }> = getTodayNightlySnapshot();
     return (
       <Card className="p-4 mb-6">
         <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>

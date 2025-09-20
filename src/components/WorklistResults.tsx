@@ -46,6 +46,8 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   // State for selected samples to checkout
   const [selectedSamples, setSelectedSamples] = React.useState<string[]>([]);
   const [checkedOutSamples, setCheckedOutSamples] = React.useState<string[]>([]);
+  // Store last checkout for undo
+  const [lastCheckout, setLastCheckout] = React.useState<{ sampleId: string, containerId: string, position: string, sampleData: any }[] | null>(null);
 
   // Handle select/deselect
   const handleSelectSample = (sampleId: string) => {
@@ -56,17 +58,68 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
 
   // Handle checkout
   const handleCheckout = (sampleIds: string[]) => {
+    if (!sampleIds.length) return;
+    // Get user initials from localStorage
+    let userInitials = '';
+    try {
+      const userData = JSON.parse(localStorage.getItem('saga-user-initials') || 'null');
+      userInitials = userData?.initials || '';
+    } catch {}
+    // Find all samples to remove and their containers
+    const removed: { sampleId: string, containerId: string, position: string, sampleData: any }[] = [];
+    foundSamples.forEach((result: any) => {
+      const { sample, container } = result;
+      if (sampleIds.includes(sample.sampleId)) {
+        // Remove from localStorage
+        const storageKey = `samples-${container.id}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const samplesObj = JSON.parse(saved);
+          if (samplesObj[sample.position]) {
+            removed.push({
+              sampleId: sample.sampleId,
+              containerId: container.id,
+              position: sample.position,
+              sampleData: samplesObj[sample.position]
+            });
+            delete samplesObj[sample.position];
+            // Optionally, add audit info
+            samplesObj[`_audit_${sample.position}`] = {
+              action: 'checkout',
+              by: userInitials,
+              at: new Date().toISOString(),
+              sampleId: sample.sampleId
+            };
+            localStorage.setItem(storageKey, JSON.stringify(samplesObj));
+          }
+        }
+      }
+    });
+    setLastCheckout(removed);
     setCheckedOutSamples((prev) => [...prev, ...sampleIds.filter(id => !prev.includes(id))]);
     setSelectedSamples([]);
-    // Optionally: persist to localStorage
-    // localStorage.setItem('checkedOutSamples', JSON.stringify([...checkedOutSamples, ...sampleIds]));
   };
 
   // Handle undo checkout
   const handleUndoCheckout = (sampleIds: string[]) => {
+    if (!lastCheckout) return;
+    // Restore each sample to its previous container/position
+    lastCheckout.forEach(({ sampleId, containerId, position, sampleData }) => {
+      const storageKey = `samples-${containerId}`;
+      const saved = localStorage.getItem(storageKey);
+      let samplesObj: Record<string, any> = {};
+      if (saved) {
+        samplesObj = JSON.parse(saved);
+      }
+      samplesObj[position] = sampleData;
+      // Remove audit
+      if (samplesObj[`_audit_${position}`]) {
+        delete samplesObj[`_audit_${position}`];
+      }
+      localStorage.setItem(storageKey, JSON.stringify(samplesObj));
+    });
     setCheckedOutSamples((prev) => prev.filter((id) => !sampleIds.includes(id)));
-    // Optionally: update localStorage
-    // localStorage.setItem('checkedOutSamples', JSON.stringify(checkedOutSamples.filter(id => !sampleIds.includes(id))));
+    setLastCheckout(null);
   };
 
   return (
@@ -107,17 +160,46 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
               Found Samples ({foundSamples.length})
             </h3>
             <div className="flex gap-2 mb-4 flex-wrap">
-              <Button size="sm" variant="outline" onClick={() => handleCheckout(foundSamples.map((r: any) => r.sample.sampleId))}>
-                Check Out All
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => handleCheckout(selectedSamples)} disabled={selectedSamples.length === 0}>
-                Check Out Selected
+              <Button size="sm" variant="default" onClick={() => handleCheckout(selectedSamples)} disabled={selectedSamples.length === 0}>
+                Checkout Selected
               </Button>
               <Button size="sm" variant="outline" onClick={() => handleUndoCheckout(checkedOutSamples)} disabled={checkedOutSamples.length === 0}>
-                Undo Checkout
+                Undo
               </Button>
             </div>
             <ScrollArea className="h-64">
+              {/* Select All Checkbox */}
+              <div className="flex items-center gap-2 mb-2">
+                {(() => {
+                  const selectAllRef = React.useRef<HTMLInputElement>(null);
+                  const selectable = foundSamples.filter((r: any) => !checkedOutSamples.includes(r.sample.sampleId)).map((r: any) => r.sample.sampleId);
+                  const allSelected = selectable.length > 0 && selectable.every(id => selectedSamples.includes(id));
+                  const someSelected = selectedSamples.length > 0 && selectable.some(id => selectedSamples.includes(id)) && !allSelected;
+                  React.useEffect(() => {
+                    if (selectAllRef.current) {
+                      selectAllRef.current.indeterminate = someSelected;
+                    }
+                  }, [someSelected, selectedSamples, foundSamples, checkedOutSamples]);
+                  return (
+                    <>
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedSamples(selectable);
+                          } else {
+                            setSelectedSamples([]);
+                          }
+                        }}
+                        disabled={foundSamples.length === 0}
+                      />
+                      <span className="text-xs text-muted-foreground">Select All</span>
+                    </>
+                  );
+                })()}
+              </div>
               <div className="flex flex-col gap-2 w-full">
                 {foundSamples.map((result: any, index: number) => {
                   const sampleId = result.sample.sampleId;
