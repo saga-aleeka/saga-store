@@ -192,8 +192,20 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => handleCheckout(foundSamples.filter((r: any) => !checkedOutSamples.includes(r.sample.sampleId)).map((r: any) => r.sample.sampleId))}
-                disabled={foundSamples.every((r: any) => checkedOutSamples.includes(r.sample.sampleId))}
+                onClick={() => {
+                  // Only check out samples that are still present in the grid (not already checked out)
+                  const availableSampleIds = foundSamples
+                    .filter((r: any) => {
+                      const samplesObj = loadSamplesForContainer(r.container.id);
+                      return samplesObj && samplesObj[r.sample.position] && samplesObj[r.sample.position].sampleId === r.sample.sampleId;
+                    })
+                    .map((r: any) => r.sample.sampleId);
+                  handleCheckout(availableSampleIds);
+                }}
+                disabled={foundSamples.every((r: any) => {
+                  const samplesObj = loadSamplesForContainer(r.container.id);
+                  return !samplesObj || !samplesObj[r.sample.position] || samplesObj[r.sample.position].sampleId !== r.sample.sampleId;
+                })}
               >
                 Check Out All
               </Button>
