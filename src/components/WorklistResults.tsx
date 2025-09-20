@@ -194,6 +194,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
             </h3>
             <div className="flex gap-2 mb-4 flex-wrap">
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => {
@@ -219,6 +220,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
                 Check Out All
               </Button>
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => handleCheckout(selectedSamples)}
@@ -227,6 +229,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
                 Check Out Selected
               </Button>
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => handleUndoCheckout(checkedOutSamples)}
