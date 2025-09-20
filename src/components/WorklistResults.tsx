@@ -62,6 +62,7 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
     // Get user initials from localStorage
     let userInitials = '';
     try {
+      // Match the badge: saga-user-initials is an object with { initials }
       const userData = JSON.parse(localStorage.getItem('saga-user-initials') || 'null');
       userInitials = userData?.initials || '';
     } catch {}
