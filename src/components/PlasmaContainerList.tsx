@@ -259,7 +259,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const [selectedSampleType, setSelectedSampleType] = useState<SampleType | null>(null);
   const [showAvailableOnly, setShowAvailableOnly] = useState<boolean>(false);
   const [showTrainingOnly, setShowTrainingOnly] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'containers' | 'archive'>('containers');
+  const [activeTab, setActiveTab] = useState<'containers' | 'archive' | 'samples'>('containers');
   const [worklistSampleIds, setWorklistSampleIds] = useState<string[]>([]);
   const [worklistDuplicateIds, setWorklistDuplicateIds] = useState<string[]>([]);
   const [sampleSearchMode, setSampleSearchMode] = useState<'manual' | 'worklist' | 'bulk'>('manual');
@@ -473,7 +473,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           <p className="text-muted-foreground">No snapshot found for today.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }) => (
+            {todaySnapshot.map(({ container, samples }: { container: PlasmaContainer; samples: any[] }) => (
               <Card key={container.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>
