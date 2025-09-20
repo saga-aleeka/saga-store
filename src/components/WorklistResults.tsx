@@ -84,14 +84,32 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
       if (samplesObj && samplesObj[sample.position] && samplesObj[sample.position].sampleId === sample.sampleId) {
         const now = new Date().toISOString();
         const user = getCurrentUser();
-        const newHistory = [
-          ...(samplesObj[sample.position].history || []),
-          { timestamp: now, action: 'check-out', user }
-        ];
+        // Add check-out entry to history before removing
+        const updatedSample = {
+          ...samplesObj[sample.position],
+          history: [
+            ...(samplesObj[sample.position].history || []),
+            { timestamp: now, action: 'check-out', user, notes: `Sample checked out from position ${sample.position}` }
+          ]
+        };
+        // Store the sample with updated history in a separate storage for checked-out samples
+        const checkedOutKey = `checked-out-samples`;
+        const existingCheckedOut = localStorage.getItem(checkedOutKey);
+        let checkedOutSamples: any[] = [];
+        if (existingCheckedOut) {
+          try {
+            checkedOutSamples = JSON.parse(existingCheckedOut);
+          } catch (error) {
+            console.error('Error loading checked out samples:', error);
+          }
+        }
+        checkedOutSamples = checkedOutSamples.filter(s => s.sampleId !== updatedSample.sampleId);
+        checkedOutSamples.push(updatedSample);
+        localStorage.setItem(checkedOutKey, JSON.stringify(checkedOutSamples));
         // Save undo backup
         const undoKey = `undo-${container.id}-${sample.sampleId}`;
-        localStorage.setItem(undoKey, JSON.stringify({ ...sample, position: sample.position, containerId: container.id, history: newHistory }));
-        // Remove the sample from the container (do not re-add it)
+        localStorage.setItem(undoKey, JSON.stringify({ ...sample, position: sample.position, containerId: container.id, history: updatedSample.history }));
+        // Remove the sample from the container
         delete samplesObj[sample.position];
         saveSamplesForContainer(container.id, samplesObj);
         forceLocalStorageUpdate(`samples-${container.id}`);
