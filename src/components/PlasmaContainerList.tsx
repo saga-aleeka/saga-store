@@ -103,12 +103,10 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
 
-  // Manual backup logic for admin (creates a new dated snapshot)
+  // Manual backup logic for admin
   const handleManualBackup = () => {
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '-');
-    const backupKey = `snapshot-${dateStr}-${timeStr}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
     const containersToBackup = Array.isArray(containers) ? containers : [];
     const backupData = containersToBackup.map(container => {
       const storageKey = `samples-${container.id}`;
@@ -119,7 +117,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       };
     });
     localStorage.setItem(backupKey, JSON.stringify(backupData));
-    alert('Manual backup completed.');
+    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
   // Download snapshot as CSV in grid import template layout
@@ -201,20 +199,19 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
   const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
 
-  // Nightly backup logic (2am Eastern Time, creates a new dated snapshot)
+  // Nightly backup logic (2am Eastern Time, overwrite previous)
   React.useEffect(() => {
     function getEasternTimeDate() {
       const now = new Date();
-      // Get UTC-5 (Eastern) time
-      const utcOffset = -5;
+      const utcOffset = -5; // hours
       const eastern = new Date(now.getTime() + utcOffset * 60 * 60 * 1000);
       return eastern;
     }
 
     function scheduleNightlyBackup() {
       const easternNow = getEasternTimeDate();
-      const dateStr = easternNow.toISOString().slice(0, 10);
-      const backupKey = `snapshot-${dateStr}-02-00-00`;
+      const today = easternNow.toISOString().slice(0, 10);
+      const backupKey = `nightly-backup-${today}`;
 
       const next2am = new Date(easternNow);
       next2am.setHours(2, 0, 0, 0);
@@ -490,82 +487,52 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // ...existing code...
   // Remove the inner handleEditContainer and related inner render logic
-  // Helper: get all snapshot keys and data
-  const getAllSnapshots = () => {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('snapshot-'));
-    // Sort by date/time descending
-    keys.sort().reverse();
-    return keys.map(key => ({
-      key,
-      date: key.replace('snapshot-', '').replace(/-/g, ':').replace(/:(\d\d)$/, '-$1'),
-      data: (() => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } })()
-    }));
+  // Helper to get today's nightly snapshot
+  const getTodayNightlySnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) return [];
+    try {
+      return JSON.parse(backupDataRaw);
+    } catch {
+      return [];
+    }
   };
 
-  // State for snapshot dashboard
-  const [snapshotSampleType, setSnapshotSampleType] = useState<SampleType | null>(null);
-  const allSnapshots = getAllSnapshots();
-
-  // Render snapshot dashboard
-  const renderSnapshotDashboard = () => (
-    <Card className="p-4 mb-6">
-      <h3 className="mb-2">Snapshots (2am ET & Manual)</h3>
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
-        <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Latest Snapshot (CSV)</Button>
-        <span className="ml-4 text-sm text-muted-foreground">Filter by sample type:</span>
-        <select
-          className="border rounded px-2 py-1 text-sm"
-          value={snapshotSampleType || ''}
-          onChange={e => setSnapshotSampleType(e.target.value as SampleType || null)}
-        >
-          <option value="">All Types</option>
-          {SAMPLE_TYPES.map(type => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
-      </div>
-      {allSnapshots.length === 0 ? (
-        <p className="text-muted-foreground">No snapshots found.</p>
-      ) : (
-        <div>
-          {allSnapshots.map(({ key, date, data }) => (
-            <Card key={key} className="mb-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h4>Snapshot: {date.replace(/:/g, '-')}</h4>
-                  <p className="text-xs text-muted-foreground">{data.length} containers</p>
-                </div>
-              </div>
-              <div className="mt-2">
-                {(data.length === 0) ? (
-                  <p className="text-muted-foreground">No containers in this snapshot.</p>
-                ) : (
-                  <div>
-                    {data
-                      .filter(({ container }: any) => !snapshotSampleType || container.sampleType === snapshotSampleType)
-                      .map(({ container, samples }: any) => (
-                        <Card key={container.id} className="mb-2">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <h5>{container.name}</h5>
-                              <p className="text-xs text-muted-foreground">Location: {container.location} | Type: {container.sampleType}</p>
-                            </div>
-                            <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
-                              Revert to this Snapshot
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-          ))}
+  // Render admin nightly snapshot
+  const renderAdminNightlySnapshot = () => {
+    const todaySnapshot: Array<{ container: PlasmaContainer; samples: any[] }> = getTodayNightlySnapshot();
+    return (
+      <Card className="p-4 mb-6">
+        <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+        <div className="flex gap-2 mb-4">
+          <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
+          <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Snapshot</Button>
         </div>
-      )}
-    </Card>
-  );
+        {todaySnapshot.length === 0 ? (
+          <p className="text-muted-foreground">No snapshot found for today.</p>
+        ) : (
+          <div>
+            {todaySnapshot.map(({ container, samples }) => (
+              <Card key={container.id} className="mb-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4>{container.name}</h4>
+                    <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
+                    Revert to Last Nightly Save
+                  </Button>
+                </div>
+                {/* ...other container details... */}
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   // Render container card
   const renderContainerCard = (container: PlasmaContainer) => (
@@ -709,9 +676,6 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   return (
     <div className="p-6">
-      {/* Snapshot Dashboard (admin) */}
-      {renderSnapshotDashboard()}
-
       <Header 
         actions={(
           <Button onClick={() => setIsCreateDialogOpen(true)}>
