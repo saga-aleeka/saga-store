@@ -1,9 +1,6 @@
 import React from 'react';
-// If you are getting a "Cannot find module" error for the image import, 
-// make sure the file exists at the specified path. 
-// If it does not, you can use a placeholder or remove the import for now.
 
-const sagaLogo = "/build/assets/64588e517bd125623e5f91d657806eafe8768d13-B9ZrFAQz.png";
+import sagaLogo from '../assets/64588e517bd125623e5f91d657806eafe8768d13.png';
 
 interface HeaderProps {
   actions?: React.ReactNode;
