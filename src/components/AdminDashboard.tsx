@@ -11,6 +11,7 @@ import { Header } from './Header';
 import { ArrowLeft } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { WorklistUpload } from './WorklistUpload';
+import ImportGrid from './ImportGrid';
 // ...other imports as needed
   // Stub for onExitAdmin if not provided
   const onExitAdmin = () => { window.location.reload(); };
@@ -198,9 +199,65 @@ export function AdminDashboard() {
           <TabsContent value="import">
             <Card className="p-6 mb-6">
               <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
-              <WorklistUpload onSamplesExtracted={() => {}} />
+              {/* Editable grid for import */}
+              <ImportGrid />
+              <div className="mt-4">
+                <WorklistUpload onSamplesExtracted={() => {}} />
+              </div>
             </Card>
           </TabsContent>
+
+// --- ImportGrid component ---
+import React, { useState } from 'react';
+function ImportGrid() {
+  // Example grid state: 5x5 for demo, can be made dynamic
+  const [grid, setGrid] = useState(
+    Array.from({ length: 5 }, (_, row) =>
+      Array.from({ length: 5 }, (_, col) => ({ value: '', row, col }))
+    )
+  );
+
+  const handleCellChange = (rowIdx, colIdx, value) => {
+    setGrid(prev =>
+      prev.map((row, r) =>
+        row.map((cell, c) =>
+          r === rowIdx && c === colIdx ? { ...cell, value } : cell
+        )
+      )
+    );
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Row/Col</TableHead>
+            {[1,2,3,4,5].map(col => (
+              <TableHead key={col}>{col}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {grid.map((row, rowIdx) => (
+            <TableRow key={rowIdx}>
+              <TableHead>{String.fromCharCode(65 + rowIdx)}</TableHead>
+              {row.map((cell, colIdx) => (
+                <TableCell key={colIdx}>
+                  <input
+                    className="border rounded px-1 py-0.5 w-16 text-xs"
+                    value={cell.value}
+                    onChange={e => handleCellChange(rowIdx, colIdx, e.target.value)}
+                  />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
 
           {/* Snapshot/Export Tab Content */}
           <TabsContent value="snapshot">
@@ -228,8 +285,6 @@ export function AdminDashboard() {
                     placeholder="Search container name..."
                     value={viewedSaveFile?.containers[0]?.name || ''}
                     onChange={e => {
-                      // This is a placeholder; real search logic would filter containers
-                      // For now, just clear the viewed file if search changes
                       setViewedSaveFile(null);
                     }}
                   />
@@ -239,6 +294,10 @@ export function AdminDashboard() {
                     Download CSV for {selectedSampleType}
                   </Button>
                 )}
+                {/* Snapshot management buttons */}
+                <Button size="sm" variant="secondary" onClick={() => alert('Revert to snapshot coming soon!')}>Revert to Snapshot</Button>
+                <Button size="sm" variant="destructive" onClick={() => alert('Delete snapshot coming soon!')}>Delete Snapshot</Button>
+                <Button size="sm" variant="outline" onClick={() => alert('Export all snapshots coming soon!')}>Export All</Button>
               </div>
               <div className="flex flex-wrap gap-4">
                 {sampleTypes.length === 0 && <span className="text-muted-foreground">No sample types found.</span>}
@@ -264,6 +323,7 @@ export function AdminDashboard() {
               </div>
             </Card>
           </TabsContent>
+
         </Tabs>
         {/* --- End Admin Dashboard Tabs --- */}
       </div>
