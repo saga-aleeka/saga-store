@@ -12,6 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { WorklistUpload } from './WorklistUpload';
 import ImportGrid from './ImportGrid';
+// import ImportCsvGrid from './ImportCsvGrid';
 // ...other imports as needed
   // Stub for onExitAdmin if not provided
   const onExitAdmin = () => { window.location.reload(); };
@@ -198,6 +199,7 @@ export function AdminDashboard() {
           <TabsContent value="import">
             <Card className="p-6 mb-6">
               <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
+              {/* Restored grid-based import UI for containers and samples */}
               <ImportGrid />
               <div className="mt-4">
                 <WorklistUpload onSamplesExtracted={() => {}} />
