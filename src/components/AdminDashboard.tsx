@@ -194,6 +194,17 @@ export function AdminDashboard() {
             <TabsTrigger value="snapshot">Snapshot / Export</TabsTrigger>
           </TabsList>
 
+          {/* Import Tab Content */}
+          <TabsContent value="import">
+            <Card className="p-6 mb-6">
+              <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
+              <ImportGrid />
+              <div className="mt-4">
+                <WorklistUpload onSamplesExtracted={() => {}} />
+              </div>
+            </Card>
+          </TabsContent>
+
           {/* Snapshot/Export Tab Content */}
           <TabsContent value="snapshot">
             <Card className="p-6 mb-6">
