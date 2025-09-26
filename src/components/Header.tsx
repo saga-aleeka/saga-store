@@ -3,7 +3,7 @@ import React from 'react';
 // make sure the file exists at the specified path. 
 // If it does not, you can use a placeholder or remove the import for now.
 
-const sagaLogo = "/logo.png"; // Use a public/static path as a fallback
+const sagaLogo = "/build/assets/64588e517bd125623e5f91d657806eafe8768d13-B9ZrFAQz.png";
 
 interface HeaderProps {
   actions?: React.ReactNode;

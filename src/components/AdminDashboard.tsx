@@ -9,6 +9,8 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Header } from './Header';
 import { ArrowLeft } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { WorklistUpload } from './WorklistUpload';
 // ...other imports as needed
   // Stub for onExitAdmin if not provided
   const onExitAdmin = () => { window.location.reload(); };
@@ -184,37 +186,86 @@ export function AdminDashboard() {
           }
         />
 
-        {/* --- Snapshot/Save File Management UI --- */}
-        <Card className="p-6 mb-6">
-          <h3 className="mb-2 font-semibold">Nightly & Manual Save Files (Snapshots)</h3>
-          <div className="flex flex-wrap gap-4">
-            {sampleTypes.length === 0 && <span className="text-muted-foreground">No sample types found.</span>}
-            {sampleTypes.map(type => (
-              <div key={type} className="border rounded p-3 flex flex-col items-start gap-2 bg-muted/50">
-                <div className="font-mono text-xs mb-1">{type}</div>
-                <Button size="sm" variant="outline" onClick={() => handleManualSave(type)}>
-                  Save Now
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleDownloadSaveFile(type)}>
-                  Download CSV
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleViewSaveFile(type)}>
-                  View File
-                </Button>
-                {selectedSampleType === type && viewedSaveFile && (
-                  <div className="mt-2 w-full max-w-xl overflow-x-auto bg-background border rounded p-2">
-                    <pre className="text-xs whitespace-pre-wrap">{formatSaveFileAsGridCSV(viewedSaveFile)}</pre>
-                  </div>
+        {/* --- Admin Dashboard Tabs --- */}
+        <Tabs defaultValue="import" className="w-full mt-6">
+          <TabsList className="mb-4">
+            <TabsTrigger value="import">Import</TabsTrigger>
+            <TabsTrigger value="snapshot">Snapshot / Export</TabsTrigger>
+          </TabsList>
+
+
+          {/* Import Tab Content */}
+          <TabsContent value="import">
+            <Card className="p-6 mb-6">
+              <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
+              <WorklistUpload onSamplesExtracted={() => {}} />
+            </Card>
+          </TabsContent>
+
+          {/* Snapshot/Export Tab Content */}
+          <TabsContent value="snapshot">
+            <Card className="p-6 mb-6">
+              <h3 className="mb-2 font-semibold">Nightly & Manual Save Files (Snapshots)</h3>
+              {/* Filtering UI */}
+              <div className="flex flex-wrap gap-4 mb-4 items-end">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Sample Type</label>
+                  <select
+                    className="border rounded px-2 py-1 text-sm"
+                    value={selectedSampleType || ''}
+                    onChange={e => setSelectedSampleType(e.target.value || null)}
+                  >
+                    <option value="">All</option>
+                    {sampleTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Container Name</label>
+                  <Input
+                    className="w-48"
+                    placeholder="Search container name..."
+                    value={viewedSaveFile?.containers[0]?.name || ''}
+                    onChange={e => {
+                      // This is a placeholder; real search logic would filter containers
+                      // For now, just clear the viewed file if search changes
+                      setViewedSaveFile(null);
+                    }}
+                  />
+                </div>
+                {selectedSampleType && (
+                  <Button size="sm" variant="outline" onClick={() => handleDownloadSaveFile(selectedSampleType)}>
+                    Download CSV for {selectedSampleType}
+                  </Button>
                 )}
               </div>
-            ))}
-          </div>
-
-        </Card>
-        {/* --- End Snapshot/Save File Management UI --- */}
-
-        {/* ...existing dashboard UI (import/export/manage tabs, etc.) ... */}
-        {/* ...existing code... */}
+              <div className="flex flex-wrap gap-4">
+                {sampleTypes.length === 0 && <span className="text-muted-foreground">No sample types found.</span>}
+                {(selectedSampleType ? sampleTypes.filter(type => type === selectedSampleType) : sampleTypes).map(type => (
+                  <div key={type} className="border rounded p-3 flex flex-col items-start gap-2 bg-muted/50">
+                    <div className="font-mono text-xs mb-1">{type}</div>
+                    <Button size="sm" variant="outline" onClick={() => handleManualSave(type)}>
+                      Save Now
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDownloadSaveFile(type)}>
+                      Download CSV
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleViewSaveFile(type)}>
+                      View File
+                    </Button>
+                    {selectedSampleType === type && viewedSaveFile && (
+                      <div className="mt-2 w-full max-w-xl overflow-x-auto bg-background border rounded p-2">
+                        <pre className="text-xs whitespace-pre-wrap">{formatSaveFileAsGridCSV(viewedSaveFile)}</pre>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
+        {/* --- End Admin Dashboard Tabs --- */}
       </div>
     </div>
   );
