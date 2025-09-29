@@ -24,14 +24,26 @@ interface CsvImportSummaryProps {
 }
 
 function parseCsv(csv: string): ImportSummary {
-  // Simple CSV parser for demo: expects columns for container location, name, sampleId, position
-  const lines = csv.split(/\r?\n/).filter(l => l.trim());
+  // Find first non-empty row, then stop after 10 consecutive blank rows
+  const lines = csv.split(/\r?\n/);
+  let startIdx = 0;
+  while (startIdx < lines.length && !lines[startIdx].trim()) {
+    startIdx++;
+  }
   const containers: ContainerItem[] = [];
   const samples: SampleItem[] = [];
   const containerMap = new Map<string, ContainerItem>();
-  lines.forEach(line => {
+  let blankCount = 0;
+  for (let i = startIdx; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) {
+      blankCount++;
+      if (blankCount >= 10) break;
+      continue;
+    } else {
+      blankCount = 0;
+    }
     const cols = line.split(',').map(s => s.trim());
-    // Heuristic: look for lines with at least 4 columns
     if (cols.length >= 4) {
       const [location, name, sampleId, position] = cols;
       if (location && name && sampleId && position) {
@@ -52,7 +64,7 @@ function parseCsv(csv: string): ImportSummary {
         });
       }
     }
-  });
+  }
   return { containers, samples };
 }
 
