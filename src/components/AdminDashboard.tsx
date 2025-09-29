@@ -1,186 +1,453 @@
-
-
-
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
+// Types for preview objects
+interface Preview<T> {
+  valid: boolean;
+  data: T[];
+  errors: string[];
+}
+import GridSnapshotView from './GridSnapshotView';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
+import { Alert, AlertDescription } from './ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Upload, Download, FileText, AlertTriangle, CheckCircle, Database, ArrowLeft, Trash2 } from 'lucide-react';
 import { Header } from './Header';
-import { ArrowLeft } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
-import { WorklistUpload } from './WorklistUpload';
-import CsvImportSummary from './CsvImportSummary';
-// import ImportCsvGrid from './ImportCsvGrid';
-// ...other imports as needed
-  // Stub for onExitAdmin if not provided
-  const onExitAdmin = () => { window.location.reload(); };
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 
-// --- Snapshot/Save File Logic ---
-type ContainerSnapshot = {
+interface Container {
   id: string;
   name: string;
   location: string;
   containerType: string;
   sampleType: string;
   temperature: string;
-};
-type SampleSnapshot = {
-  containerId: string;
-  sampleId: string;
-  position: string;
-};
-type SaveFile = {
-  containers: ContainerSnapshot[];
-  samples: SampleSnapshot[];
-  savedAt: string; // ISO timestamp
-};
-function getSampleTypes(containers: Array<{ sampleType: string }>) {
-  return Array.from(new Set(containers.map(c => c.sampleType)));
 }
-function getSnapshotKey(sampleType: string) {
-  return `snapshot-${sampleType}`;
-}
-function createSaveFileForSampleType(sampleType: string, containers: any[]) {
-  const relevantContainers = containers.filter(c => c.sampleType === sampleType);
-  const containerSnaps: ContainerSnapshot[] = relevantContainers.map(c => ({
-    id: c.id,
-    name: c.name,
-    location: c.location,
-    containerType: c.containerType,
-    sampleType: c.sampleType,
-    temperature: c.temperature,
-  }));
-  let sampleSnaps: SampleSnapshot[] = [];
-  relevantContainers.forEach(container => {
-    const storageKey = `samples-${container.id}`;
-    const savedSamples = localStorage.getItem(storageKey);
-    if (savedSamples) {
-      const samples = JSON.parse(savedSamples);
-      Object.entries(samples).forEach(([position, sample]) => {
-        const typedSample = sample as { id: string };
-        sampleSnaps.push({
-          containerId: container.id,
-          sampleId: typedSample.id,
-          position,
+
+export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
+  // Utility: Parse grid-style import template
+  function parseGridImport(content: string) {
+  console.log('--- Grid Import Debug Start ---');
+    // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
+  const lines = content.split(/\r?\n/).map(l => l.trimEnd());
+    const containers: any[] = [];
+    let i = 0;
+  while (i < lines.length) {
+      // Find start of a block (must have 'Box Name:')
+      if (lines[i] && lines[i].includes('Box Name:')) {
+        console.log(`Parsing container block at line ${i}:`, lines[i]);
+        // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
+  let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
+  parts = parts.map(p => (p || '').trim());
+  console.log('Header parts:', parts);
+        let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
+        let containerName = '';
+        // Find the part after 'Box Name:'
+        const boxNameIdx = parts.findIndex(p => p.includes('Box Name:'));
+        if (boxNameIdx !== -1 && parts.length > boxNameIdx + 1) {
+          containerName = (parts[boxNameIdx + 1] || '').trim();
+        } else if (parts.length > 2) {
+          containerName = (parts[2] || '').trim();
+        }
+        let location = rackId || '';
+        let samples: any[] = [];
+        i++;
+        // Skip empty lines
+        while (i < lines.length && lines[i].trim() === '') i++;
+        // Next line: column headers (should start with two empty columns, then numbers)
+        const colHeaderLine = lines[i] || '';
+        let colHeaders: string[] = [];
+        if (colHeaderLine.includes(',')) {
+          colHeaders = colHeaderLine.split(',').slice(2).map(h => (h || '').trim()).filter(Boolean);
+        } else {
+          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (h || '').trim()).filter(Boolean);
+        }
+        console.log('Column headers:', colHeaders);
+        i++;
+        // Parse all rows until next container or end of file
+        while (i < lines.length && lines[i] && !lines[i].includes('Box Name:')) {
+          let rowParts: string[] = [];
+          if (lines[i].includes(',')) {
+            rowParts = lines[i].split(',');
+          } else {
+            rowParts = lines[i].split(/\t|\s{2,}/);
+          }
+          rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
+          console.log(`Row ${i} (${lines[i]}):`, rowParts);
+          // Use first cell as row label if present, else use blank or row number
+          // Detect offset: if first cell is empty and second is a single letter, use second as row label
+          let rowLabel = rowParts[0] || String(i);
+          let sampleStartIdx = 1;
+          if (rowParts[0] === '' && /^[A-I]$/.test(rowParts[1] || '')) {
+            rowLabel = rowParts[1];
+            sampleStartIdx = 2;
+          }
+          const isRowHeader = /^[A-I]$/.test(rowLabel);
+          for (let c = 0; c < colHeaders.length; c++) {
+            let sampleId = rowParts[sampleStartIdx + c] || '';
+            sampleId = sampleId.replace(/\u00A0/g, '').trim();
+            // Never import the row header as a sample ID
+            if (isRowHeader && c === 0 && sampleId === rowLabel) {
+              // This is the row header, skip
+              continue;
+            }
+            // Only allow row/column form for position (e.g., A1, B2)
+            const colNum = colHeaders[c] || String(c + 1);
+            const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
+            if (sampleId && position) {
+              samples.push({
+                sampleId,
+                position,
+                containerName, // preserve all characters and symbols
+                location,
+              });
+              console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
+            } else if (rowParts[sampleStartIdx + c] && rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[sampleStartIdx + c].length > 0) {
+              console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
+            } else {
+              console.log(`Empty cell at ${rowLabel}${colNum}`);
+            }
+          }
+          i++;
+        }
+        containers.push({
+          rackId,
+          containerName,
+          location,
+          samples,
         });
-      });
-    }
-  });
-  return {
-    containers: containerSnaps,
-    samples: sampleSnaps,
-    savedAt: new Date().toISOString(),
-  } as SaveFile;
-}
-function saveSnapshotForSampleType(sampleType: string, containers: any[]) {
-  const saveFile = createSaveFileForSampleType(sampleType, containers);
-  localStorage.setItem(getSnapshotKey(sampleType), JSON.stringify(saveFile));
-}
-function loadSnapshotForSampleType(sampleType: string): SaveFile | null {
-  const raw = localStorage.getItem(getSnapshotKey(sampleType));
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function formatSaveFileAsGridCSV(saveFile: SaveFile): string {
-  let csv = '';
-  saveFile.containers.forEach(container => {
-    csv += `${container.name},Box Name:,${container.name},,,\n`;
-    const samples = saveFile.samples.filter(s => s.containerId === container.id);
-    const rows = ['A','B','C','D','E','F','G','H','I'];
-    const cols = [1,2,3,4,5,6,7,8,9];
-    csv += ',,' + cols.join(',') + '\n';
-    rows.forEach(row => {
-      csv += row;
-      cols.forEach(col => {
-        const pos = row + col;
-        const sample = samples.find(s => s.position === pos);
-        csv += ',' + (sample ? sample.sampleId : '');
-      });
-      csv += '\n';
-    });
-    csv += '\n';
-  });
-  return csv;
-}
-// --- End Snapshot/Save File Logic ---
-
-export function AdminDashboard() {
-  // --- State ---
-  const [containers, setContainers] = useState<Array<{ name: string; location: string; containerType: string; sampleType: string; temperature: string; id: string }>>(() => {
-    const raw = localStorage.getItem('containers');
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return [];
+        console.log(`Parsed ${samples.length} samples for container ${containerName}`);
+      } else {
+        i++;
       }
     }
-    return [];
-  });
-  const [selectedSampleType, setSelectedSampleType] = useState<string | null>(null);
-  const [viewedSaveFile, setViewedSaveFile] = useState<SaveFile | null>(null);
-  const [showClearDialog, setShowClearDialog] = useState(false);
-  const sampleTypes = useMemo(() => getSampleTypes(containers), [containers]);
-
-  // --- 2am ET Nightly Save Logic ---
-  useEffect(() => {
-    function msUntilNext2amET() {
-      const now = new Date();
-      const next2am = new Date(now);
-      next2am.setUTCHours(6, 0, 0, 0); // 2am ET = 6am UTC (for EDT)
-      if (now > next2am) {
-        next2am.setUTCDate(next2am.getUTCDate() + 1);
-      }
-      return next2am.getTime() - now.getTime();
-    }
-    function nightlySaveAllSampleTypes() {
-      const types = getSampleTypes(containers);
-      types.forEach(type => saveSnapshotForSampleType(type, containers));
-    }
-    const timeout = setTimeout(() => {
-      nightlySaveAllSampleTypes();
-      setInterval(nightlySaveAllSampleTypes, 24 * 60 * 60 * 1000);
-    }, msUntilNext2amET());
-    if (msUntilNext2amET() < 1000 * 60) {
-      nightlySaveAllSampleTypes();
-    }
-    return () => clearTimeout(timeout);
-  }, [containers]);
-  // --- End 2am ET Nightly Save Logic ---
-
-  // --- Manual Save, Download, and View UI ---
-  function handleManualSave(sampleType: string) {
-    saveSnapshotForSampleType(sampleType, containers);
-    alert(`Save file for ${sampleType} updated.`);
+    console.log('--- Grid Import Debug End ---');
+    return { containers };
   }
-  function handleDownloadSaveFile(sampleType: string) {
-    const saveFile = loadSnapshotForSampleType(sampleType);
-    if (!saveFile) {
-      alert('No save file found for this sample type.');
+
+  const handleContainerFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result as string;
+        // Try to parse as grid import
+        const parsed = parseGridImport(content);
+        if (parsed.containers.length > 0) {
+          // Preview for user
+          setContainerPreview({ valid: true, data: parsed.containers, errors: [] });
+          // Also set sample preview for all samples
+          const allSamples = parsed.containers.flatMap(c => c.samples);
+          setSamplePreview({ valid: true, data: allSamples, errors: [] });
+        } else {
+          setContainerPreview({ valid: false, data: [], errors: ['No containers found in grid import.'] });
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+  const [containerPreview, setContainerPreview] = useState<Preview<any> | null>(null);
+
+  const handleSampleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result;
+        console.log('Sample file content:', content);
+        // Add logic to process the file content
+      };
+      reader.readAsText(file);
+    }
+  };
+  const [samplePreview, setSamplePreview] = useState<Preview<any> | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState('');
+  const containerFileRef = useRef(null);
+  const sampleFileRef = useRef(null);
+
+  const importSamples = () => {
+    console.log('Importing samples...');
+    // Example: Assume samplePreview.data is [{ containerName, sampleId, position }]
+    if (!samplePreview || !samplePreview.valid) {
+      alert('No valid sample data to import.');
       return;
     }
-    const csv = formatSaveFileAsGridCSV(saveFile);
-    const blob = new Blob([csv], { type: 'text/csv' });
+    // Map container names to IDs
+    const nameToId: { [name: string]: string } = {};
+    containers.forEach(c => {
+      nameToId[c.name] = c.id;
+    });
+    let importedCount = 0;
+    samplePreview.data.forEach((sample: any) => {
+      const containerId = nameToId[sample.containerName];
+      if (!containerId) {
+        console.warn(`No container found for name: ${sample.containerName}`);
+        return;
+      }
+      // Load samples for this container
+      const storageKey = `samples-${containerId}`;
+      let samples: Record<string, any> = {};
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        samples = JSON.parse(savedSamples);
+      }
+      // Assign sample to position
+      samples[sample.position] = { id: sample.sampleId, ...sample };
+      localStorage.setItem(storageKey, JSON.stringify(samples));
+      importedCount++;
+    });
+    alert(`Imported ${importedCount} samples by container name.`);
+  };
+
+  const importContainers = () => {
+    if (!containerPreview || !containerPreview.valid) {
+      alert('No valid container data to import.');
+      return;
+    }
+    setIsImporting(true);
+    setTimeout(() => {
+      // For each container, create or update in saga-containers
+      const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
+      let containers = Array.isArray(savedContainers) ? savedContainers : [];
+      let importedCount = 0;
+      let retainedCount = 0;
+      containerPreview.data.forEach((c: any) => {
+        // Use containerName as unique name, location as location (preserve all input, including underscores/symbols)
+        let existing = containers.find((x: any) => x.name === c.containerName);
+        // Determine sampleType from containerName (case-insensitive keyword match)
+        const nameLower = (c.containerName || '').toLowerCase();
+        let sampleType = 'Unknown';
+  if (nameLower.includes('dp pool') || nameLower.includes('dp_pools') || nameLower.includes('dp_pools') || nameLower.includes('dp')) sampleType = 'DP Pools';
+  else if (nameLower.includes('cfdna')) sampleType = 'cfDNA Tubes';
+  else if (nameLower.includes('dtc')) sampleType = 'DTC Tubes';
+  else if (nameLower.includes('mnc')) sampleType = 'MNC Tubes';
+  else if (nameLower.includes('pa pool') || nameLower.includes('pap')) sampleType = 'PA Pool Tubes';
+  else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
+  else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
+  else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
+        let type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
+        if (!existing) {
+          existing = {
+            id: `${c.containerName}_${Date.now()}`,
+            name: c.containerName, // preserve exactly as input
+            location: c.location,
+            containerType: type,
+            sampleType,
+            temperature: '-80°C',
+          };
+          containers.push(existing);
+        } else {
+          // Update sampleType if needed
+          existing.sampleType = sampleType;
+        }
+        // Save samples for this container
+        const storageKey = `samples-${existing.id}`;
+        let samples: Record<string, any> = {};
+        // Load existing samples for this container (if any)
+        const savedSamples = localStorage.getItem(storageKey);
+        if (savedSamples) {
+          try {
+            samples = JSON.parse(savedSamples);
+          } catch {}
+        }
+        c.samples.forEach((sample: any) => {
+          // If a sample already exists at this position and has the same ID, retain it
+          const existingSample = samples[sample.position];
+          if (existingSample && existingSample.id === sample.sampleId) {
+            retainedCount++;
+            // Retain the existing sample object (including history)
+            return;
+          }
+          // Otherwise, overwrite or add new
+          samples[sample.position] = {
+            id: sample.sampleId, // PlasmaBoxDashboard expects 'id' property
+            position: sample.position,
+            containerName: c.containerName,
+            location: c.location,
+            timestamp: new Date().toISOString(),
+            history: [{
+              timestamp: new Date().toISOString(),
+              action: 'check-in',
+              notes: `Imported from grid at position ${sample.position}`
+            }]
+          };
+          importedCount++;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(samples));
+      });
+      localStorage.setItem('saga-containers', JSON.stringify(containers));
+      // Update containers state/UI after import
+      if (typeof onContainersChange === 'function') {
+        onContainersChange(containers);
+      }
+      setIsImporting(false);
+      // Show confirmation dialog
+      window.setTimeout(() => {
+        window.confirm(`Import complete! ${importedCount} samples imported. ${retainedCount} samples retained in their original positions.\n\nClick OK to continue.`);
+      }, 100);
+    }, 100);
+  };
+
+  // Templates
+  const containerTemplate = `name,location,containerType,sampleType,temperature\n"Plasma Box Alpha","Freezer A - Rack 1","5x5-box","DP Pools","-80°C"\n"cfDNA Storage Unit","Freezer B - Rack 2","9x9-box","cfDNA Tubes","-80°C"`;
+  const gridTemplate = `cfDNA_RACK_001,Box Name:,cfDNA_BOX_001,,,,,,,,,,
+,,1,2,3,4,5,6,7,8,9
+,A,C00388cD010,C00395cD008,C00304cD005,C00397cD036,C00402cD006,C00411cD016,C00554cD002,C00405cD018,C00394cD016
+,B,C00552cD001,C00394cD008,C00411cD014,C00375cD016,C00403cD006,C00386cD014,C00397cD014,C00403cD018,C00386cD018
+,C,C00558cD004,C00853cD004,C00372cD014,C00394cD006,C00553cD001,C00553cD002,C00396cD014,C00402cD018,C00411cD016
+,D,C00394cD010,C00400cD010,C00477cD016,C00398cD006,C00405cD006,C00386cD008,C00400cD014,C00304cD004,C00397cD008
+,E,C00395cD010,C00487cD011,C00411cD010,C00336cD002,C00406cD006,C00553cD003,C00402cD014,C00400cD018,C00396cD008
+,F,C00552cD002,C00402cD010,C00386cD006,C00397cD006,C00446cD018,C00640cD003,C00403cD014,C00396cD018,C00403cD008
+,G,C00397cD010,C00403cD010,C00554cD001,C00396cD006,C00555cD002,C00336cD002,C00554cD003,C00397cD018,C00556cD019
+,H,C00396cD010,C00552cD003,C00395cD036,C00400cD006,C00558cD006,C00394cD014,C00405cD014,C00416cD020,C00402cD008
+,I,C00406cD010,C00405cD010,C00330cD004,C00487cD012,C00555cD001,C00395cD014,C00406cD014,C00395cD018,C00403cD008
+
+
+PLASMA_RACK_001,Box Name:,PLASMA_BOX_001,,,,,
+
+,,1,2,3,4,5
+,A,C03001PL1A,C03002PL2A,C03003PL3A,C03004PL4A,C03005PL5A
+,B,C03006PL6A,C03007PL7A,C03008PL8A,C03009PL9A,C03010PL10A
+,C,C03011PL11A,C03012PL12A,C03013PL13A,C03014PL14A,C03015PL15A
+,D,C03016PL16A,C03017PL17A,C03018PL18A,C03019PL19A,C03020PL20A
+,E,C03021PL21A,C03022PL22A,C03023PL23A,C03024PL24A,C03025PL25A
+
+
+DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
+,,1,2,3,4,5,6,7,8,9
+,A,C01039DPP1B,C01040DPP2B,C01041DPP3B,C01042DPP4B,C01043DPP5B,C01044DPP6B,C01045DPP7B,C01046DPP8B,C01047DPP9B
+,B,C01048DPP10B,C01049DPP11B,C01050DPP12B,C01051DPP13B,C01052DPP14B,C01053DPP15B,C01054DPP16B,C01055DPP17B,C01056DPP18B
+,C,C01057DPP19B,C01058DPP20B,C01059DPP21B,C01060DPP22B,C01061DPP23B,C01062DPP24B,C01063DPP25B,C01064DPP26B,C01065DPP27B`;
+
+  const sampleTemplate = `containerName,sampleId,position
+"cfDNA_BOX_001","C01039DPP1B","A1"
+"cfDNA_BOX_001","C01040DPP2B","A2"`;
+
+  // Helper: Export containers as CSV
+  const exportContainers = () => {
+    const csvContent = [
+      'name,location,containerType,sampleType,temperature',
+      ...containers.map(c => `"${c.name}","${c.location}","${c.containerType}","${c.sampleType}","${c.temperature}"`)
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${sampleType}-snapshot.csv`;
+    a.download = 'containers-export.csv';
     a.click();
     window.URL.revokeObjectURL(url);
-  }
-  function handleViewSaveFile(sampleType: string) {
-    const saveFile = loadSnapshotForSampleType(sampleType);
-    setViewedSaveFile(saveFile);
-    setSelectedSampleType(sampleType);
-  }
-  // --- End Manual Save, Download, and View UI ---
+  };
 
-  // ...other dashboard logic (import/export/manage tabs, etc.)...
+  // Helper: Manual backup
+  const handleManualBackup = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const containersToBackup = Array.isArray(containers) ? containers : [];
+    const backupData = containersToBackup.map(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      return {
+        container,
+        samples: savedSamples ? JSON.parse(savedSamples) : []
+      };
+    });
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
+  };
+
+  // Helper: Download snapshot as CSV
+  const handleDownloadSnapshot = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const backupKey = `nightly-backup-${today}`;
+    const backupDataRaw = localStorage.getItem(backupKey);
+    if (!backupDataRaw) {
+      alert('No snapshot found for today.');
+      return;
+    }
+    // Parse backupDataRaw and convert to grid CSV format
+    const backupData = JSON.parse(backupDataRaw);
+    // For each container, output grid: first row is A,B,C..., then each row is 1,sampleID,sampleID...
+    let csvSections: string[] = [];
+    backupData.forEach((entry: any) => {
+      const c = entry.container;
+      const samples = Array.isArray(entry.samples)
+        ? entry.samples
+        : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
+      // Pad grid based on container type
+      let columns: string[] = [];
+      let rows: string[] = [];
+      if (c.containerType === '5x5-box') {
+        columns = ['A','B','C','D','E'];
+        rows = ['1','2','3','4','5'];
+      } else if (c.containerType === '9x9-box') {
+        columns = ['A','B','C','D','E','F','G','H','I'];
+        rows = ['1','2','3','4','5','6','7','8','9'];
+      } else {
+          // Fallback: use detected positions
+          const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
+          columns = Array.from(new Set(allPositions.map((p: string) => p[0]))) as string[];
+          columns = columns.sort();
+          rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))) as string[];
+          rows = rows.sort((a,b) => Number(a)-Number(b));
+      }
+      // Header: container name
+      csvSections.push(`${c.name}`);
+      // First row: column labels
+      csvSections.push(["", ...columns].join(","));
+      // For each row number, output row label and sample IDs for each column
+      rows.forEach(rowNum => {
+        const row = [rowNum];
+        columns.forEach(col => {
+          const pos = `${col}${rowNum}`;
+          const sample = samples.find((s: any) => s.position === pos);
+          row.push(sample ? sample.id || sample.sampleId : "");
+        });
+        csvSections.push(row.join(","));
+      });
+      // Blank line between containers
+      csvSections.push("");
+    });
+    const csvContent = csvSections.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshot-grid-${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Helper: Export samples as CSV
+  const exportSamples = () => {
+    let rows = ['containerId,sampleId,position'];
+    containers.forEach(container => {
+      const storageKey = `samples-${container.id}`;
+      const savedSamples = localStorage.getItem(storageKey);
+      if (savedSamples) {
+        const samples = JSON.parse(savedSamples);
+        Object.entries(samples).forEach(([position, sample]) => {
+          const typedSample = sample as { id: string }; // Cast sample to the expected type
+          rows.push(`"${container.id}","${typedSample.id}","${position}"`);
+        });
+      }
+    });
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'samples-export.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const [showClearDialog, setShowClearDialog] = useState(false);
 
   return (
     <div className="p-6 min-h-screen bg-background">
@@ -196,187 +463,344 @@ export function AdminDashboard() {
             </>
           }
         />
-
-        {/* --- Admin Dashboard Tabs --- */}
         <Tabs defaultValue="import" className="w-full mt-6">
-          <TabsList className="mb-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="import">Import</TabsTrigger>
-            <TabsTrigger value="snapshot">Snapshot / Export</TabsTrigger>
-            <TabsTrigger value="danger">Danger Zone</TabsTrigger>
+            <TabsTrigger value="export">Export</TabsTrigger>
+            <TabsTrigger value="manage">Manage</TabsTrigger>
           </TabsList>
-          {/* Danger Zone Tab Content */}
-          <TabsContent value="danger">
-            <Card className="p-6 mb-6 border-red-600 border-2 bg-red-50">
-              <h3 className="mb-2 font-semibold text-red-700">Danger Zone: Clear All Data</h3>
-              <p className="mb-4 text-red-600">This will permanently delete all saved containers, samples, and snapshots from your browser. This action cannot be undone.</p>
-              <Button variant="destructive" onClick={() => {
-                if (window.confirm('Are you sure you want to clear ALL saved data? This cannot be undone.')) {
-                  localStorage.clear();
-                  setContainers([]);
-                  setViewedSaveFile(null);
-                  setSelectedSampleType(null);
-                  alert('All saved data has been cleared.');
-                  window.location.reload();
-                }
-              }}>
-                Clear All Data
-              </Button>
-            </Card>
-          </TabsContent>
-
-          {/* Import Tab Content */}
-          <TabsContent value="import">
-            <Card className="p-6 mb-6">
-              <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
-              {/* New CSV import UI: scan file for containers and samples, summarize, and allow import */}
-              <CsvImportSummary onImport={items => {
-                // Map imported containers to required state shape
-                // Map to PlasmaContainer type for dashboard visibility
-                const mappedContainers = items.containers.map(c => {
-                  // Guess containerType and totalSlots from sampleType or name (fallback to 9x9-box)
-                  let containerType: string = c.containerType || '';
-                  let totalSlots = 81;
-                  if (!containerType) {
-                    if (/9x9/i.test(c.name) || /9x9/i.test(c.location)) {
-                      containerType = '9x9-box';
-                      totalSlots = 81;
-                    } else if (/5x5/i.test(c.name) || /5x5/i.test(c.location)) {
-                      containerType = '5x5-box';
-                      totalSlots = 25;
-                    } else {
-                      containerType = '9x9-box';
-                      totalSlots = 81;
-                    }
-                  }
-                  // Count samples for this container
-                  const sampleCount = items.samples.filter(s => s.containerId === c.id).length;
-                  return {
-                    id: c.id,
-                    name: c.name,
-                    location: c.location,
-                    containerType,
-                    sampleType: c.sampleType || '',
-                    temperature: c.temperature || '',
-                    occupiedSlots: sampleCount,
-                    totalSlots,
-                    lastUpdated: new Date().toISOString(),
-                    isTraining: false,
-                    isArchived: false,
-                    history: [
-                      {
-                        timestamp: new Date().toISOString(),
-                        action: 'imported',
-                        user: 'admin',
-                        notes: 'Imported from CSV'
-                      }
-                    ]
-                  };
-                });
-                // Merge with existing containers to prevent duplicates
-                const existingRaw = localStorage.getItem('plasma-containers');
-                let existing: any[] = [];
-                if (existingRaw) {
-                  try { existing = JSON.parse(existingRaw); } catch { existing = []; }
-                }
-                // Use id as unique key
-                const existingById = Object.fromEntries(existing.map(c => [c.id, c]));
-                mappedContainers.forEach(c => { existingById[c.id] = c; });
-                const mergedContainers = Object.values(existingById);
-                setContainers(mergedContainers as any);
-                localStorage.setItem('containers', JSON.stringify(mergedContainers));
-                localStorage.setItem('plasma-containers', JSON.stringify(mergedContainers));
-                console.debug('Saved to localStorage: containers and plasma-containers', {
-                  containers: JSON.parse(localStorage.getItem('containers') || '[]'),
-                  plasmaContainers: JSON.parse(localStorage.getItem('plasma-containers') || '[]')
-                });
-                // Save samples by container in dashboard format
-                const samplesByContainer: { [containerId: string]: { [position: string]: { id: string; timestamp: string; history: any[] } } } = {};
-                const now = new Date().toISOString();
-                for (const s of items.samples) {
-                  if (!samplesByContainer[s.containerId]) samplesByContainer[s.containerId] = {};
-                  samplesByContainer[s.containerId][s.position] = {
-                    id: s.sampleId,
-                    timestamp: now,
-                    history: [{ timestamp: now, action: 'imported', notes: 'Imported from CSV' }]
-                  };
-                }
-                for (const containerId in samplesByContainer) {
-                  localStorage.setItem(`samples-${containerId}`, JSON.stringify(samplesByContainer[containerId]));
-                }
-                alert(`Imported ${items.containers.length} containers and ${items.samples.length} samples. The dashboard will now refresh to show the new data.`);
-                window.location.reload();
-              }} />
-            </Card>
-          </TabsContent>
-
-          {/* Snapshot/Export Tab Content */}
-          <TabsContent value="snapshot">
-            <Card className="p-6 mb-6">
-              <h3 className="mb-2 font-semibold">Nightly & Manual Save Files (Snapshots)</h3>
-              {/* Filtering UI */}
-              <div className="flex flex-wrap gap-4 mb-4 items-end">
-                <div>
-                  <label className="block text-xs font-medium mb-1">Sample Type</label>
-                  <select
-                    className="border rounded px-2 py-1 text-sm"
-                    value={selectedSampleType || ''}
-                    onChange={e => setSelectedSampleType(e.target.value || null)}
-                  >
-                    <option value="">All</option>
-                    {sampleTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+          <TabsContent value="import" className="space-y-6">
+            {/* Import Containers Card */}
+            <Card className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  <h3>Import Containers</h3>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Container Name</label>
+                <div className="space-y-3">
+                  <Label htmlFor="containerFile">Upload Container CSV</Label>
                   <Input
-                    className="w-48"
-                    placeholder="Search container name..."
-                    value={viewedSaveFile?.containers[0]?.name || ''}
-                    onChange={e => {
-                      setViewedSaveFile(null);
-                    }}
+                    ref={containerFileRef}
+                    id="containerFile"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleContainerFileUpload}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Grid format auto-detects sample type from rack ID (e.g., cfDNA_RACK_001 → cfDNA Tubes) and container size from sample type (Plasma → 5x5 box, others → 9x9 box). Imports containers AND samples together.
+                  </p>
                 </div>
-                {selectedSampleType && (
-                  <Button size="sm" variant="outline" onClick={() => handleDownloadSaveFile(selectedSampleType)}>
-                    Download CSV for {selectedSampleType}
-                  </Button>
-                )}
-                {/* Snapshot management buttons */}
-                <Button size="sm" variant="secondary" onClick={() => alert('Revert to snapshot coming soon!')}>Revert to Snapshot</Button>
-                <Button size="sm" variant="destructive" onClick={() => alert('Delete snapshot coming soon!')}>Delete Snapshot</Button>
-                <Button size="sm" variant="outline" onClick={() => alert('Export all snapshots coming soon!')}>Export All</Button>
-              </div>
-              <div className="flex flex-wrap gap-4">
-                {sampleTypes.length === 0 && <span className="text-muted-foreground">No sample types found.</span>}
-                {(selectedSampleType ? sampleTypes.filter(type => type === selectedSampleType) : sampleTypes).map(type => (
-                  <div key={type} className="border rounded p-3 flex flex-col items-start gap-2 bg-muted/50">
-                    <div className="font-mono text-xs mb-1">{type}</div>
-                    <Button size="sm" variant="outline" onClick={() => handleManualSave(type)}>
-                      Save Now
+                <Tabs defaultValue="grid" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="grid">Grid Format</TabsTrigger>
+                    <TabsTrigger value="standard">Standard CSV</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="grid" className="space-y-2">
+                    <Label>Grid CSV Template (Your Format)</Label>
+                    <Textarea
+                      value={gridTemplate}
+                      readOnly
+                      className="font-mono text-xs h-32"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const blob = new Blob([gridTemplate], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'grid-template.csv';
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Grid Template
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleDownloadSaveFile(type)}>
-                      Download CSV
+                  </TabsContent>
+                  <TabsContent value="standard" className="space-y-2">
+                    <Label>Standard CSV Template</Label>
+                    <Textarea
+                      value={containerTemplate}
+                      readOnly
+                      className="font-mono text-xs h-20"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const blob = new Blob([containerTemplate], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'container-template.csv';
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Standard Template
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleViewSaveFile(type)}>
-                      View File
-                    </Button>
-                    {selectedSampleType === type && viewedSaveFile && (
-                      <div className="mt-2 w-full max-w-xl overflow-x-auto bg-background border rounded p-2">
-                        <pre className="text-xs whitespace-pre-wrap">{formatSaveFileAsGridCSV(viewedSaveFile)}</pre>
+                  </TabsContent>
+                </Tabs>
+                {containerPreview && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {containerPreview.valid ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span className="text-sm">
+                        {containerPreview.valid 
+                          ? `${containerPreview.data.length} containers ready to import`
+                          : `${containerPreview.errors.length} errors found`
+                        }
+                      </span>
+                    </div>
+                    {samplePreview && samplePreview.data.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm text-blue-600">
+                          + {samplePreview.data.length} samples detected in grid
+                        </span>
+                      </div>
+                    )}
+                    {!containerPreview.valid && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <ul className="list-disc list-inside space-y-1">
+                            {containerPreview.errors.map((error: string, index: number) => (
+                              <li key={index} className="text-xs">{error}</li>
+                            ))}
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {containerPreview.valid && (
+                      <div className="space-y-2">
+                        <Button 
+                          onClick={importContainers}
+                          disabled={isImporting}
+                          className="w-full"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          {isImporting ? 'Importing...' : `Import All (Containers + Samples)`}
+                        </Button>
+                        <p className="text-xs text-blue-700 text-center font-semibold">
+                          This will import <b>all containers and all samples</b> from the grid file in one step.
+                        </p>
                       </div>
                     )}
                   </div>
-                ))}
+                )}
+              </div>
+            </Card>
+            {/* Import Samples Card */}
+            <Card className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  <h3>Import Samples</h3>
+                </div>
+                <div className="space-y-3">
+                  <Label htmlFor="sampleFile">Upload Sample CSV</Label>
+                  <Input
+                    ref={sampleFileRef}
+                    id="sampleFile"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleSampleFileUpload}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    CSV format: containerId, sampleId, position
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>CSV Template</Label>
+                  <Textarea
+                    value={sampleTemplate}
+                    readOnly
+                    className="font-mono text-xs h-16"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const blob = new Blob([sampleTemplate], { type: 'text/csv' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sample-template.csv';
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template
+                  </Button>
+                </div>
+                {samplePreview && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {samplePreview.valid ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span className="text-sm">
+                        {samplePreview.valid 
+                          ? `${samplePreview.data.length} samples ready to import`
+                          : `${samplePreview.errors.length} errors found`
+                        }
+                      </span>
+                    </div>
+                    {!samplePreview.valid && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <ul className="list-disc list-inside space-y-1">
+                            {samplePreview.errors.map((error: string, index: number) => (
+                              <li key={index} className="text-xs">{error}</li>
+                            ))}
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {samplePreview.valid && (
+                      <Button 
+                        onClick={importSamples}
+                        disabled={isImporting}
+                        className="w-full"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        {isImporting ? 'Importing...' : 'Import Samples'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           </TabsContent>
-
+          <TabsContent value="export" className="space-y-6">
+            <Card className="p-6">
+              <div className="space-y-4">
+                <h3>Export & Backup Data</h3>
+                <p className="text-sm text-muted-foreground">
+                  Download your current container and sample data, or perform a manual backup of the current state. Manual backup will be overwritten at the next 2am snapshot.
+                </p>
+                {/* Show last snapshot date/time */}
+                {(() => {
+                  // Find the latest nightly-backup key in localStorage
+                  const backupKeys = Object.keys(localStorage).filter(k => k.startsWith('nightly-backup-'));
+                  if (backupKeys.length === 0) return null;
+                  // Sort by date descending
+                  const latestKey = backupKeys.sort().reverse()[0];
+                  // Extract date from key
+                  const dateStr = latestKey.replace('nightly-backup-', '');
+                  // Try to get the time from the backup data if available
+                  let timeStr = '';
+                  try {
+                    const backupData = JSON.parse(localStorage.getItem(latestKey) || 'null');
+                    if (Array.isArray(backupData) && backupData.length > 0 && backupData[0].timestamp) {
+                      // Use the timestamp from the first container if present
+                      timeStr = backupData[0].timestamp;
+                    }
+                  } catch {}
+                  return (
+                    <div className="text-xs text-muted-foreground">
+                      Last snapshot: <b>{dateStr}</b>{timeStr ? `, time: ${timeStr}` : ''}
+                    </div>
+                  );
+                })()}
+                <div className="flex gap-4 flex-wrap">
+                  <Button onClick={exportContainers} disabled={containers.length === 0}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Containers ({containers.length})
+                  </Button>
+                  <Button onClick={handleManualBackup}>
+                    <Database className="w-4 h-4 mr-2" />
+                    Manual Backup
+                  </Button>
+                  <Button onClick={handleDownloadSnapshot}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Snapshot
+                  </Button>
+                  <Button onClick={exportSamples} disabled={containers.length === 0}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Samples
+                  </Button>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-6 mt-6">
+              <h3 className="mb-4">Snapshot Grid View</h3>
+              <GridSnapshotView containers={containers.map(container => {
+                const storageKey = `samples-${container.id}`;
+                const savedSamples = localStorage.getItem(storageKey);
+                let samples = [];
+                if (savedSamples) {
+                  try {
+                    samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
+                      ...sample,
+                      position,
+                    }));
+                  } catch (e) {}
+                }
+                return {
+                  ...container,
+                  samples,
+                };
+              })} />
+            </Card>
+          </TabsContent>
+          <TabsContent value="manage" className="space-y-6">
+            <Card className="p-6">
+              <div className="space-y-4">
+                <h3>Danger Zone</h3>
+                <p className="text-sm text-muted-foreground">
+                  This will permanently delete all containers and samples from the database. This action cannot be undone.
+                </p>
+                <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Clear All Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Confirm Data Deletion</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to delete <b>ALL</b> containers and samples? This cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowClearDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={() => {
+                        Object.keys(localStorage).forEach(key => {
+                          if (key.startsWith('samples-') || key.startsWith('nightly-backup-')) {
+                            localStorage.removeItem(key);
+                          }
+                        });
+                        if (typeof onContainersChange === 'function') onContainersChange([]);
+                        setShowClearDialog(false);
+                        alert('All data cleared.');
+                      }}>
+                        Yes, Delete Everything
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Card>
+          </TabsContent>
         </Tabs>
-        {/* --- End Admin Dashboard Tabs --- */}
       </div>
     </div>
   );
-}
+};

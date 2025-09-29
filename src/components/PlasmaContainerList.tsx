@@ -120,7 +120,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
-  // Download snapshot as CSV in grid import template layout
+  // Download snapshot as JSON
   const handleDownloadSnapshot = () => {
     const today = new Date().toISOString().slice(0, 10);
     const backupKey = `nightly-backup-${today}`;
@@ -129,63 +129,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       alert('No snapshot found for today.');
       return;
     }
-    const backupData = JSON.parse(backupDataRaw);
-    // For each container, output grid: first row is A,B,C..., then each row is 1,sampleID,sampleID...
-    let csvSections: string[] = [];
-    backupData.forEach((entry: any) => {
-      const c = entry.container;
-      const samples = Array.isArray(entry.samples)
-        ? entry.samples
-        : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
-      // Pad grid based on container type
-      let columns: string[] = [];
-      let rows: string[] = [];
-      if (c.containerType === '5x5-box') {
-        columns = ['A','B','C','D','E'];
-        rows = ['1','2','3','4','5'];
-      } else if (c.containerType === '9x9-box') {
-        columns = ['A','B','C','D','E','F','G','H','I'];
-        rows = ['1','2','3','4','5','6','7','8','9'];
-      } else if (c.containerType === '5x4-rack') {
-        columns = ['A','B','C','D'];
-        rows = ['1','2','3','4','5'];
-      } else if (c.containerType === '9x9-rack') {
-        columns = ['A','B','C','D','E','F','G','H','I'];
-        rows = ['1','2','3','4','5','6','7','8','9'];
-      } else if (c.containerType === '7x14-rack') {
-        columns = ['A','B','C','D','E','F','G'];
-        rows = Array.from({length:14}, (_,i)=>String(i+1));
-      } else {
-        // Fallback: use detected positions
-        const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
-        columns = Array.from(new Set(allPositions.map((p: string) => p[0])));
-        columns = columns.sort();
-        rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1))));
-        rows = rows.sort((a,b) => Number(a)-Number(b));
-      }
-      // Header: container name
-      csvSections.push(`${c.name}`);
-      // First row: column labels
-      csvSections.push(["", ...columns].join(","));
-      // For each row number, output row label and sample IDs for each column
-      rows.forEach(rowNum => {
-        const row = [rowNum];
-        columns.forEach(col => {
-          const pos = `${col}${rowNum}`;
-          const sample = samples.find((s: any) => s.position === pos);
-          row.push(sample ? sample.id || sample.sampleId : "");
-        });
-        csvSections.push(row.join(","));
-      });
-      // Blank line between containers
-      csvSections.push("");
-    });
-    const csvContent = csvSections.join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([backupDataRaw], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `snapshot-grid-${today}.csv`;
+    a.download = `snapshot-${today}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -277,11 +225,9 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   useEffect(() => {
     if (!propsContainers) {
       const savedContainers = localStorage.getItem(STORAGE_KEY);
-      console.debug('[PlasmaContainerList] Loaded from localStorage:', STORAGE_KEY, savedContainers);
       if (savedContainers) {
         try {
           const parsedContainers = JSON.parse(savedContainers);
-          console.debug('[PlasmaContainerList] Parsed containers:', parsedContainers);
           if (Array.isArray(parsedContainers)) {
             setLocalContainers(parsedContainers);
           }
@@ -676,7 +622,6 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     );
   }
 
-  console.debug('[PlasmaContainerList] Rendering containers:', containers);
   return (
     <div className="p-6">
       <Header 
