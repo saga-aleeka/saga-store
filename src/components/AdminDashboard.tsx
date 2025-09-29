@@ -1,7 +1,6 @@
 
 
 
-// Removed unused string to fix the error
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -11,7 +10,7 @@ import { Header } from './Header';
 import { ArrowLeft } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { WorklistUpload } from './WorklistUpload';
-import ImportGrid from './ImportGrid';
+import CsvImportSummary from './CsvImportSummary';
 // import ImportCsvGrid from './ImportCsvGrid';
 // ...other imports as needed
   // Stub for onExitAdmin if not provided
@@ -199,11 +198,19 @@ export function AdminDashboard() {
           <TabsContent value="import">
             <Card className="p-6 mb-6">
               <h3 className="mb-2 font-semibold">Import Containers & Samples</h3>
-              {/* Restored grid-based import UI for containers and samples */}
-              <ImportGrid />
-              <div className="mt-4">
-                <WorklistUpload onSamplesExtracted={() => {}} />
-              </div>
+              {/* New CSV import UI: scan file for containers and samples, summarize, and allow import */}
+              <CsvImportSummary onImport={items => {
+                // Map imported containers to required state shape
+                setContainers(items.containers.map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  location: c.location,
+                  containerType: c.containerType || '',
+                  sampleType: c.sampleType || '',
+                  temperature: c.temperature || '',
+                })));
+                alert(`Imported ${items.containers.length} containers and ${items.samples.length} samples.`);
+              }} />
             </Card>
           </TabsContent>
 
