@@ -231,14 +231,47 @@ export function AdminDashboard() {
               {/* New CSV import UI: scan file for containers and samples, summarize, and allow import */}
               <CsvImportSummary onImport={items => {
                 // Map imported containers to required state shape
-                const mappedContainers = items.containers.map(c => ({
-                  id: c.id,
-                  name: c.name,
-                  location: c.location,
-                  containerType: c.containerType || '',
-                  sampleType: c.sampleType || '',
-                  temperature: c.temperature || '',
-                }));
+                // Map to PlasmaContainer type for dashboard visibility
+                const mappedContainers = items.containers.map(c => {
+                  // Guess containerType and totalSlots from sampleType or name (fallback to 9x9-box)
+                  let containerType: string = c.containerType || '';
+                  let totalSlots = 81;
+                  if (!containerType) {
+                    if (/9x9/i.test(c.name) || /9x9/i.test(c.location)) {
+                      containerType = '9x9-box';
+                      totalSlots = 81;
+                    } else if (/5x5/i.test(c.name) || /5x5/i.test(c.location)) {
+                      containerType = '5x5-box';
+                      totalSlots = 25;
+                    } else {
+                      containerType = '9x9-box';
+                      totalSlots = 81;
+                    }
+                  }
+                  // Count samples for this container
+                  const sampleCount = items.samples.filter(s => s.containerId === c.id).length;
+                  return {
+                    id: c.id,
+                    name: c.name,
+                    location: c.location,
+                    containerType,
+                    sampleType: c.sampleType || '',
+                    temperature: c.temperature || '',
+                    occupiedSlots: sampleCount,
+                    totalSlots,
+                    lastUpdated: new Date().toISOString(),
+                    isTraining: false,
+                    isArchived: false,
+                    history: [
+                      {
+                        timestamp: new Date().toISOString(),
+                        action: 'imported',
+                        user: 'admin',
+                        notes: 'Imported from CSV'
+                      }
+                    ]
+                  };
+                });
                 setContainers(mappedContainers);
                 localStorage.setItem('containers', JSON.stringify(mappedContainers));
                 // Also save to plasma-containers for main dashboard visibility
