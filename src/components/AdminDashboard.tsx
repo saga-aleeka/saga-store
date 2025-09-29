@@ -272,19 +272,33 @@ export function AdminDashboard() {
                     ]
                   };
                 });
-                console.debug('Mapped containers for import:', mappedContainers);
-                setContainers(mappedContainers);
-                localStorage.setItem('containers', JSON.stringify(mappedContainers));
-                localStorage.setItem('plasma-containers', JSON.stringify(mappedContainers));
+                // Merge with existing containers to prevent duplicates
+                const existingRaw = localStorage.getItem('plasma-containers');
+                let existing: any[] = [];
+                if (existingRaw) {
+                  try { existing = JSON.parse(existingRaw); } catch { existing = []; }
+                }
+                // Use id as unique key
+                const existingById = Object.fromEntries(existing.map(c => [c.id, c]));
+                mappedContainers.forEach(c => { existingById[c.id] = c; });
+                const mergedContainers = Object.values(existingById);
+                setContainers(mergedContainers as any);
+                localStorage.setItem('containers', JSON.stringify(mergedContainers));
+                localStorage.setItem('plasma-containers', JSON.stringify(mergedContainers));
                 console.debug('Saved to localStorage: containers and plasma-containers', {
                   containers: JSON.parse(localStorage.getItem('containers') || '[]'),
                   plasmaContainers: JSON.parse(localStorage.getItem('plasma-containers') || '[]')
                 });
-                // Save samples by container
-                const samplesByContainer: { [containerId: string]: { [position: string]: { id: string } } } = {};
+                // Save samples by container in dashboard format
+                const samplesByContainer: { [containerId: string]: { [position: string]: { id: string; timestamp: string; history: any[] } } } = {};
+                const now = new Date().toISOString();
                 for (const s of items.samples) {
                   if (!samplesByContainer[s.containerId]) samplesByContainer[s.containerId] = {};
-                  samplesByContainer[s.containerId][s.position] = { id: s.sampleId };
+                  samplesByContainer[s.containerId][s.position] = {
+                    id: s.sampleId,
+                    timestamp: now,
+                    history: [{ timestamp: now, action: 'imported', notes: 'Imported from CSV' }]
+                  };
                 }
                 for (const containerId in samplesByContainer) {
                   localStorage.setItem(`samples-${containerId}`, JSON.stringify(samplesByContainer[containerId]));
