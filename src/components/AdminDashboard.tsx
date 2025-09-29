@@ -289,7 +289,8 @@ export function AdminDashboard() {
                 for (const containerId in samplesByContainer) {
                   localStorage.setItem(`samples-${containerId}`, JSON.stringify(samplesByContainer[containerId]));
                 }
-                alert(`Imported ${items.containers.length} containers and ${items.samples.length} samples.`);
+                alert(`Imported ${items.containers.length} containers and ${items.samples.length} samples. The dashboard will now refresh to show the new data.`);
+                window.location.reload();
               }} />
             </Card>
           </TabsContent>
