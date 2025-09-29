@@ -277,9 +277,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   useEffect(() => {
     if (!propsContainers) {
       const savedContainers = localStorage.getItem(STORAGE_KEY);
+      console.debug('[PlasmaContainerList] Loaded from localStorage:', STORAGE_KEY, savedContainers);
       if (savedContainers) {
         try {
           const parsedContainers = JSON.parse(savedContainers);
+          console.debug('[PlasmaContainerList] Parsed containers:', parsedContainers);
           if (Array.isArray(parsedContainers)) {
             setLocalContainers(parsedContainers);
           }
@@ -674,6 +676,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     );
   }
 
+  console.debug('[PlasmaContainerList] Rendering containers:', containers);
   return (
     <div className="p-6">
       <Header 
