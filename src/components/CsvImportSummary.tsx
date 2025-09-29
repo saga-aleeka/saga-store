@@ -47,10 +47,15 @@ function inferSampleType(containerName: string): string {
 
 function isSampleId(val: string): boolean {
   // Accepts alphanumeric, at least 6 chars, no spaces
-  return /^[A-Za-z0-9]{6,}$/.test(val);
+  const result = /^[A-Za-z0-9]{6,}$/.test(val);
+  if (val && val.length > 0) {
+    console.debug('isSampleId check:', { val, result });
+  }
+  return result;
 }
 
 function parseCsv(csv: string): ImportSummary {
+  console.debug('parseCsv called');
   // Parse grid format: scan for container header, parse grid, extract info, repeat for all blocks
   const lines = csv.split(/\r?\n/);
   const containers: ContainerItem[] = [];
@@ -58,6 +63,9 @@ function parseCsv(csv: string): ImportSummary {
   let i = 0;
   let blankCount = 0;
   while (i < lines.length) {
+    if (i < lines.length) {
+      console.debug('parseCsv line', i, lines[i]);
+    }
     // Skip leading blanks
     while (i < lines.length && !lines[i].trim()) {
       i++;
@@ -66,8 +74,9 @@ function parseCsv(csv: string): ImportSummary {
     }
     blankCount = 0;
     // Look for container header: Container_Location, "Box Name:", Container_Name
-    const headerMatch = lines[i] && lines[i].includes('Box Name:');
-    if (!headerMatch) { i++; continue; }
+  const headerMatch = lines[i] && lines[i].includes('Box Name:');
+  if (!headerMatch) { i++; continue; }
+  console.debug('Found container header at line', i, lines[i]);
     const headerCols = lines[i].split(',').map(s => s.trim());
     const containerLocation = headerCols[0];
     const containerName = headerCols[2];
@@ -94,10 +103,14 @@ function parseCsv(csv: string): ImportSummary {
       if (!rowLabel || !/^[A-Z]$/.test(rowLabel)) break;
       for (let c = colStart; c < rowCols.length; c++) {
         const sampleId = rowCols[c];
+        if (sampleId) {
+          console.debug('Checking cell for sampleId', { sampleId, rowLabel, col: c, colHeader: colHeaders[c] });
+        }
         if (isSampleId(sampleId)) {
           const colNum = colHeaders[c] || (c - colStart + 1).toString();
           const position = rowLabel + colNum;
           samples.push({ containerId, sampleId, position });
+          console.debug('Sample identified and added', { sampleId, position, containerId });
         }
       }
       i++;
