@@ -24,46 +24,61 @@ interface CsvImportSummaryProps {
 }
 
 function parseCsv(csv: string): ImportSummary {
-  // Find first non-empty row, then stop after 10 consecutive blank rows
+  // Parse grid format: scan for container header, parse grid, extract info, repeat for all blocks
   const lines = csv.split(/\r?\n/);
-  let startIdx = 0;
-  while (startIdx < lines.length && !lines[startIdx].trim()) {
-    startIdx++;
-  }
   const containers: ContainerItem[] = [];
   const samples: SampleItem[] = [];
-  const containerMap = new Map<string, ContainerItem>();
+  let i = 0;
   let blankCount = 0;
-  for (let i = startIdx; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) {
+  while (i < lines.length) {
+    // Skip leading blanks
+    while (i < lines.length && !lines[i].trim()) {
+      i++;
       blankCount++;
-      if (blankCount >= 10) break;
-      continue;
-    } else {
-      blankCount = 0;
+      if (blankCount >= 10) return { containers, samples };
     }
-    const cols = line.split(',').map(s => s.trim());
-    if (cols.length >= 4) {
-      const [location, name, sampleId, position] = cols;
-      if (location && name && sampleId && position) {
-        let container = containerMap.get(name);
-        if (!container) {
-          container = {
-            id: name + '-' + location,
-            name,
-            location,
-          };
-          containers.push(container);
-          containerMap.set(name, container);
+    blankCount = 0;
+    // Look for container header: Container_Location, "Box Name:", Container_Name
+    const headerMatch = lines[i] && lines[i].includes('Box Name:');
+    if (!headerMatch) { i++; continue; }
+    const headerCols = lines[i].split(',').map(s => s.trim());
+    const containerLocation = headerCols[0];
+    const containerName = headerCols[2];
+    const containerId = containerName + '-' + containerLocation;
+    containers.push({ id: containerId, name: containerName, location: containerLocation });
+    i++;
+    // Next line: column headers (skip)
+    while (i < lines.length && !lines[i].trim()) { i++; }
+    const colHeaderLine = lines[i] || '';
+    const colHeaders = colHeaderLine.split(',').map(s => s.trim());
+    // Find where columns start (usually after two empty columns)
+    let colStart = 0;
+    for (let c = 0; c < colHeaders.length; c++) {
+      if (colHeaders[c] === '1') { colStart = c; break; }
+    }
+    i++;
+    // Parse grid rows (A,B,C,...) until blank or next header
+    while (i < lines.length && lines[i].trim()) {
+      const rowCols = lines[i].split(',').map(s => s.trim());
+      const rowLabel = rowCols[0];
+      if (!rowLabel || !/^[A-Z]$/.test(rowLabel)) break;
+      for (let c = colStart; c < rowCols.length; c++) {
+        const sampleId = rowCols[c];
+        if (sampleId) {
+          const colNum = colHeaders[c] || (c - colStart + 1).toString();
+          const position = rowLabel + colNum;
+          samples.push({ containerId, sampleId, position });
         }
-        samples.push({
-          containerId: container.id,
-          sampleId,
-          position,
-        });
       }
+      i++;
     }
+    // After grid, skip to next block or end
+    while (i < lines.length && !lines[i].trim()) {
+      i++;
+      blankCount++;
+      if (blankCount >= 10) return { containers, samples };
+    }
+    blankCount = 0;
   }
   return { containers, samples };
 }
