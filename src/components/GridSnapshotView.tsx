@@ -16,6 +16,7 @@ export interface Container {
 
 export interface GridSnapshotViewProps {
   containers: Container[];
+  onConvert?: (container: Container) => void;
 }
 
 // Helper to get unique sample types
@@ -66,52 +67,96 @@ function getPositions(containers: Container[]): GridPositions {
   }
 }
 
-const GridSnapshotView: React.FC<GridSnapshotViewProps> = ({ containers }: GridSnapshotViewProps) => {
+
+const GridSnapshotView: React.FC<GridSnapshotViewProps> = ({ containers, onConvert }) => {
+  const [openDropdown, setOpenDropdown] = React.useState<string | null>(null);
+  const [confirming, setConfirming] = React.useState<string | null>(null);
+
   const sampleTypes = getSampleTypes(containers);
 
   return (
     <div>
       {sampleTypes.map(sampleType => {
         const containersOfType = getContainersBySampleType(containers, sampleType);
-        // Get full grid columns and rows for this sample type
-        const grid = getPositions(containersOfType);
-        const columns = grid.columns;
-        const rows = grid.rows;
         return (
           <div key={sampleType} style={{ marginBottom: 32 }}>
             <h2 style={{ fontWeight: "bold", fontSize: 18 }}>{sampleType}</h2>
-            <div style={{ display: "flex", gap: 32 }}>
-              {containersOfType.map(container => (
-                <table key={container.id} style={{ borderCollapse: "collapse", minWidth: 200 }}>
-                  <thead>
-                    <tr>
-                      <th colSpan={columns.length + 1} style={{ background: "#eee", textAlign: "center" }}>{container.name}</th>
-                    </tr>
-                    <tr>
-                      <th></th>
-                      {columns.map((col: string) => (
-                        <th key={col} style={{ background: "#f5f5f5", textAlign: "center" }}>{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((rowNum: string) => (
-                      <tr key={rowNum}>
-                        <td style={{ fontWeight: "bold" }}>{rowNum}</td>
-                        {columns.map((col: string) => {
-                          const pos = `${rowNum}${col}`;
-                          const sample = container.samples.find(s => s.position === pos);
-                          return (
-                            <td key={pos} style={{ border: "1px solid #ccc", textAlign: "center" }}>
-                              {sample ? sample.id || sample.sampleId : ""}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {containersOfType.map(container => {
+                const grid = getPositions([container]);
+                const columns = grid.columns;
+                const rows = grid.rows;
+                const isOpen = openDropdown === container.id;
+                return (
+                  <div key={container.id} style={{ border: '1px solid #ddd', borderRadius: 8, marginBottom: 8, background: '#fafbfc' }}>
+                    <div
+                      style={{ cursor: 'pointer', padding: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                      onClick={() => setOpenDropdown(isOpen ? null : container.id)}
+                    >
+                      <span>{container.name}</span>
+                      <span style={{ fontSize: 18 }}>{isOpen ? '▲' : '▼'}</span>
+                    </div>
+                    {isOpen && (
+                      <div style={{ padding: 16, background: '#fff', borderTop: '1px solid #eee' }}>
+                        <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+                          <table style={{ borderCollapse: 'collapse', minWidth: 400, maxWidth: '100%' }}>
+                            <thead>
+                              <tr>
+                                <th></th>
+                                {columns.map(col => (
+                                  <th key={col} style={{ background: '#f5f5f5', textAlign: 'center' }}>{col}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map(rowNum => (
+                                <tr key={rowNum}>
+                                  <td style={{ fontWeight: 'bold' }}>{rowNum}</td>
+                                  {columns.map(col => {
+                                    const pos = `${rowNum}${col}`;
+                                    const sample = container.samples.find(s => s.position === pos);
+                                    return (
+                                      <td key={pos} style={{ border: '1px solid #ccc', textAlign: 'center', minWidth: 40, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {sample ? sample.id || sample.sampleId : ''}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <button
+                            style={{
+                              background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', marginRight: 8
+                            }}
+                            onClick={() => setConfirming(container.id)}
+                          >
+                            Convert
+                          </button>
+                        </div>
+                        {confirming === container.id && (
+                          <div style={{ marginTop: 12, background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: 4, padding: 12 }}>
+                            <div style={{ marginBottom: 8 }}>Are you sure you want to convert and overwrite this container with the above snapshot?</div>
+                            <button
+                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontWeight: 600, marginRight: 8, cursor: 'pointer' }}
+                              onClick={() => {
+                                setConfirming(null);
+                                if (onConvert) onConvert(container);
+                              }}
+                            >Yes, Convert</button>
+                            <button
+                              style={{ background: '#e11d48', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
+                              onClick={() => setConfirming(null)}
+                            >Cancel</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

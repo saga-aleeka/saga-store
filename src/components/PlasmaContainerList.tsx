@@ -91,7 +91,7 @@ export const getSampleTypeColor = (sampleType: SampleType) => {
   }
 };
 
-const SAMPLE_TYPES: SampleType[] = ['DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'PA Pool Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates'];
+export const SAMPLE_TYPES: SampleType[] = ['DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'PA Pool Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates'];
 
 interface PlasmaContainerListProps {
   containers?: PlasmaContainer[];

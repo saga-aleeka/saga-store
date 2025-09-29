@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { SAMPLE_TYPES, getSampleTypeColor } from './PlasmaContainerList';
 // Types for preview objects
 interface Preview<T> {
   valid: boolean;
@@ -370,46 +371,60 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     }
     // Parse backupDataRaw and convert to grid CSV format
     const backupData = JSON.parse(backupDataRaw);
-    // For each container, output grid: first row is A,B,C..., then each row is 1,sampleID,sampleID...
+    // For each container, output grid: rack, Box Name:, box, then column headers, then grid rows
     let csvSections: string[] = [];
     backupData.forEach((entry: any) => {
       const c = entry.container;
       const samples = Array.isArray(entry.samples)
         ? entry.samples
         : Object.entries(entry.samples || {}).map(([position, sample]: [string, any]) => ({ ...sample, position }));
-      // Pad grid based on container type
+
+      // Try to extract rack from location, fallback to blank
+      let rack = c.location || '';
+      // Use container name as box
+      let box = c.name || '';
+
+      // Determine grid size and columns/rows
       let columns: string[] = [];
       let rows: string[] = [];
       if (c.containerType === '5x5-box') {
-        columns = ['A','B','C','D','E'];
-        rows = ['1','2','3','4','5'];
+        columns = ['1','2','3','4','5'];
+        rows = ['A','B','C','D','E'];
       } else if (c.containerType === '9x9-box') {
-        columns = ['A','B','C','D','E','F','G','H','I'];
-        rows = ['1','2','3','4','5','6','7','8','9'];
+        columns = ['1','2','3','4','5','6','7','8','9'];
+        rows = ['A','B','C','D','E','F','G','H','I'];
       } else {
-          // Fallback: use detected positions
-          const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
-          columns = Array.from(new Set(allPositions.map((p: string) => p[0]))) as string[];
-          columns = columns.sort();
-          rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))) as string[];
-          rows = rows.sort((a,b) => Number(a)-Number(b));
-      }
-      // Header: container name
-      csvSections.push(`${c.name}`);
-      // First row: column labels
-      csvSections.push(["", ...columns].join(","));
-      // For each row number, output row label and sample IDs for each column
-      rows.forEach(rowNum => {
-        const row = [rowNum];
-        columns.forEach(col => {
-          const pos = `${col}${rowNum}`;
-          const sample = samples.find((s: any) => s.position === pos);
-          row.push(sample ? sample.id || sample.sampleId : "");
+        // Fallback: detect from sample positions
+        const allPositions = samples.map((s: any) => s.position).filter((p: any): p is string => typeof p === 'string' && p.length > 1);
+        const colSet = new Set<string>();
+        const rowSet = new Set<string>();
+        allPositions.forEach((p: string) => {
+          if (p.length > 1) {
+            rowSet.add(p[0]);
+            colSet.add(p.slice(1));
+          }
         });
-        csvSections.push(row.join(","));
+        columns = Array.from(colSet).sort((a,b) => Number(a)-Number(b));
+        rows = Array.from(rowSet).sort();
+      }
+
+      // Header: rack, Box Name:, box, then fill to grid width
+      const header = [rack, 'Box Name:', box, ...Array(columns.length).fill('')];
+      csvSections.push(header.join(','));
+      // Second row: two blanks, then column numbers
+      csvSections.push([ '', '', ...columns ].join(','));
+      // Each row: row label, then sample IDs for each column
+      rows.forEach(rowLabel => {
+        const row = [rowLabel];
+        columns.forEach(colNum => {
+          const pos = `${rowLabel}${colNum}`;
+          const sample = samples.find((s: any) => s.position === pos);
+          row.push(sample ? sample.id || sample.sampleId : '');
+        });
+        csvSections.push([ '', ...row ].join(','));
       });
       // Blank line between containers
-      csvSections.push("");
+      csvSections.push('');
     });
     const csvContent = csvSections.join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -448,6 +463,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
   };
 
   const [showClearDialog, setShowClearDialog] = useState(false);
+  // Add sample type filter state for export tab
+  const [filteredSampleType, setFilteredSampleType] = useState<string>('All');
 
   return (
     <div className="p-6 min-h-screen bg-background">
@@ -716,44 +733,92 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                   );
                 })()}
                 <div className="flex gap-4 flex-wrap">
-                  <Button onClick={exportContainers} disabled={containers.length === 0}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Containers ({containers.length})
-                  </Button>
                   <Button onClick={handleManualBackup}>
                     <Database className="w-4 h-4 mr-2" />
                     Manual Backup
                   </Button>
-                  <Button onClick={handleDownloadSnapshot}>
+                  {/* Download button, only enabled if grid view is filtered to one sample type */}
+                  <Button
+                    onClick={handleDownloadSnapshot}
+                    disabled={filteredSampleType === null || filteredSampleType === 'All'}
+                    variant="outline"
+                  >
                     <Download className="w-4 h-4 mr-2" />
-                    Download Snapshot
-                  </Button>
-                  <Button onClick={exportSamples} disabled={containers.length === 0}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Samples
+                    Download
                   </Button>
                 </div>
               </div>
             </Card>
             <Card className="p-6 mt-6">
               <h3 className="mb-4">Snapshot Grid View</h3>
-              <GridSnapshotView containers={containers.map(container => {
-                const storageKey = `samples-${container.id}`;
-                const savedSamples = localStorage.getItem(storageKey);
-                let samples = [];
-                if (savedSamples) {
-                  try {
-                    samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
-                      ...sample,
-                      position,
-                    }));
-                  } catch (e) {}
-                }
-                return {
-                  ...container,
-                  samples,
-                };
-              })} />
+              {/* Sample type filter UI */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-sm text-muted-foreground">Filter by sample type:</span>
+                <Button
+                  variant={filteredSampleType === 'All' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilteredSampleType('All')}
+                >
+                  All Types
+                </Button>
+                {SAMPLE_TYPES.map((sampleType: string) => (
+                  <Button
+                    key={sampleType}
+                    variant={filteredSampleType === sampleType ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilteredSampleType(sampleType)}
+                    className={filteredSampleType === sampleType ? '' : getSampleTypeColor(sampleType as any)}
+                  >
+                    {sampleType}
+                  </Button>
+                ))}
+              </div>
+              <GridSnapshotView
+                containers={containers
+                  .filter(container => filteredSampleType === 'All' || container.sampleType === filteredSampleType)
+                  .map(container => {
+                    const storageKey = `samples-${container.id}`;
+                    const savedSamples = localStorage.getItem(storageKey);
+                    let samples = [];
+                    if (savedSamples) {
+                      try {
+                        samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
+                          ...sample,
+                          position,
+                        }));
+                      } catch (e) {}
+                    }
+                    return {
+                      ...container,
+                      samples,
+                    };
+                  })}
+                onConvert={(container) => {
+                  // Overwrite the container's samples in localStorage and update dashboard
+                  const storageKey = `samples-${container.id}`;
+                  // Build a map of position -> sample (removing any extra fields)
+                  const sampleMap: Record<string, any> = {};
+                  container.samples.forEach(s => {
+                    sampleMap[s.position] = { id: s.id || s.sampleId };
+                  });
+                  localStorage.setItem(storageKey, JSON.stringify(sampleMap));
+                  // Optionally update the container list if needed
+                  if (typeof onContainersChange === 'function') {
+                    // Re-read all containers and their samples
+                    const updated = containers.map(c => {
+                      if (c.id === container.id) {
+                        return {
+                          ...c,
+                          samples: container.samples,
+                        };
+                      }
+                      return c;
+                    });
+                    onContainersChange(updated);
+                  }
+                  alert('Container has been converted and updated from snapshot.');
+                }}
+              />
             </Card>
           </TabsContent>
           <TabsContent value="manage" className="space-y-6">
