@@ -192,7 +192,27 @@ export function AdminDashboard() {
           <TabsList className="mb-4">
             <TabsTrigger value="import">Import</TabsTrigger>
             <TabsTrigger value="snapshot">Snapshot / Export</TabsTrigger>
+            <TabsTrigger value="danger">Danger Zone</TabsTrigger>
           </TabsList>
+          {/* Danger Zone Tab Content */}
+          <TabsContent value="danger">
+            <Card className="p-6 mb-6 border-red-600 border-2 bg-red-50">
+              <h3 className="mb-2 font-semibold text-red-700">Danger Zone: Clear All Data</h3>
+              <p className="mb-4 text-red-600">This will permanently delete all saved containers, samples, and snapshots from your browser. This action cannot be undone.</p>
+              <Button variant="destructive" onClick={() => {
+                if (window.confirm('Are you sure you want to clear ALL saved data? This cannot be undone.')) {
+                  localStorage.clear();
+                  setContainers([]);
+                  setViewedSaveFile(null);
+                  setSelectedSampleType(null);
+                  alert('All saved data has been cleared.');
+                  window.location.reload();
+                }
+              }}>
+                Clear All Data
+              </Button>
+            </Card>
+          </TabsContent>
 
           {/* Import Tab Content */}
           <TabsContent value="import">

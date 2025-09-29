@@ -99,9 +99,19 @@ function parseCsv(csv: string): ImportSummary {
     // Parse grid rows (A,B,C,...) until blank or next header
     while (i < lines.length && lines[i].trim()) {
       const rowCols = lines[i].split(',').map(s => s.trim());
-      const rowLabel = rowCols[0];
-      if (!rowLabel || !/^[A-Z]$/.test(rowLabel)) break;
-      for (let c = colStart; c < rowCols.length; c++) {
+      // Support both: row label in col 0 or col 1 if col 0 is blank
+      let rowLabel = '';
+      let sampleStart = colStart;
+      if (rowCols[0] && /^[A-Z]$/.test(rowCols[0])) {
+        rowLabel = rowCols[0];
+        sampleStart = colStart;
+      } else if (rowCols[1] && /^[A-Z]$/.test(rowCols[1])) {
+        rowLabel = rowCols[1];
+        sampleStart = 2; // samples start after row label
+      } else {
+        break;
+      }
+      for (let c = sampleStart; c < rowCols.length; c++) {
         const sampleId = rowCols[c];
         if (sampleId) {
           console.debug('Checking cell for sampleId', { sampleId, rowLabel, col: c, colHeader: colHeaders[c] });
