@@ -23,6 +23,33 @@ interface CsvImportSummaryProps {
   onImport: (items: ImportSummary) => void;
 }
 
+function inferTemperature(containerName: string): string {
+  const name = containerName.toLowerCase();
+  if (/(dp|pa|ctdna|mnc)/i.test(name)) return '-20C';
+  if (/dtc/i.test(name)) return '4C';
+  if (/(plasma|bc)/i.test(name)) return '-80C';
+  if (/idt/i.test(name)) return '-20C';
+  return '';
+}
+
+function inferSampleType(containerName: string): string {
+  const name = containerName.toLowerCase();
+  if (/dp/i.test(name)) return 'DP';
+  if (/pa/i.test(name)) return 'PA';
+  if (/ctdna/i.test(name)) return 'ctDNA';
+  if (/mnc/i.test(name)) return 'MNC';
+  if (/dtc/i.test(name)) return 'DTC';
+  if (/plasma/i.test(name)) return 'plasma';
+  if (/bc/i.test(name)) return 'BC';
+  if (/idt/i.test(name)) return 'IDT';
+  return '';
+}
+
+function isSampleId(val: string): boolean {
+  // Accepts alphanumeric, at least 6 chars, no spaces
+  return /^[A-Za-z0-9]{6,}$/.test(val);
+}
+
 function parseCsv(csv: string): ImportSummary {
   // Parse grid format: scan for container header, parse grid, extract info, repeat for all blocks
   const lines = csv.split(/\r?\n/);
@@ -45,7 +72,10 @@ function parseCsv(csv: string): ImportSummary {
     const containerLocation = headerCols[0];
     const containerName = headerCols[2];
     const containerId = containerName + '-' + containerLocation;
-    containers.push({ id: containerId, name: containerName, location: containerLocation });
+    const containerType = '';
+    const sampleType = inferSampleType(containerName);
+    const temperature = inferTemperature(containerName);
+    containers.push({ id: containerId, name: containerName, location: containerLocation, containerType, sampleType, temperature });
     i++;
     // Next line: column headers (skip)
     while (i < lines.length && !lines[i].trim()) { i++; }
@@ -64,7 +94,7 @@ function parseCsv(csv: string): ImportSummary {
       if (!rowLabel || !/^[A-Z]$/.test(rowLabel)) break;
       for (let c = colStart; c < rowCols.length; c++) {
         const sampleId = rowCols[c];
-        if (sampleId) {
+        if (isSampleId(sampleId)) {
           const colNum = colHeaders[c] || (c - colStart + 1).toString();
           const position = rowLabel + colNum;
           samples.push({ containerId, sampleId, position });
