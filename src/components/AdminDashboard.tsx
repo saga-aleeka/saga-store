@@ -272,10 +272,14 @@ export function AdminDashboard() {
                     ]
                   };
                 });
+                console.debug('Mapped containers for import:', mappedContainers);
                 setContainers(mappedContainers);
                 localStorage.setItem('containers', JSON.stringify(mappedContainers));
-                // Also save to plasma-containers for main dashboard visibility
                 localStorage.setItem('plasma-containers', JSON.stringify(mappedContainers));
+                console.debug('Saved to localStorage: containers and plasma-containers', {
+                  containers: JSON.parse(localStorage.getItem('containers') || '[]'),
+                  plasmaContainers: JSON.parse(localStorage.getItem('plasma-containers') || '[]')
+                });
                 // Save samples by container
                 const samplesByContainer: { [containerId: string]: { [position: string]: { id: string } } } = {};
                 for (const s of items.samples) {
