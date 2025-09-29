@@ -156,6 +156,28 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
       {hasFoundSamples && (
         <div className="w-full">
           <Card className="p-6">
+            {/* Unique containers to pull */}
+            {(() => {
+              // Get unique containers from foundSamples
+              const uniqueContainers = Array.from(
+                new Map(
+                  foundSamples.map((r: any) => [r.container.id, r.container])
+                ).values()
+              );
+              if (uniqueContainers.length === 0) return null;
+              return (
+                <div className="mb-4">
+                  <div className="font-semibold text-sm mb-1">Containers to Pull ({uniqueContainers.length}):</div>
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueContainers.map((container: any) => (
+                      <Badge key={container.id} variant="outline" className="text-xs">
+                        {container.name} <span className="text-muted-foreground">({container.location})</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <h3 className="flex items-center gap-2 mb-4">
               <CheckCircle className="w-5 h-5 text-green-600" />
               Found Samples ({foundSamples.length})
