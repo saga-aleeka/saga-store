@@ -241,6 +241,8 @@ export function AdminDashboard() {
                 }));
                 setContainers(mappedContainers);
                 localStorage.setItem('containers', JSON.stringify(mappedContainers));
+                // Also save to plasma-containers for main dashboard visibility
+                localStorage.setItem('plasma-containers', JSON.stringify(mappedContainers));
                 // Save samples by container
                 const samplesByContainer: { [containerId: string]: { [position: string]: { id: string } } } = {};
                 for (const s of items.samples) {
