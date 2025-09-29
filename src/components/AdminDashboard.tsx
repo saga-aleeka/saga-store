@@ -111,7 +111,17 @@ function formatSaveFileAsGridCSV(saveFile: SaveFile): string {
 
 export function AdminDashboard() {
   // --- State ---
-  const [containers, setContainers] = useState<Array<{ name: string; location: string; containerType: string; sampleType: string; temperature: string; id: string }>>([]);
+  const [containers, setContainers] = useState<Array<{ name: string; location: string; containerType: string; sampleType: string; temperature: string; id: string }>>(() => {
+    const raw = localStorage.getItem('containers');
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const [selectedSampleType, setSelectedSampleType] = useState<string | null>(null);
   const [viewedSaveFile, setViewedSaveFile] = useState<SaveFile | null>(null);
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -221,14 +231,25 @@ export function AdminDashboard() {
               {/* New CSV import UI: scan file for containers and samples, summarize, and allow import */}
               <CsvImportSummary onImport={items => {
                 // Map imported containers to required state shape
-                setContainers(items.containers.map(c => ({
+                const mappedContainers = items.containers.map(c => ({
                   id: c.id,
                   name: c.name,
                   location: c.location,
                   containerType: c.containerType || '',
                   sampleType: c.sampleType || '',
                   temperature: c.temperature || '',
-                })));
+                }));
+                setContainers(mappedContainers);
+                localStorage.setItem('containers', JSON.stringify(mappedContainers));
+                // Save samples by container
+                const samplesByContainer: { [containerId: string]: { [position: string]: { id: string } } } = {};
+                for (const s of items.samples) {
+                  if (!samplesByContainer[s.containerId]) samplesByContainer[s.containerId] = {};
+                  samplesByContainer[s.containerId][s.position] = { id: s.sampleId };
+                }
+                for (const containerId in samplesByContainer) {
+                  localStorage.setItem(`samples-${containerId}`, JSON.stringify(samplesByContainer[containerId]));
+                }
                 alert(`Imported ${items.containers.length} containers and ${items.samples.length} samples.`);
               }} />
             </Card>
