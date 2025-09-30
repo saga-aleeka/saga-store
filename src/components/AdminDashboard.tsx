@@ -356,7 +356,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
         samples: savedSamples ? JSON.parse(savedSamples) : []
       };
     });
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
+  console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
+  localStorage.setItem(backupKey, JSON.stringify(backupData));
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
@@ -774,25 +775,57 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                 ))}
               </div>
               <GridSnapshotView
-                containers={containers
-                  .filter(container => filteredSampleType === 'All' || container.sampleType === filteredSampleType)
-                  .map(container => {
-                    const storageKey = `samples-${container.id}`;
-                    const savedSamples = localStorage.getItem(storageKey);
-                    let samples = [];
-                    if (savedSamples) {
-                      try {
-                        samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
+                containers={(() => {
+                  // Use snapshot data if available
+                  const today = new Date().toISOString().slice(0, 10);
+                  const backupKey = `nightly-backup-${today}`;
+                  const backupDataRaw = localStorage.getItem(backupKey);
+                  if (!backupDataRaw) {
+                    // fallback to live containers if no snapshot
+                    return containers
+                      .filter(container => filteredSampleType === 'All' || container.sampleType === filteredSampleType)
+                      .map(container => {
+                        const storageKey = `samples-${container.id}`;
+                        const savedSamples = localStorage.getItem(storageKey);
+                        let samples = [];
+                        if (savedSamples) {
+                          try {
+                            samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
+                              ...sample,
+                              position,
+                            }));
+                          } catch (e) {}
+                        }
+                        return {
+                          ...container,
+                          samples,
+                        };
+                      });
+                  }
+                  // Parse snapshot backup data
+                  let backupData = [];
+                  try {
+                    backupData = JSON.parse(backupDataRaw);
+                  } catch {}
+                  return backupData
+                    .map((entry: any) => {
+                      const c = entry.container;
+                      let samples = [];
+                      if (Array.isArray(entry.samples)) {
+                        samples = entry.samples;
+                      } else if (entry.samples && typeof entry.samples === 'object') {
+                        samples = Object.entries(entry.samples).map(([position, sample]: [string, any]) => ({
                           ...sample,
                           position,
                         }));
-                      } catch (e) {}
-                    }
-                    return {
-                      ...container,
-                      samples,
-                    };
-                  })}
+                      }
+                      return {
+                        ...c,
+                        samples,
+                      };
+                    })
+                    .filter((container: any) => filteredSampleType === 'All' || container.sampleType === filteredSampleType);
+                })()}
                 onConvert={(container) => {
                   // Overwrite the container's samples in localStorage and update dashboard
                   const storageKey = `samples-${container.id}`;

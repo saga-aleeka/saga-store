@@ -116,7 +116,8 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         samples: savedSamples ? JSON.parse(savedSamples) : []
       };
     });
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
+  console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
+  localStorage.setItem(backupKey, JSON.stringify(backupData));
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
@@ -180,7 +181,8 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             samples: savedSamples ? JSON.parse(savedSamples) : []
           };
         });
-        localStorage.setItem(backupKey, JSON.stringify(backupData));
+  console.log('[SNAPSHOT] Nightly backup: writing to', backupKey, backupData);
+  localStorage.setItem(backupKey, JSON.stringify(backupData));
         scheduleNightlyBackup();
       }, msUntil2am);
       return () => clearTimeout(timer);
