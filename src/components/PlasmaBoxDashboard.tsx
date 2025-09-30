@@ -987,8 +987,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               
               {viewMode === 'edit' && (
                 <div className="flex items-center gap-2">
-                  <Input
                   {/* Initials input removed, always use saga-user-initials */}
+                  <Input
                     placeholder="Scan or enter sample ID"
                     value={scannedBarcode}
                     onChange={(e) => setScannedBarcode(e.target.value)}
