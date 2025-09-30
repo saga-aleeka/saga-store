@@ -299,6 +299,10 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
   const uniqueActions = Array.isArray(logs) ? [...new Set(logs.map(log => log.action))] : [];
   const uniqueUsers = Array.isArray(logs) ? [...new Set(logs.map(log => log.userId))] : [];
 
+  // Filter out empty/undefined values for Selects
+  const filteredUniqueActions = uniqueActions.filter(a => a && a !== '');
+  const filteredUniqueUsers = uniqueUsers.filter(u => u && u !== '');
+
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
       case 'critical': return <AlertTriangle className="w-4 h-4 text-red-600" />;
@@ -475,7 +479,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Actions</SelectItem>
-                    {uniqueActions.map(action => (
+                    {filteredUniqueActions.map(action => (
                       <SelectItem key={action} value={action}>{action}</SelectItem>
                     ))}
                   </SelectContent>
@@ -500,7 +504,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Users</SelectItem>
-                    {uniqueUsers.map(user => (
+                    {filteredUniqueUsers.map(user => (
                       <SelectItem key={user} value={user}>{user}</SelectItem>
                     ))}
                   </SelectContent>
