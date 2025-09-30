@@ -499,7 +499,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       newSample
     ]);
 
-    // Audit log: check-in
+    // Audit log: check-in (preserve full container name)
     let userId = userInitials.trim();
     let userName = userInitials.trim();
     try {
@@ -507,15 +507,19 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       if (userInfo && userInfo.id) userId = userInfo.id;
       if (userInfo && userInfo.name) userName = userInfo.name;
     } catch {}
+    // Use container.id to reconstruct the full container name if needed
+    const fullContainerName = container.name && container.id && !container.name.endsWith(container.id)
+      ? `${container.name}_${container.id}`
+      : container.name;
     createAuditLog(
       'sample-check-in',
       'sample',
       scannedBarcode.trim(),
       {
-        description: '', // No verbose note, all info in columns
+        description: '',
         metadata: {
           sampleId: scannedBarcode.trim(),
-          containerName: container.name,
+          containerName: fullContainerName,
           position: position
         }
       },
@@ -599,7 +603,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       movedSample
     ]);
 
-    // Audit log: move
+    // Audit log: move (preserve full container name)
     let userId = userInitials.trim();
     let userName = userInitials.trim();
     try {
@@ -607,15 +611,18 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       if (userInfo && userInfo.id) userId = userInfo.id;
       if (userInfo && userInfo.name) userName = userInfo.name;
     } catch {}
+    const fullContainerName = container.name && container.id && !container.name.endsWith(container.id)
+      ? `${container.name}_${container.id}`
+      : container.name;
     createAuditLog(
       'sample-move',
       'sample',
       scannedBarcode.trim(),
       {
-        description: '', // No verbose note, all info in columns
+        description: '',
         metadata: {
           sampleId: scannedBarcode.trim(),
-          containerName: container.name,
+          containerName: fullContainerName,
           fromPosition,
           toPosition
         }
@@ -725,7 +732,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       movedSample
     ]);
 
-    // Audit log: move from other container
+    // Audit log: move from other container (preserve full container names)
     let userId = userInitials.trim();
     let userName = userInitials.trim();
     try {
@@ -733,16 +740,22 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       if (userInfo && userInfo.id) userId = userInfo.id;
       if (userInfo && userInfo.name) userName = userInfo.name;
     } catch {}
+    const fullToContainerName = container.name && container.id && !container.name.endsWith(container.id)
+      ? `${container.name}_${container.id}`
+      : container.name;
+    const fullFromContainerName = sourceLocation.container.name && sourceLocation.container.id && !sourceLocation.container.name.endsWith(sourceLocation.container.id)
+      ? `${sourceLocation.container.name}_${sourceLocation.container.id}`
+      : sourceLocation.container.name;
     createAuditLog(
       'sample-move',
       'sample',
       scannedBarcode.trim(),
       {
-        description: '', // No verbose note, all info in columns
+        description: '',
         metadata: {
           sampleId: scannedBarcode.trim(),
-          fromContainerName: sourceLocation.container.name,
-          toContainerName: container.name,
+          fromContainerName: fullFromContainerName,
+          toContainerName: fullToContainerName,
           fromPosition: sourceLocation.position,
           toPosition
         }
@@ -899,16 +912,20 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         if (userInfo && userInfo.id) userId = userInfo.id;
         if (userInfo && userInfo.name) userName = userInfo.name;
       } catch {}
+      // Audit log: checkout (preserve full container name)
+      const fullContainerName = container.name && container.id && !container.name.endsWith(container.id)
+        ? `${container.name}_${container.id}`
+        : container.name;
       createAuditLog(
         'sample-check-out',
         'sample',
         selectedSample.sampleId,
         {
-          description: `Checked out sample ${selectedSample.sampleId} from ${container.name} (${container.id}) position ${selectedPosition}`,
+          description: `Checked out sample ${selectedSample.sampleId} from ${fullContainerName} position ${selectedPosition}`,
           metadata: {
             sampleId: selectedSample.sampleId,
             fromContainerId: container.id,
-            fromContainerName: container.name,
+            fromContainerName: fullContainerName,
             fromPosition: selectedPosition
           }
         },
@@ -935,16 +952,20 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           if (userInfo && userInfo.id) userId = userInfo.id;
           if (userInfo && userInfo.name) userName = userInfo.name;
         } catch {}
+        // Audit log: clear position (preserve full container name)
+        const fullContainerName = container.name && container.id && !container.name.endsWith(container.id)
+          ? `${container.name}_${container.id}`
+          : container.name;
         createAuditLog(
           'sample-clear-position',
           'sample',
           selectedSample.sampleId,
           {
-            description: `Cleared sample ${selectedSample.sampleId} from ${container.name} (${container.id}) position ${selectedPosition}`,
+            description: `Cleared sample ${selectedSample.sampleId} from ${fullContainerName} position ${selectedPosition}`,
             metadata: {
               sampleId: selectedSample.sampleId,
               fromContainerId: container.id,
-              fromContainerName: container.name,
+              fromContainerName: fullContainerName,
               fromPosition: selectedPosition
             }
           },
@@ -968,15 +989,19 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         if (userInfo && userInfo.id) userId = userInfo.id;
         if (userInfo && userInfo.name) userName = userInfo.name;
       } catch {}
+      // Audit log: clear box (preserve full container name)
+      const fullContainerName = container.name && container.id && !container.name.endsWith(container.id)
+        ? `${container.name}_${container.id}`
+        : container.name;
       createAuditLog(
         'container-clear-box',
         'container',
         container.id,
         {
-          description: `Cleared all samples from container ${container.name} (${container.id})`,
+          description: `Cleared all samples from container ${fullContainerName}`,
           metadata: {
             containerId: container.id,
-            containerName: container.name
+            containerName: fullContainerName
           }
         },
         userId
