@@ -59,15 +59,28 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
   // Handle checkout
   const handleCheckout = (sampleIds: string[]) => {
     if (!sampleIds.length) return;
-    // Get user initials from localStorage
+    // Get user info from localStorage (badge)
     let userInitials = '';
+    let userName = '';
+    let userId = '';
     try {
-      // Match the badge: saga-user-initials is an object with { initials }
+      // saga-user-initials: { initials }
       const userData = JSON.parse(localStorage.getItem('saga-user-initials') || 'null');
       userInitials = userData?.initials || '';
+      // saga-user-info: { id, name }
+      const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+      userName = userInfo?.name || userInitials || 'Unknown';
+      userId = userInfo?.id || userInitials || 'Unknown';
     } catch {}
     // Find all samples to remove and their containers
     const removed: { sampleId: string, containerId: string, position: string, sampleData: any }[] = [];
+    const now = new Date().toISOString();
+    // Prepare audit log
+    let auditLogs: any[] = [];
+    try {
+      auditLogs = JSON.parse(localStorage.getItem('saga-audit-logs') || '[]');
+      if (!Array.isArray(auditLogs)) auditLogs = [];
+    } catch { auditLogs = []; }
     foundSamples.forEach((result: any) => {
       const { sample, container } = result;
       if (sampleIds.includes(sample.sampleId)) {
@@ -88,14 +101,38 @@ export const WorklistResults: React.FC<WorklistResultsProps> = ({
             samplesObj[`_audit_${sample.position}`] = {
               action: 'checkout',
               by: userInitials,
-              at: new Date().toISOString(),
+              at: now,
               sampleId: sample.sampleId
             };
             localStorage.setItem(storageKey, JSON.stringify(samplesObj));
+            // Add to audit log
+            auditLogs.push({
+              id: `${sample.sampleId}-${now}`,
+              timestamp: now,
+              userId,
+              userName,
+              userRole: '',
+              action: 'sample-check-out',
+              entityType: 'sample',
+              entityId: sample.sampleId,
+              details: {
+                description: `Checked out sample ${sample.sampleId} from ${container.name} (${container.id}) position ${sample.position}`,
+                metadata: {
+                  sampleId: sample.sampleId,
+                  fromContainerId: container.id,
+                  fromContainerName: container.name,
+                  fromPosition: sample.position
+                }
+              },
+              severity: 'medium',
+              success: true
+            });
           }
         }
       }
     });
+    // Save audit log
+    localStorage.setItem('saga-audit-logs', JSON.stringify(auditLogs));
     setLastCheckout(removed);
     setCheckedOutSamples((prev) => [...prev, ...sampleIds.filter(id => !prev.includes(id))]);
     setSelectedSamples([]);
