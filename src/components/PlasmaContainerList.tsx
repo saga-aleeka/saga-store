@@ -458,10 +458,28 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // ...existing code...
   // Remove the inner handleEditContainer and related inner render logic
-  // Helper to get today's nightly snapshot
-  const getTodayNightlySnapshot = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
+
+  // --- Snapshot selection state and helpers ---
+  const [selectedSnapshotDate, setSelectedSnapshotDate] = useState<string | null>(null);
+  const [availableSnapshotDates, setAvailableSnapshotDates] = useState<string[]>([]);
+
+  // Find all available backup dates (sorted descending)
+  useEffect(() => {
+    const keys = Object.keys(localStorage)
+      .filter(k => k.startsWith('nightly-backup-'))
+      .map(k => k.replace('nightly-backup-', ''))
+      .sort((a, b) => b.localeCompare(a)); // descending
+    setAvailableSnapshotDates(keys);
+    // Default to most recent
+    if (!selectedSnapshotDate && keys.length > 0) {
+      setSelectedSnapshotDate(keys[0]);
+    }
+  }, [selectedSnapshotDate]);
+
+  // Helper to get snapshot for selected date
+  const getSnapshotForDate = (date: string | null) => {
+    if (!date) return [];
+    const backupKey = `nightly-backup-${date}`;
     const backupDataRaw = localStorage.getItem(backupKey);
     if (!backupDataRaw) return [];
     try {
@@ -471,21 +489,34 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     }
   };
 
-  // Render admin nightly snapshot
+  // Render admin nightly snapshot with date selection
   const renderAdminNightlySnapshot = () => {
-    const todaySnapshot: Array<{ container: PlasmaContainer; samples: any[] }> = getTodayNightlySnapshot();
+    const snapshot: Array<{ container: PlasmaContainer; samples: any[] }> = getSnapshotForDate(selectedSnapshotDate);
     return (
       <Card className="p-4 mb-6">
         <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 items-center">
           <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
           <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Snapshot</Button>
+          {/* Calendar dropdown for snapshot selection */}
+          <div className="ml-4 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Select snapshot date:</span>
+            <select
+              className="border rounded px-2 py-1 text-sm"
+              value={selectedSnapshotDate || ''}
+              onChange={e => setSelectedSnapshotDate(e.target.value)}
+            >
+              {availableSnapshotDates.map(date => (
+                <option key={date} value={date}>{date}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        {todaySnapshot.length === 0 ? (
-          <p className="text-muted-foreground">No snapshot found for today.</p>
+        {snapshot.length === 0 ? (
+          <p className="text-muted-foreground">No snapshot found for selected date.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }) => (
+            {snapshot.map(({ container, samples }) => (
               <Card key={container.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>
@@ -672,6 +703,9 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         />
       )}
 
+      {/* --- Admin Nightly Snapshot with Date Selection --- */}
+      {renderAdminNightlySnapshot()}
+
       {/* Main Content with Tabs */}
       {containers.length === 0 ? (
         <Card className="p-12 text-center">
@@ -707,224 +741,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           </TabsList>
 
           <TabsContent value="containers" className="space-y-6">
-            {/* Container Search and Filter Controls */}
-            <Card className="p-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                    {/* @ts-ignore: Input is a function component, not a constructor */}
-                    <Input
-                      placeholder="Search active containers by ID, name, or location..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Filter by sample type:</span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={selectedSampleType === null ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedSampleType(null)}
-                  >
-                    All Types
-                  </Button>
-                  {SAMPLE_TYPES.map((sampleType) => (
-                    <Button
-                      key={sampleType}
-                      variant={selectedSampleType === sampleType ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSelectedSampleType(sampleType)}
-                      className={selectedSampleType === sampleType ? '' : getSampleTypeColor(sampleType)}
-                    >
-                      {sampleType}
-                    </Button>
-                  ))}
-                  
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className="text-sm text-muted-foreground">•</span>
-                    <Button
-                      variant={showAvailableOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setShowAvailableOnly(!showAvailableOnly)}
-                      className="flex items-center gap-2"
-                    >
-                      Available Slots Only
-                    </Button>
-                    <Button
-                      variant={showTrainingOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setShowTrainingOnly(!showTrainingOnly)}
-                      className="flex items-center gap-2"
-                      style={showTrainingOnly ? { 
-                        backgroundColor: 'var(--training)', 
-                        color: 'var(--training-foreground)',
-                        borderColor: 'var(--training)'
-                      } : {}}
-                    >
-                      <GraduationCap className="w-4 h-4" />
-                      Training Only
-                    </Button>
-                  </div>
-                  
-                  {(searchQuery || selectedSampleType || showAvailableOnly || showTrainingOnly) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearContainerFilters}
-                      className="text-muted-foreground"
-                    >
-                      Clear Filters
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* Container Results Summary */}
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredContainers.length} of {activeContainers.length} active containers
-                {searchQuery && ` matching "${searchQuery}"`}
-                {selectedSampleType && ` filtered by ${selectedSampleType}`}
-                {showAvailableOnly && ` with available slots`}
-                {showTrainingOnly && ` marked as training`}
-              </p>
-            </div>
-
-            {/* Container Grid */}
-            {filteredContainers.length === 0 ? (
-              <Card className="p-12 text-center">
-                <div className="text-muted-foreground">
-                  <Thermometer className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <h3 className="mb-2">No active containers found</h3>
-                  <p className="text-sm">
-                    {activeContainers.length === 0 
-                      ? "No active containers available. Try creating a new container or check the Archive tab."
-                      : "Try adjusting your search or filter criteria"}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={clearContainerFilters} className="mt-4">
-                    Clear Filters
-                  </Button>
-                </div>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredContainers.map((container) => (
-                  <div key={container.id}>
-                    <ContainerCard
-                      container={container}
-                      onSelect={setSelectedContainer}
-                      onEdit={handleEditContainer}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* ...existing code... */}
           </TabsContent>
 
           <TabsContent value="archive" className="space-y-6">
-            {/* Archive Search and Filter Controls */}
-            <Card className="p-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                    {/* @ts-ignore: Input is a function component, not a constructor */}
-                    <Input
-                      placeholder="Search archived containers by ID, name, or location..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Filter by sample type:</span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={selectedSampleType === null ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedSampleType(null)}
-                  >
-                    All Types
-                  </Button>
-                  {SAMPLE_TYPES.map((sampleType) => (
-                    <Button
-                      key={sampleType}
-                      variant={selectedSampleType === sampleType ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSelectedSampleType(sampleType)}
-                      className={selectedSampleType === sampleType ? '' : getSampleTypeColor(sampleType)}
-                    >
-                      {sampleType}
-                    </Button>
-                  ))}
-                  
-                  {(searchQuery || selectedSampleType) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setSelectedSampleType(null);
-                      }}
-                      className="text-muted-foreground ml-4"
-                    >
-                      Clear Filters
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* Archive Results Summary */}
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredContainers.length} of {archivedContainers.length} archived containers
-                {searchQuery && ` matching "${searchQuery}"`}
-                {selectedSampleType && ` filtered by ${selectedSampleType}`}
-              </p>
-            </div>
-
-            {/* Archive Grid */}
-            {filteredContainers.length === 0 ? (
-              <Card className="p-12 text-center">
-                <div className="text-muted-foreground">
-                  <Archive className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <h3 className="mb-2">No archived containers found</h3>
-                  <p className="text-sm">
-                    {archivedContainers.length === 0 
-                      ? "No archived containers available."
-                      : "Try adjusting your search or filter criteria"}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={() => { setSearchQuery(''); setSelectedSampleType(null); }} className="mt-4">
-                    Clear Filters
-                  </Button>
-                </div>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredContainers.map((container) => (
-                  <div key={container.id}>
-                    <ContainerCard
-                      container={container}
-                      onSelect={setSelectedContainer}
-                      onEdit={handleEditContainer}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* ...existing code... */}
           </TabsContent>
 
           <TabsContent value="samples" className="space-y-6">
