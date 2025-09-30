@@ -149,6 +149,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Nightly backup logic (2am Eastern Time, overwrite previous)
   React.useEffect(() => {
+    // Only schedule nightly backup, do not update snapshot after every edit
     function getEasternTimeDate() {
       const now = new Date();
       const utcOffset = -5; // hours
@@ -169,6 +170,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       const msUntil2am = next2am.getTime() - easternNow.getTime();
 
       const timer = setTimeout(() => {
+        // Only perform backup at 2am, not after every edit
         const containersToBackup = Array.isArray(propsContainers) ? propsContainers : localContainers;
         const backupData = (Array.isArray(containersToBackup) ? containersToBackup : []).map(container => {
           const storageKey = `samples-${container.id}`;
@@ -186,7 +188,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
     const cancel = scheduleNightlyBackup();
     return cancel;
-  }, [propsContainers, localContainers]);
+  }, []); // Remove dependencies to avoid running after every edit
 
   // Revert container to last nightly backup
   const [revertDialogOpen, setRevertDialogOpen] = useState<boolean>(false);
