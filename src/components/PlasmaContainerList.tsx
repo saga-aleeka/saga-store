@@ -677,7 +677,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         <Card className="p-12 text-center">
           <div className="text-muted-foreground">
             <Thermometer className="w-16 h-16 mx-auto mb-6 opacity-30" />
-            <h3 className="mb-3">Welcome to Plasma Storage Management</h3>
+            <h3 className="mb-3">Welcome to SAGA Sample Storage Management Systems</h3>
             <p className="text-sm mb-6 max-w-md mx-auto">
               Get started by creating your first storage container. You can organize different sample types 
               including DP Pools, cfDNA Tubes, DTC Tubes, MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.

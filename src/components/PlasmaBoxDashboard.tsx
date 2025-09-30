@@ -55,7 +55,15 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const [selectedSample, setSelectedSample] = useState<PlasmaSample | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('view');
   const [scannedBarcode, setScannedBarcode] = useState('');
-  const [userInitials, setUserInitials] = useState('');
+  // Always use saga-user-initials from localStorage for audit tracking
+  const [userInitials, setUserInitials] = useState(() => {
+    try {
+      const userData = JSON.parse(localStorage.getItem('saga-user-initials') || 'null');
+      return userData?.initials || '';
+    } catch {
+      return '';
+    }
+  });
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
   const [targetPosition, setTargetPosition] = useState<string>('');
   const [moveNotification, setMoveNotification] = useState<{ from: string; to: string; sampleId: string } | null>(null);
@@ -980,13 +988,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               {viewMode === 'edit' && (
                 <div className="flex items-center gap-2">
                   <Input
-                    placeholder="Your initials (required)"
-                    value={userInitials}
-                    onChange={(e) => setUserInitials(e.target.value.toUpperCase())}
-                    className="w-32"
-                    maxLength={4}
-                  />
-                  <Input
+                  {/* Initials input removed, always use saga-user-initials */}
                     placeholder="Scan or enter sample ID"
                     value={scannedBarcode}
                     onChange={(e) => setScannedBarcode(e.target.value)}

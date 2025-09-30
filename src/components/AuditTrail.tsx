@@ -41,7 +41,6 @@ export interface AuditLogEntry {
     metadata?: any;
     notes?: string;
   };
-  severity: 'low' | 'medium' | 'high' | 'critical';
   success: boolean;
   ipAddress?: string;
   userAgent?: string;
@@ -115,7 +114,7 @@ export function createAuditLog(
           newValues: options.newValues,
           metadata: options.metadata
         },
-        severity: options.severity || 'low',
+  // severity removed
         success: options.success !== false,
       };
       const updatedLogs = [newLog, ...existingLogs].slice(0, 1000); // Keep last 1000 entries
@@ -129,6 +128,9 @@ export function createAuditLog(
 }
 
 export function AuditTrail({ currentUser }: AuditTrailProps) {
+  // Pagination state
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
@@ -280,20 +282,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       : [];
   }, [logs, searchQuery, actionFilter, severityFilter, userFilter, successFilter, dateFilter]);
 
-  // Filter movements
-  const filteredMovements = useMemo(() => {
-    return Array.isArray(sampleMovements)
-      ? sampleMovements.filter(movement => {
-          const matchesSearch = searchQuery === '' ||
-            movement.sampleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            movement.actionType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            movement.toContainerId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            movement.notes?.toLowerCase().includes(searchQuery.toLowerCase());
-
-          return matchesSearch;
-        })
-      : [];
-  }, [sampleMovements, searchQuery]);
 
   // Get unique values for filters
   const uniqueActions = Array.isArray(logs) ? [...new Set(logs.map(log => log.action))] : [];
@@ -442,7 +430,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'audit' | 'movements')}>
+          <Tabs value={activeTab} onValueChange={(value: string) => setActiveTab(value as 'audit' | 'movements')}>
             <TabsList className="grid w-full grid-cols-2 max-w-md">
               <TabsTrigger value="audit" className="flex items-center gap-2">
                 <Activity className="w-4 h-4" />
@@ -456,13 +444,27 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
 
             {/* Search and Filter Controls */}
             <div className="mt-6 space-y-4">
+              {/* Page size selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Rows per page:</span>
+                <Select value={String(pageSize)} onValueChange={(v: string) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="w-20 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
                     placeholder="Search logs, actions, users, or entities..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                     className="pl-10"
                   />
                 </div>
@@ -479,24 +481,13 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Actions</SelectItem>
-                    {filteredUniqueActions.map(action => (
+                    {filteredUniqueActions.map((action: string) => (
                       <SelectItem key={action} value={action}>{action}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Severity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Levels</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
+
 
                 <Select value={userFilter} onValueChange={setUserFilter}>
                   <SelectTrigger>
@@ -504,7 +495,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Users</SelectItem>
-                    {filteredUniqueUsers.map(user => (
+                    {filteredUniqueUsers.map((user: string) => (
                       <SelectItem key={user} value={user}>{user}</SelectItem>
                     ))}
                   </SelectContent>
@@ -555,13 +546,13 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                         <TableHead>User</TableHead>
                         <TableHead>Action</TableHead>
                         <TableHead>Entity</TableHead>
-                        <TableHead>Severity</TableHead>
+                        {/* Severity removed */}
                         <TableHead>Status</TableHead>
                         <TableHead>Description</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredLogs.map((log) => (
+                      {paginatedLogs.map((log: AuditLogEntry) => (
                         <TableRow key={log.id}>
                           <TableCell className="font-mono text-xs">
                             {formatTimestamp(log.timestamp)}
@@ -586,12 +577,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                               <div className="font-mono text-xs">{log.entityId}</div>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={getSeverityColor(log.severity)}>
-                              {getSeverityIcon(log.severity)}
-                              <span className="ml-1">{log.severity}</span>
-                            </Badge>
-                          </TableCell>
+
                           <TableCell>
                             {log.success ? (
                               <CheckCircle className="w-4 h-4 text-green-600" />
@@ -617,6 +603,16 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                       ))}
                     </TableBody>
                   </Table>
+                  {/* Pagination controls for audit tab */}
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <Button size="sm" variant="outline" onClick={() => setPage((p: number) => Math.max(1, p - 1))} disabled={page === 1}>
+                      Prev
+                    </Button>
+                    <span className="text-xs">Page {page} of {Math.max(1, Math.ceil(filteredLogs.length / pageSize))}</span>
+                    <Button size="sm" variant="outline" onClick={() => setPage((p: number) => p + 1)} disabled={page >= Math.ceil(filteredLogs.length / pageSize)}>
+                      Next
+                    </Button>
+                  </div>
                 </div>
               )}
             </TabsContent>
@@ -633,76 +629,88 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Timestamp</TableHead>
-                        <TableHead>Sample ID</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead>Container</TableHead>
-                        <TableHead>Position</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredMovements.map((movement) => (
-                        <TableRow key={movement.id}>
-                          <TableCell className="font-mono text-xs">
-                            {formatTimestamp(movement.timestamp)}
-                          </TableCell>
-                          <TableCell className="font-mono">
-                            {movement.sampleId}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant="outline" 
-                              className={
-                                movement.actionType === 'check-in' ? 'bg-green-50 text-green-700 border-green-200' :
-                                movement.actionType === 'check-out' ? 'bg-red-50 text-red-700 border-red-200' :
-                                movement.actionType === 'move' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                'bg-yellow-50 text-yellow-700 border-yellow-200'
-                              }
-                            >
-                              {movement.actionType}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {/* Show container name or ID, but strip trailing _numbers if present */}
-                            {(() => {
-                              const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
-                              if (typeof raw !== 'string') return raw;
-                              // If the string ends with _<digits>, remove only the trailing digits, keep the rest (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
-                              // If no trailing _digits, show as-is
-                              const match = raw.match(/^(.*?)(_\d+)?$/);
-                              if (match) {
-                                // If there are at least two underscores, and the last part is all digits, remove it
-                                const parts = raw.split('_');
-                                if (parts.length > 2 && /^\d+$/.test(parts[parts.length - 1])) {
-                                  return parts.slice(0, -1).join('_');
-                                }
-                              }
-                              return raw;
-                            })()}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {movement.toPosition || movement.fromPosition || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Users className="w-3 h-3 text-muted-foreground" />
-                              {movement.userName}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-md text-sm">
-                            {movement.notes || '-'}
-                          </TableCell>
+                <>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Timestamp</TableHead>
+                          <TableHead>Sample ID</TableHead>
+                          <TableHead>Action</TableHead>
+                          <TableHead>Container</TableHead>
+                          <TableHead>Position</TableHead>
+                          <TableHead>User</TableHead>
+                          <TableHead>Notes</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedMovements.map((movement: SampleMovement) => (
+                          <TableRow key={movement.id}>
+                            <TableCell className="font-mono text-xs">
+                              {formatTimestamp(movement.timestamp)}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              {movement.sampleId}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="outline" 
+                                className={
+                                  movement.actionType === 'check-in' ? 'bg-green-50 text-green-700 border-green-200' :
+                                  movement.actionType === 'check-out' ? 'bg-red-50 text-red-700 border-red-200' :
+                                  movement.actionType === 'move' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                }
+                              >
+                                {movement.actionType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {/* Show container name or ID, but strip trailing _numbers if present */}
+                              {(() => {
+                                const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
+                                if (typeof raw !== 'string') return raw;
+                                // If the string ends with _<digits>, remove only the trailing digits, keep the rest (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
+                                // If no trailing _digits, show as-is
+                                const match = raw.match(/^(.*?)(_\d+)?$/);
+                                if (match) {
+                                  // If there are at least two underscores, and the last part is all digits, remove it
+                                  const parts = raw.split('_');
+                                  if (parts.length > 2 && /^\d+$/.test(parts[parts.length - 1])) {
+                                    return parts.slice(0, -1).join('_');
+                                  }
+                                }
+                                return raw;
+                              })()}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {movement.toPosition || movement.fromPosition || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Users className="w-3 h-3 text-muted-foreground" />
+                                {movement.userName}
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-md text-sm">
+                              {movement.notes || '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {/* Pagination controls for movements tab */}
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <Button size="sm" variant="outline" onClick={() => setPage((p: number) => Math.max(1, p - 1))} disabled={page === 1}>
+                      Prev
+                    </Button>
+                    <span className="text-xs">Page {page} of {Math.max(1, Math.ceil(filteredMovements.length / pageSize))}</span>
+                    <Button size="sm" variant="outline" onClick={() => setPage((p: number) => p + 1)} disabled={page >= Math.ceil(filteredMovements.length / pageSize)}>
+                      Next
+                    </Button>
+                  </div>
+                </>
               )}
             </TabsContent>
           </Tabs>

@@ -366,21 +366,8 @@ export default function App() {
         <Card className="w-96">
           <CardContent className="p-6">
             <div className="text-center mb-6">
-              <UserIcon className="h-12 w-12 mx-auto mb-4 text-primary" />
-              <h1>SAGA Storage System</h1>
-              <p className="text-muted-foreground">
-                Welcome to your clinical lab management platform
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Advanced sample tracking and freezer management for laboratory workflows
-              </p>
-              <div className="flex items-center justify-center gap-2 mt-3">
-                {getDatabaseStatusBadge()}
-                <Badge variant="outline" className="text-xs">
-                  <Wifi className="h-3 w-3 mr-1" />
-                  StackBlitz Demo
-                </Badge>
-              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user h-12 w-12 mx-auto mb-4 text-primary"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <h3 className="mb-3">Welcome to SAGA Sample Storage Management Systems</h3>
             </div>
 
             <div className="space-y-4">
