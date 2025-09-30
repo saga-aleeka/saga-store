@@ -514,12 +514,11 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       'sample',
       scannedBarcode.trim(),
       {
-        description: `Checked in sample ${scannedBarcode.trim()} to ${container.name} (${container.id}) position ${position}`,
+        description: '', // No verbose note, all info in columns
         metadata: {
           sampleId: scannedBarcode.trim(),
-          toContainerId: container.id,
-          toContainerName: container.name,
-          toPosition: position
+          containerName: container.name,
+          position: position
         }
       },
       userId
@@ -616,14 +615,11 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       'sample',
       scannedBarcode.trim(),
       {
-        description: `Moved sample ${scannedBarcode.trim()} in ${container.name} (${container.id}) from ${fromPosition} to ${toPosition}`,
+        description: '', // No verbose note, all info in columns
         metadata: {
           sampleId: scannedBarcode.trim(),
-          fromContainerId: container.id,
-          fromContainerName: container.name,
+          containerName: container.name,
           fromPosition,
-          toContainerId: container.id,
-          toContainerName: container.name,
           toPosition
         }
       },
@@ -746,14 +742,12 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       'sample',
       scannedBarcode.trim(),
       {
-        description: `Moved sample ${scannedBarcode.trim()} from ${sourceLocation.container.name} (${sourceLocation.container.id}) position ${sourceLocation.position} to ${container.name} (${container.id}) position ${toPosition}`,
+        description: '', // No verbose note, all info in columns
         metadata: {
           sampleId: scannedBarcode.trim(),
-          fromContainerId: sourceLocation.container.id,
           fromContainerName: sourceLocation.container.name,
-          fromPosition: sourceLocation.position,
-          toContainerId: container.id,
           toContainerName: container.name,
+          fromPosition: sourceLocation.position,
           toPosition
         }
       },
