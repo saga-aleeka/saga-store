@@ -116,8 +116,17 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         samples: savedSamples ? JSON.parse(savedSamples) : []
       };
     });
-  console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
-  localStorage.setItem(backupKey, JSON.stringify(backupData));
+    console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    // 7-day rolling retention: keep only 7 most recent backups
+    const backupKeys = Object.keys(localStorage)
+      .filter(k => k.startsWith('nightly-backup-'))
+      .sort();
+    if (backupKeys.length > 7) {
+      const toDelete = backupKeys.slice(0, backupKeys.length - 7);
+      toDelete.forEach(k => localStorage.removeItem(k));
+      console.log('[SNAPSHOT] Deleted old backups:', toDelete);
+    }
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
@@ -181,8 +190,17 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
             samples: savedSamples ? JSON.parse(savedSamples) : []
           };
         });
-  console.log('[SNAPSHOT] Nightly backup: writing to', backupKey, backupData);
-  localStorage.setItem(backupKey, JSON.stringify(backupData));
+        console.log('[SNAPSHOT] Nightly backup: writing to', backupKey, backupData);
+        localStorage.setItem(backupKey, JSON.stringify(backupData));
+        // 7-day rolling retention: keep only 7 most recent backups
+        const backupKeys = Object.keys(localStorage)
+          .filter(k => k.startsWith('nightly-backup-'))
+          .sort();
+        if (backupKeys.length > 7) {
+          const toDelete = backupKeys.slice(0, backupKeys.length - 7);
+          toDelete.forEach(k => localStorage.removeItem(k));
+          console.log('[SNAPSHOT] Deleted old backups:', toDelete);
+        }
         scheduleNightlyBackup();
       }, msUntil2am);
       return () => clearTimeout(timer);

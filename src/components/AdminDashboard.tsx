@@ -29,6 +29,27 @@ interface Container {
 }
 
 export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
+  // --- Snapshot date selection state and logic ---
+  const availableSnapshotDates = React.useMemo(() => {
+    return Object.keys(localStorage)
+      .filter(k => k.startsWith('nightly-backup-'))
+      .map(k => k.replace('nightly-backup-', ''))
+      .sort()
+      .reverse()
+      .slice(0, 7);
+  }, [containers]);
+  const [selectedSnapshotDate, setSelectedSnapshotDate] = React.useState(() => {
+    // Default to today if available, else most recent
+    const today = new Date().toISOString().slice(0, 10);
+    if (availableSnapshotDates.includes(today)) return today;
+    return availableSnapshotDates[0] || '';
+  });
+  // Update selectedSnapshotDate if available dates change and current selection is missing
+  React.useEffect(() => {
+    if (!availableSnapshotDates.includes(selectedSnapshotDate)) {
+      setSelectedSnapshotDate(availableSnapshotDates[0] || '');
+    }
+  }, [availableSnapshotDates, selectedSnapshotDate]);
   // Utility: Parse grid-style import template
   function parseGridImport(content: string) {
   console.log('--- Grid Import Debug Start ---');
@@ -356,8 +377,17 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
         samples: savedSamples ? JSON.parse(savedSamples) : []
       };
     });
-  console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
-  localStorage.setItem(backupKey, JSON.stringify(backupData));
+    console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
+    localStorage.setItem(backupKey, JSON.stringify(backupData));
+    // 7-day rolling retention: keep only 7 most recent backups
+    const backupKeys = Object.keys(localStorage)
+      .filter(k => k.startsWith('nightly-backup-'))
+      .sort();
+    if (backupKeys.length > 7) {
+      const toDelete = backupKeys.slice(0, backupKeys.length - 7);
+      toDelete.forEach(k => localStorage.removeItem(k));
+      console.log('[SNAPSHOT] Deleted old backups:', toDelete);
+    }
     alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
@@ -733,7 +763,7 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     </div>
                   );
                 })()}
-                <div className="flex gap-4 flex-wrap">
+                <div className="flex gap-4 flex-wrap items-center">
                   <Button onClick={handleManualBackup}>
                     <Database className="w-4 h-4 mr-2" />
                     Manual Backup
@@ -747,6 +777,19 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                     <Download className="w-4 h-4 mr-2" />
                     Download
                   </Button>
+                  {/* Calendar dropdown for snapshot selection */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Snapshot date:</span>
+                    <select
+                      className="border rounded px-2 py-1 text-xs"
+                      value={selectedSnapshotDate}
+                      onChange={e => setSelectedSnapshotDate(e.target.value)}
+                    >
+                      {availableSnapshotDates.map(date => (
+                        <option key={date} value={date}>{date}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -776,9 +819,8 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
               </div>
               <GridSnapshotView
                 containers={(() => {
-                  // Use snapshot data if available
-                  const today = new Date().toISOString().slice(0, 10);
-                  const backupKey = `nightly-backup-${today}`;
+                  // Use selected snapshot date
+                  const backupKey = `nightly-backup-${selectedSnapshotDate}`;
                   const backupDataRaw = localStorage.getItem(backupKey);
                   if (!backupDataRaw) {
                     // fallback to live containers if no snapshot
