@@ -91,12 +91,20 @@ export function createAuditLog(
 ): Promise<void> {
   return new Promise((resolve) => {
     try {
+      // Always pull userId and userName from the badge/tag at the top right (saga-user-info or saga-user-initials)
+      let userId = userInitials;
+      let userName = userInitials;
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+        if (userInfo && userInfo.name) userName = userInfo.name;
+      } catch {}
       const existingLogs = JSON.parse(localStorage.getItem('saga-audit-logs') || '[]');
       const newLog: AuditLogEntry = {
         id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         timestamp: new Date().toISOString(),
-        userId: userInitials,
-        userName: userInitials,
+        userId,
+        userName,
         userRole: 'Lab User',
         action: actionType,
         entityType: resourceType,
@@ -110,7 +118,6 @@ export function createAuditLog(
         severity: options.severity || 'low',
         success: options.success !== false,
       };
-      
       const updatedLogs = [newLog, ...existingLogs].slice(0, 1000); // Keep last 1000 entries
       localStorage.setItem('saga-audit-logs', JSON.stringify(updatedLogs));
       resolve();

@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from 'react';
+
+// Utility to infer storage temperature from sample/container type
+function inferStorageTemperature(type: string) {
+  // Normalize type for matching
+  const t = (type || '').toLowerCase();
+  if (/(dp|cf\s*dna|mnc|pa|idt)/i.test(t)) return '-20C';
+  if (/dtc/i.test(t)) return '4C';
+  if (/(plasma|bc|buffy)/i.test(t)) return '-80C';
+  return '';
+}
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -8,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription } from './ui/alert';
 import { Calendar, User, TestTube, Clock, Scan, AlertTriangle, Trash2, Edit3, Info } from 'lucide-react';
 import { PlasmaContainer, getGridDimensions } from './PlasmaContainerList';
+import { createAuditLog } from './AuditTrail';
 
 interface SampleHistoryEntry {
   timestamp: string;
@@ -110,18 +121,22 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           };
         });
         localStorage.setItem(storageKey, JSON.stringify(sampleData));
-        
-        // Update container occupancy
+
+        // Infer storage temperature for this container
+        const inferredTemp = inferStorageTemperature(container.sampleType || container.containerType || '');
+
+        // Update container occupancy and storage temperature
         if (onContainerUpdate) {
           const updatedContainer = {
             ...container,
             occupiedSlots: samples.length,
-            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            storageTemperature: inferredTemp || container.storageTemperature || ''
           };
           onContainerUpdate(updatedContainer);
         }
       }, 500);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [samples, storageKey, container, onContainerUpdate]);
@@ -771,9 +786,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         alert('Please enter your initials before checking out samples.');
         return;
       }
-      
       const now = new Date().toISOString();
-      
       // Add check-out entry to history before removing
       const updatedSample: PlasmaSample = {
         ...selectedSample,
@@ -787,12 +800,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           }
         ]
       };
-      
       // Store the sample with updated history in a separate storage for checked-out samples
       const checkedOutKey = `checked-out-samples`;
       const existingCheckedOut = localStorage.getItem(checkedOutKey);
       let checkedOutSamples: PlasmaSample[] = [];
-      
       if (existingCheckedOut) {
         try {
           checkedOutSamples = JSON.parse(existingCheckedOut);
@@ -800,13 +811,33 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           console.error('Error loading checked out samples:', error);
         }
       }
-      
       // Remove any existing entry for this sample and add the updated one
       checkedOutSamples = checkedOutSamples.filter(s => s.sampleId !== updatedSample.sampleId);
       checkedOutSamples.push(updatedSample);
-      
       localStorage.setItem(checkedOutKey, JSON.stringify(checkedOutSamples));
-      
+      // Audit log: checkout
+      let userId = userInitials.trim();
+      let userName = userInitials.trim();
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+        if (userInfo && userInfo.name) userName = userInfo.name;
+      } catch {}
+      createAuditLog(
+        'sample-check-out',
+        'sample',
+        selectedSample.sampleId,
+        {
+          description: `Checked out sample ${selectedSample.sampleId} from ${container.name} (${container.id}) position ${selectedPosition}`,
+          metadata: {
+            sampleId: selectedSample.sampleId,
+            fromContainerId: container.id,
+            fromContainerName: container.name,
+            fromPosition: selectedPosition
+          }
+        },
+        userId
+      );
       // Remove from current container
       setSamples(prev => prev.filter(s => s.position !== selectedPosition));
       setSelectedSample(null);
@@ -819,8 +850,30 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         alert('Please enter your initials before clearing this position.');
         return;
       }
-      
       if (confirm(`Are you sure you want to permanently delete sample ${selectedSample.sampleId}? This will remove the sample and all its history permanently.`)) {
+        // Audit log: clear position
+        let userId = userInitials.trim();
+        let userName = userInitials.trim();
+        try {
+          const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+          if (userInfo && userInfo.id) userId = userInfo.id;
+          if (userInfo && userInfo.name) userName = userInfo.name;
+        } catch {}
+        createAuditLog(
+          'sample-clear-position',
+          'sample',
+          selectedSample.sampleId,
+          {
+            description: `Cleared sample ${selectedSample.sampleId} from ${container.name} (${container.id}) position ${selectedPosition}`,
+            metadata: {
+              sampleId: selectedSample.sampleId,
+              fromContainerId: container.id,
+              fromContainerName: container.name,
+              fromPosition: selectedPosition
+            }
+          },
+          userId
+        );
         // Completely remove the sample without preserving history
         setSamples(prev => prev.filter(s => s.position !== selectedPosition));
         setSelectedSample(null);
@@ -831,6 +884,27 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
 
   const handleClearBox = () => {
     if (confirm('Are you sure you want to clear all samples from this container?')) {
+      // Audit log: clear box
+      let userId = userInitials.trim();
+      let userName = userInitials.trim();
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+        if (userInfo && userInfo.name) userName = userInfo.name;
+      } catch {}
+      createAuditLog(
+        'container-clear-box',
+        'container',
+        container.id,
+        {
+          description: `Cleared all samples from container ${container.name} (${container.id})`,
+          metadata: {
+            containerId: container.id,
+            containerName: container.name
+          }
+        },
+        userId
+      );
       setSamples([]);
       setSelectedSample(null);
       setSelectedPosition(null);
