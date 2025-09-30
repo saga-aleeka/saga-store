@@ -429,6 +429,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       console.error('onContainersChange is not a function:', onContainersChange);
       return;
     }
+    // Only update containers state, do NOT update snapshot/backup here
     const updatedContainers = containers.map(container =>
       container.id === updatedContainer.id ? containerWithAudit : container
     );
