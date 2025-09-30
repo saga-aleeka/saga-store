@@ -662,8 +662,17 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                             {(() => {
                               const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
                               if (typeof raw !== 'string') return raw;
-                              // Remove trailing _numbers after the last underscore, but keep the identifier before it (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
-                              return raw.replace(/(_\d+){1}$/, '');
+                              // If the string ends with _<digits>, remove only the trailing digits, keep the rest (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
+                              // If no trailing _digits, show as-is
+                              const match = raw.match(/^(.*?)(_\d+)?$/);
+                              if (match) {
+                                // If there are at least two underscores, and the last part is all digits, remove it
+                                const parts = raw.split('_');
+                                if (parts.length > 2 && /^\d+$/.test(parts[parts.length - 1])) {
+                                  return parts.slice(0, -1).join('_');
+                                }
+                              }
+                              return raw;
                             })()}
                           </TableCell>
                           <TableCell className="font-mono text-sm">
