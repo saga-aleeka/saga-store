@@ -135,13 +135,12 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
 
         // Update container occupancy and storage temperature
         if (onContainerUpdate) {
-            const updatedContainer = {
+          const updatedContainer = {
             ...container,
             occupiedSlots: samples.length,
-            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
-            } as PlasmaContainer & { storageTemperature?: string };
-            // Attach storageTemperature as an extra property for local use, but don't persist it if not in PlasmaContainer type
-            (updatedContainer as any).storageTemperature = inferredTemp || (container as any).storageTemperature || '';
+            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            storageTemperature: inferredTemp || container.storageTemperature || ''
+          };
           onContainerUpdate(updatedContainer);
         }
       }, 500);
@@ -500,30 +499,6 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== position),
       newSample
     ]);
-
-    // Audit log: check-in
-    let userId = userInitials.trim();
-    let userName = userInitials.trim();
-    try {
-      const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
-      if (userInfo && userInfo.id) userId = userInfo.id;
-      if (userInfo && userInfo.name) userName = userInfo.name;
-    } catch {}
-    createAuditLog(
-      'sample-check-in',
-      'sample',
-      scannedBarcode.trim(),
-      {
-        description: `Checked in sample ${scannedBarcode.trim()} to ${container.name} (${container.id}) position ${position}`,
-        metadata: {
-          sampleId: scannedBarcode.trim(),
-          toContainerId: container.id,
-          toContainerName: container.name,
-          toPosition: position
-        }
-      },
-      userId
-    );
     
     // Reset form and prepare for next scan
     setScannedBarcode('');
@@ -602,33 +577,6 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== fromPosition && s.position !== toPosition),
       movedSample
     ]);
-
-    // Audit log: move
-    let userId = userInitials.trim();
-    let userName = userInitials.trim();
-    try {
-      const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
-      if (userInfo && userInfo.id) userId = userInfo.id;
-      if (userInfo && userInfo.name) userName = userInfo.name;
-    } catch {}
-    createAuditLog(
-      'sample-move',
-      'sample',
-      scannedBarcode.trim(),
-      {
-        description: `Moved sample ${scannedBarcode.trim()} in ${container.name} (${container.id}) from ${fromPosition} to ${toPosition}`,
-        metadata: {
-          sampleId: scannedBarcode.trim(),
-          fromContainerId: container.id,
-          fromContainerName: container.name,
-          fromPosition,
-          toContainerId: container.id,
-          toContainerName: container.name,
-          toPosition
-        }
-      },
-      userId
-    );
     
     // Reset form and prepare for next scan
     setScannedBarcode('');
@@ -732,33 +680,6 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== toPosition),
       movedSample
     ]);
-
-    // Audit log: move from other container
-    let userId = userInitials.trim();
-    let userName = userInitials.trim();
-    try {
-      const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
-      if (userInfo && userInfo.id) userId = userInfo.id;
-      if (userInfo && userInfo.name) userName = userInfo.name;
-    } catch {}
-    createAuditLog(
-      'sample-move',
-      'sample',
-      scannedBarcode.trim(),
-      {
-        description: `Moved sample ${scannedBarcode.trim()} from ${sourceLocation.container.name} (${sourceLocation.container.id}) position ${sourceLocation.position} to ${container.name} (${container.id}) position ${toPosition}`,
-        metadata: {
-          sampleId: scannedBarcode.trim(),
-          fromContainerId: sourceLocation.container.id,
-          fromContainerName: sourceLocation.container.name,
-          fromPosition: sourceLocation.position,
-          toContainerId: container.id,
-          toContainerName: container.name,
-          toPosition
-        }
-      },
-      userId
-    );
     
     // Show move notification
     setMoveNotification({
