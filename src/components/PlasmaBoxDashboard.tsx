@@ -484,14 +484,12 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         {
           timestamp: now,
           action: 'check-in',
-          user: userInitials.trim(),
-          notes: `Sample checked into position ${position}`
+          user: userInitials.trim()
         }
       ] : [{
         timestamp: now,
         action: 'check-in',
-        user: userInitials.trim(),
-        notes: `Initial storage in position ${position}`
+        user: userInitials.trim()
       }]
     };
     
@@ -590,8 +588,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           action: 'moved',
           user: userInitials.trim(),
           fromPosition,
-          toPosition,
-          notes: `Sample moved from position ${fromPosition} to ${toPosition}`
+          toPosition
         }
       ]
     };
@@ -690,8 +687,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           action: 'moved',
           user: userInitials.trim(),
           fromPosition: sourceLocation.position,
-          toPosition,
-          notes: `Sample moved from ${sourceLocation.container.name} (${sourceLocation.position}) to ${container.name} (${toPosition})`
+          toPosition
         }
       ]
     };
@@ -876,8 +872,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           {
             timestamp: now,
             action: 'check-out',
-            user: userInitials.trim(),
-            notes: `Sample checked out from position ${selectedPosition}`
+            user: userInitials.trim()
           }
         ]
       };
