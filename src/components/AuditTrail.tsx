@@ -658,7 +658,13 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                             </Badge>
                           </TableCell>
                           <TableCell className="font-mono text-sm">
-                            {movement.toContainerId || movement.fromContainerName || '-'}
+                            {/* Show container name or ID, but strip trailing _numbers if present */}
+                            {(() => {
+                              const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
+                              if (typeof raw !== 'string') return raw;
+                              // Remove trailing _numbers (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
+                              return raw.replace(/_\d+$/, '');
+                            })()}
                           </TableCell>
                           <TableCell className="font-mono text-sm">
                             {movement.toPosition || movement.fromPosition || '-'}
