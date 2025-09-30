@@ -662,8 +662,8 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                             {(() => {
                               const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
                               if (typeof raw !== 'string') return raw;
-                              // Remove trailing _numbers (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
-                              return raw.replace(/_\d+$/, '');
+                              // Remove trailing _numbers after the last underscore, but keep the identifier before it (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
+                              return raw.replace(/(_\d+){1}$/, '');
                             })()}
                           </TableCell>
                           <TableCell className="font-mono text-sm">
