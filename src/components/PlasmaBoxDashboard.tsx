@@ -135,12 +135,13 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
 
         // Update container occupancy and storage temperature
         if (onContainerUpdate) {
-          const updatedContainer = {
+            const updatedContainer = {
             ...container,
             occupiedSlots: samples.length,
-            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' '),
-            storageTemperature: inferredTemp || container.storageTemperature || ''
-          };
+            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+            } as PlasmaContainer & { storageTemperature?: string };
+            // Attach storageTemperature as an extra property for local use, but don't persist it if not in PlasmaContainer type
+            (updatedContainer as any).storageTemperature = inferredTemp || (container as any).storageTemperature || '';
           onContainerUpdate(updatedContainer);
         }
       }, 500);

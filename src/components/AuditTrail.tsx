@@ -240,45 +240,80 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
     return Array.isArray(movements) ? movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) : [];
   }, [logs]);
 
+  // Filter sample movements for the movements tab
+  const filteredMovements = useMemo(() => {
+    return sampleMovements.filter(movement => {
+      const matchesSearch = searchQuery === '' ||
+        (movement.sampleId && movement.sampleId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (movement.userName && movement.userName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (movement.notes && movement.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesUser = userFilter === 'all' || movement.userId === userFilter;
+      const matchesSuccess = successFilter === 'all' ||
+        (successFilter === 'success' && movement.success) ||
+        (successFilter === 'failure' && !movement.success);
+
+      let matchesDate = true;
+      if (dateFilter !== 'all') {
+        const movementDate = new Date(movement.timestamp);
+        const now = new Date();
+        switch (dateFilter) {
+          case 'today':
+            matchesDate = movementDate.toDateString() === now.toDateString();
+            break;
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            matchesDate = movementDate >= weekAgo;
+            break;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            matchesDate = movementDate >= monthAgo;
+            break;
+        }
+      }
+
+      return matchesSearch && matchesUser && matchesSuccess && matchesDate;
+    });
+  }, [sampleMovements, searchQuery, userFilter, successFilter, dateFilter]);
+
   // Filter logs
   const filteredLogs = useMemo(() => {
     return Array.isArray(logs)
-      ? logs.filter(log => {
-          const matchesSearch = searchQuery === '' ||
-            log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.details.description?.toLowerCase().includes(searchQuery.toLowerCase());
+          ? logs.filter(log => {
+              const matchesSearch = searchQuery === '' ||
+                log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                log.details.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
-          const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-          const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter;
-          const matchesUser = userFilter === 'all' || log.userId === userFilter;
-          const matchesSuccess = successFilter === 'all' || 
-            (successFilter === 'success' && log.success) ||
-            (successFilter === 'failure' && !log.success);
+              const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+              const matchesUser = userFilter === 'all' || log.userId === userFilter;
+              const matchesSuccess = successFilter === 'all' || 
+                (successFilter === 'success' && log.success) ||
+                (successFilter === 'failure' && !log.success);
 
-          let matchesDate = true;
-          if (dateFilter !== 'all') {
-            const logDate = new Date(log.timestamp);
-            const now = new Date();
-            
-            switch (dateFilter) {
-              case 'today':
-                matchesDate = logDate.toDateString() === now.toDateString();
-                break;
-              case 'week':
-                const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                matchesDate = logDate >= weekAgo;
-                break;
-              case 'month':
-                const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                matchesDate = logDate >= monthAgo;
-                break;
-            }
-          }
+              let matchesDate = true;
+              if (dateFilter !== 'all') {
+                const logDate = new Date(log.timestamp);
+                const now = new Date();
+                
+                switch (dateFilter) {
+                  case 'today':
+                    matchesDate = logDate.toDateString() === now.toDateString();
+                    break;
+                  case 'week':
+                    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    matchesDate = logDate >= weekAgo;
+                    break;
+                  case 'month':
+                    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    matchesDate = logDate >= monthAgo;
+                    break;
+                }
+              }
 
-          return matchesSearch && matchesAction && matchesSeverity && matchesUser && matchesSuccess && matchesDate;
-        })
+              return matchesSearch && matchesAction && matchesUser && matchesSuccess && matchesDate;
+            })
       : [];
   }, [logs, searchQuery, actionFilter, severityFilter, userFilter, successFilter, dateFilter]);
 
@@ -291,23 +326,7 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
   const filteredUniqueActions = uniqueActions.filter(a => a && a !== '');
   const filteredUniqueUsers = uniqueUsers.filter(u => u && u !== '');
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'critical': return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      case 'high': return <AlertTriangle className="w-4 h-4 text-orange-600" />;
-      case 'medium': return <Clock className="w-4 h-4 text-yellow-600" />;
-      default: return <CheckCircle className="w-4 h-4 text-green-600" />;
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
-      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default: return 'bg-green-100 text-green-800 border-green-200';
-    }
-  };
+  // Removed severity related functions
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -329,12 +348,11 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
     setDateFilter('all');
   };
 
+  // Fix exportLogs: remove severity, use filteredLogs and filteredMovements
   const exportLogs = () => {
     if (activeTab === 'movements') {
-      // True grid format for sample movements, always pad grid to full size
       const containers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
       let csvSections: string[] = [];
-      // Group movements by container
       const movementsByContainer: { [containerId: string]: SampleMovement[] } = {};
       filteredMovements.forEach(movement => {
         const cid = movement.toContainerId || movement.fromContainerId || 'Unknown';
@@ -344,7 +362,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       Object.entries(movementsByContainer).forEach(([containerId, movements]) => {
         const container = containers.find((c: any) => c.id === containerId);
         const containerName = container?.name || containerId;
-        // Pad grid based on container type
         let columns: string[] = [];
         let rows: string[] = [];
         if (container?.containerType === '5x5-box') {
@@ -354,16 +371,12 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           columns = ['1','2','3','4','5','6','7','8','9'];
           rows = ['A','B','C','D','E','F','G','H','I'];
         } else {
-          // Fallback: use detected positions
           const allPositions = movements.map(m => m.toPosition).filter((p): p is string => typeof p === 'string' && p.length > 1);
           columns = Array.from(new Set(allPositions.map((p: string) => p[0]))).sort();
           rows = Array.from(new Set(allPositions.map((p: string) => p.slice(1)))).sort((a,b) => Number(a)-Number(b));
         }
-        // Header: container name
         csvSections.push(`${containerName}`);
-        // First row: column labels
         csvSections.push(["", ...columns].join(","));
-        // For each row letter, output row label and sample IDs for each column number
         rows.forEach(rowLetter => {
           const row = [rowLetter];
           columns.forEach(colNum => {
@@ -373,7 +386,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
           });
           csvSections.push(row.join(","));
         });
-        // Blank line between containers
         csvSections.push("");
       });
       const csvContent = csvSections.join("\n");
@@ -385,16 +397,14 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       a.click();
       URL.revokeObjectURL(url);
     } else {
-      // Original format for audit logs
       const csvContent = [
-        ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Severity', 'Success', 'Description'].join(','),
+        ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Success', 'Description'].join(','),
         ...filteredLogs.map(log => [
           log.timestamp,
           log.userName,
           log.action,
           log.entityType,
           log.entityId,
-          log.severity,
           log.success,
           `"${log.details.description?.replace(/"/g, '""') || ''}"`
         ].join(','))
@@ -408,6 +418,16 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
       URL.revokeObjectURL(url);
     }
   };
+  // Pagination for logs and movements
+  const paginatedLogs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, page, pageSize]);
+
+  const paginatedMovements = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredMovements.slice(start, start + pageSize);
+  }, [filteredMovements, page, pageSize]);
 
   return (
     <div className="space-y-6">
