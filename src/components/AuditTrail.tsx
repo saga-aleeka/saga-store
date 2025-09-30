@@ -686,19 +686,16 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
                               </Badge>
                             </TableCell>
                             <TableCell className="font-mono text-sm">
-                              {/* Show container name or ID, but strip trailing _numbers if present */}
+                              {/* Show container name or ID, but include the last three digits if present */}
                               {(() => {
                                 const raw = movement.toContainerName || movement.fromContainerName || movement.toContainerId || '-';
                                 if (typeof raw !== 'string') return raw;
-                                // If the string ends with _<digits>, remove only the trailing digits, keep the rest (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001)
-                                // If no trailing _digits, show as-is
-                                const match = raw.match(/^(.*?)(_\d+)?$/);
-                                if (match) {
-                                  // If there are at least two underscores, and the last part is all digits, remove it
-                                  const parts = raw.split('_');
-                                  if (parts.length > 2 && /^\d+$/.test(parts[parts.length - 1])) {
-                                    return parts.slice(0, -1).join('_');
-                                  }
+                                // If the string ends with _<digits>, keep the last three digits (e.g., MNC_BOX_001_1759187760335 => MNC_BOX_001_335)
+                                const parts = raw.split('_');
+                                if (parts.length > 2 && /^\d+$/.test(parts[parts.length - 1])) {
+                                  const last = parts[parts.length - 1];
+                                  const lastThree = last.slice(-3);
+                                  return parts.slice(0, -1).join('_') + '_' + lastThree;
                                 }
                                 return raw;
                               })()}
