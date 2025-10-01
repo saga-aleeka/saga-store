@@ -435,6 +435,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       await upsertContainer(container);
       const updated = await fetchContainers();
       setLocalContainers(updated);
+      // Do NOT trigger setSnapshotRefreshKey here (prevents export UI from updating after every edit)
     } catch (error) {
       console.error('Error creating container in Supabase:', error);
     }
@@ -459,7 +460,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       await upsertContainer(containerWithAudit);
       const updated = await fetchContainers();
       setLocalContainers(updated);
-      // Do NOT trigger setSnapshotRefreshKey here
+      // Do NOT trigger setSnapshotRefreshKey here (prevents export UI from updating after every edit)
     } catch (error) {
       console.error('Error updating container in Supabase:', error);
     }
