@@ -502,10 +502,11 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
         const row = [rowLabel];
         columns.forEach(colNum => {
           const pos = `${rowLabel}${colNum}`;
-          const sample = samples.find((s: any) => s.position === pos);
+          // Find sample for this position, treat null/undefined as empty slot
+          const sample = samples.find((s: any) => s.position === pos && s.sampleId);
           row.push(sample ? sample.id || sample.sampleId : '');
         });
-        csvSections.push([ '', ...row ].join(','));
+        csvSections.push(row.join(','));
       });
       // Blank line between containers
       csvSections.push('');
