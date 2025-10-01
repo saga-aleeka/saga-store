@@ -102,6 +102,8 @@ interface PlasmaContainerListProps {
 }
 
 export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+  // State to trigger snapshot UI refresh
+  const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   // Example: get current user (replace with your actual logic)
   const currentUser = localStorage.getItem('currentUser') || 'Unknown User';
   // Use props if provided, otherwise use local state
