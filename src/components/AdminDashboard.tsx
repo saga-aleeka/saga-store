@@ -70,25 +70,25 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   function parseGridImport(content: string) {
   console.log('--- Grid Import Debug Start ---');
     // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
-  const lines = content.split(/\r?\n/).map(l => l.trimEnd());
+  const lines = content.split(/\r?\n/).map(l => (typeof l === 'string' ? l.trimEnd() : ''));
     const containers: any[] = [];
     let i = 0;
   while (i < lines.length) {
       // Find start of a block (must have 'Box Name:')
-      if (lines[i] && lines[i].includes('Box Name:')) {
+  if (typeof lines[i] === 'string' && lines[i].includes('Box Name:')) {
         console.log(`Parsing container block at line ${i}:`, lines[i]);
         // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
   let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
-  parts = parts.map(p => (p || '').trim());
+  parts = parts.map(p => (typeof p === 'string' ? p.trim() : ''));
   console.log('Header parts:', parts);
         let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
         let containerName = '';
         // Find the part after 'Box Name:'
         const boxNameIdx = parts.findIndex(p => p.includes('Box Name:'));
         if (boxNameIdx !== -1 && parts.length > boxNameIdx + 1) {
-          containerName = (parts[boxNameIdx + 1] || '').trim();
+          containerName = typeof parts[boxNameIdx + 1] === 'string' ? parts[boxNameIdx + 1].trim() : '';
         } else if (parts.length > 2) {
-          containerName = (parts[2] || '').trim();
+          containerName = typeof parts[2] === 'string' ? parts[2].trim() : '';
         }
         let location = rackId || '';
         let samples: any[] = [];
@@ -98,22 +98,34 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         // Next line: column headers (should start with two empty columns, then numbers)
         const colHeaderLine = lines[i] || '';
         let colHeaders: string[] = [];
-        if (colHeaderLine.includes(',')) {
-          colHeaders = colHeaderLine.split(',').slice(2).map(h => (h || '').trim()).filter(Boolean);
+        if (typeof colHeaderLine === 'string' && colHeaderLine.includes(',')) {
+          colHeaders = colHeaderLine.split(',').slice(2).map(h => (typeof h === 'string' ? h.trim() : '')).filter(Boolean);
+        } else if (typeof colHeaderLine === 'string') {
+          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (typeof h === 'string' ? h.trim() : '')).filter(Boolean);
         } else {
-          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (h || '').trim()).filter(Boolean);
+          colHeaders = [];
         }
         console.log('Column headers:', colHeaders);
         i++;
         // Parse all rows until next container or end of file
         while (i < lines.length && lines[i] && !lines[i].includes('Box Name:')) {
           let rowParts: string[] = [];
-          if (lines[i].includes(',')) {
+          if (typeof lines[i] === 'string' && lines[i].includes(',')) {
             rowParts = lines[i].split(',');
-          } else {
+          } else if (typeof lines[i] === 'string') {
             rowParts = lines[i].split(/\t|\s{2,}/);
+          } else {
+            rowParts = [];
           }
-          rowParts = rowParts.map(cell => (cell || '').replace(/\u00A0/g, '').trim());
+          rowParts = rowParts.map(cell => {
+            if (typeof cell === 'string') {
+              return cell.replace(/\u00A0/g, '').trim();
+            } else if (cell == null) {
+              return '';
+            } else {
+              return String(cell).replace(/\u00A0/g, '').trim();
+            }
+          });
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
           // Use first cell as row label if present, else use blank or row number
           // Detect offset: if first cell is empty and second is a single letter, use second as row label
@@ -126,7 +138,13 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           const isRowHeader = /^[A-I]$/.test(rowLabel);
           for (let c = 0; c < colHeaders.length; c++) {
             let sampleId = rowParts[sampleStartIdx + c] || '';
-            sampleId = sampleId.replace(/\u00A0/g, '').trim();
+            if (typeof sampleId === 'string') {
+              sampleId = sampleId.replace(/\u00A0/g, '').trim();
+            } else if (sampleId == null) {
+              sampleId = '';
+            } else {
+              sampleId = String(sampleId).replace(/\u00A0/g, '').trim();
+            }
             // Never import the row header as a sample ID
             if (isRowHeader && c === 0 && sampleId === rowLabel) {
               // This is the row header, skip
@@ -143,7 +161,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
                 location,
               });
               console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
-            } else if (rowParts[sampleStartIdx + c] && rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 && rowParts[sampleStartIdx + c].length > 0) {
+            } else if (
+              rowParts[sampleStartIdx + c] &&
+              typeof rowParts[sampleStartIdx + c] === 'string' &&
+              rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 &&
+              rowParts[sampleStartIdx + c].length > 0
+            ) {
               console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
             } else {
               console.log(`Empty cell at ${rowLabel}${colNum}`);
