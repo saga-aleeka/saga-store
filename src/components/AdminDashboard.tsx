@@ -220,17 +220,21 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     });
     let importedCount = 0;
     for (const sample of samplePreview.data) {
-      const containerId = nameToId[sample.containerName];
-      if (!containerId) {
-        console.warn(`No container found for name: ${sample.containerName}`);
+      // Robust mapping: support both grid and standard formats
+      const containerName = sample.containerName || sample.container || sample.box || sample.name;
+      const sampleId = sample.sampleId || sample.id || sample.sample || sample.code;
+      const position = sample.position || sample.pos || sample.slot;
+      const containerId = nameToId[containerName];
+      if (!containerId || !sampleId || !position) {
+        console.warn(`Missing required fields for sample:`, sample);
         continue;
       }
       try {
         await upsertSample({
-          id: sample.sampleId,
+          id: sampleId,
           containerId,
-          position: sample.position,
-          // Add other fields as needed
+          position,
+          // Add other fields as needed, e.g. storageDate, type, etc.
         });
         importedCount++;
       } catch (e) {
@@ -248,8 +252,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
     setIsImporting(true);
     let importedCount = 0;
     for (const c of containerPreview.data) {
+      // Robust mapping: support both grid and standard formats
+      const containerName = c.containerName || c.name || c.box || c.id;
+      const location = c.location || c.rackId || c.rack || '';
+      const samples = c.samples || [];
       // Determine sampleType from containerName (case-insensitive keyword match)
-      const nameLower = (c.containerName || '').toLowerCase();
+      const nameLower = (containerName || '').toLowerCase();
       let sampleType = 'Unknown';
       if (nameLower.includes('dp pool') || nameLower.includes('dp_pools') || nameLower.includes('dp')) sampleType = 'DP Pools';
       else if (nameLower.includes('cfdna')) sampleType = 'cfDNA Tubes';
@@ -259,15 +267,20 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
       else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
       else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
-      let type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
+      let type = samples.length === 25 ? '5x5-box' : '9x9-box';
       const containerObj = {
-        id: `${c.containerName}_${Date.now()}`,
-        name: c.containerName,
-        location: c.location,
+        id: `${containerName}_${Date.now()}`,
+        name: containerName,
+        location,
         containerType: type,
         sampleType,
         temperature: '-80°C',
       };
+      // Only upsert if required fields are present
+      if (!containerObj.name || !containerObj.location || !containerObj.containerType) {
+        console.warn('Skipping container with missing required fields:', containerObj);
+        continue;
+      }
       try {
         await upsertContainer(containerObj);
         importedCount++;
