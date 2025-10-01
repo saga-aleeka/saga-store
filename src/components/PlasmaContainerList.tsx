@@ -1,5 +1,11 @@
+  // State to trigger snapshot UI refresh
+  const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
+import { fetchSamples } from '../utils/supabase/samples';
+import { supabase } from '../utils/supabase/client';
+import { saveBackup, getLatestBackup } from '../utils/supabase/backup';
 import {
   Dialog,
   DialogContent,
@@ -104,30 +110,16 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   // Use props if provided, otherwise use local state
 
   // Manual backup logic for admin
-  const handleManualBackup = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
+  const handleManualBackup = async () => {
     const containersToBackup = Array.isArray(containers) ? containers : [];
-    const backupData = containersToBackup.map(container => {
-      const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
-      return {
-        container,
-        samples: savedSamples ? JSON.parse(savedSamples) : []
-      };
-    });
-    console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
-    // 7-day rolling retention: keep only 7 most recent backups
-    const backupKeys = Object.keys(localStorage)
-      .filter(k => k.startsWith('nightly-backup-'))
-      .sort();
-    if (backupKeys.length > 7) {
-      const toDelete = backupKeys.slice(0, backupKeys.length - 7);
-      toDelete.forEach(k => localStorage.removeItem(k));
-      console.log('[SNAPSHOT] Deleted old backups:', toDelete);
+    try {
+      await saveBackup(containersToBackup, currentUser);
+      alert('Manual backup completed to Supabase.');
+      setSnapshotRefreshKey(k => k + 1);
+    } catch (error) {
+      alert('Failed to save backup to Supabase.');
+      console.error(error);
     }
-    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
   // Download snapshot as JSON
@@ -201,7 +193,8 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           toDelete.forEach(k => localStorage.removeItem(k));
           console.log('[SNAPSHOT] Deleted old backups:', toDelete);
         }
-        scheduleNightlyBackup();
+  setSnapshotRefreshKey(k => k + 1); // trigger snapshot UI refresh after 2am backup
+  scheduleNightlyBackup();
       }, msUntil2am);
       return () => clearTimeout(timer);
     }
@@ -219,57 +212,69 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     setRevertDialogOpen(true);
   };
 
-  const confirmRevertContainer = () => {
+  const confirmRevertContainer = async () => {
     if (!containerIdToRevert) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const backupDataRaw = localStorage.getItem(backupKey);
-    if (!backupDataRaw) {
-      alert('No nightly backup found for today.');
+    try {
+      const backup = await getLatestBackup();
+      if (!backup || !Array.isArray(backup.data)) {
+        alert('No backup found in Supabase.');
+        setRevertDialogOpen(false);
+        return;
+      }
+      const containerBackup = backup.data.find((b: any) => b.id === containerIdToRevert || b.container?.id === containerIdToRevert);
+      if (!containerBackup) {
+        alert('No backup found for this container.');
+        setRevertDialogOpen(false);
+        return;
+      }
+      // Restore container in Supabase
+      await upsertContainer(containerBackup.container || containerBackup);
+      const updated = await fetchContainers();
+      setLocalContainers(updated);
       setRevertDialogOpen(false);
-      return;
-    }
-    const backupData = JSON.parse(backupDataRaw);
-    const containerBackup = backupData.find((b: any) => b.container.id === containerIdToRevert);
-    if (!containerBackup) {
-      alert('No backup found for this container.');
+      alert('Container reverted to last backup from Supabase.');
+    } catch (error) {
+      alert('Failed to restore from Supabase backup.');
       setRevertDialogOpen(false);
-      return;
+      console.error(error);
     }
-    // Restore samples for this container
-    const storageKey = `samples-${containerIdToRevert}`;
-    localStorage.setItem(storageKey, JSON.stringify(containerBackup.samples));
-    setRevertDialogOpen(false);
-    alert('Container reverted to last nightly save. Please refresh to see changes.');
   };
 
-  // Load containers from localStorage if using local state
+  // Load containers from Supabase if using local state
   useEffect(() => {
     if (!propsContainers) {
-      const savedContainers = localStorage.getItem(STORAGE_KEY);
-      if (savedContainers) {
-        try {
-          const parsedContainers = JSON.parse(savedContainers);
-          if (Array.isArray(parsedContainers)) {
-            setLocalContainers(parsedContainers);
-          }
-        } catch (error) {
-          console.error('Error loading containers:', error);
-        }
-      }
+      fetchContainers()
+        .then(data => {
+          if (Array.isArray(data)) setLocalContainers(data);
+        })
+        .catch(error => {
+          console.error('Error loading containers from Supabase:', error);
+        });
+
+      // Real-time sync for containers
+      const containerSub = supabase.channel('public:containers')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, payload => {
+          fetchContainers().then(data => {
+            if (Array.isArray(data)) setLocalContainers(data);
+          });
+        })
+        .subscribe();
+
+      // Real-time sync for samples (optional, for future sample migration)
+      // const sampleSub = supabase.channel('public:samples')
+      //   .on('postgres_changes', { event: '*', schema: 'public', table: 'samples' }, payload => {
+      //     fetchSamples().then(data => {/* update local state if needed */});
+      //   })
+      //   .subscribe();
+
+      return () => {
+        supabase.removeChannel(containerSub);
+        // supabase.removeChannel(sampleSub);
+      };
     }
   }, [propsContainers]);
 
-  // Auto-save containers if using local state
-  useEffect(() => {
-    if (!propsContainers && Array.isArray(localContainers)) {
-      const timeoutId = setTimeout(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localContainers));
-      }, 500);
 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [localContainers, propsContainers]);
 
   const [selectedContainer, setSelectedContainer] = useState<PlasmaContainer | null>(null);
   const [selectedSampleForView, setSelectedSampleForView] = useState<string | null>(null);
@@ -416,7 +421,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     return 'Available';
   };
 
-  const handleCreateContainer = (newContainer: Omit<PlasmaContainer, 'id' | 'occupiedSlots' | 'lastUpdated'>) => {
+  const handleCreateContainer = async (newContainer: Omit<PlasmaContainer, 'id' | 'occupiedSlots' | 'lastUpdated'>) => {
     const id = `PB${String(containers.length + 1).padStart(3, '0')}`;
     const totalSlots = getGridDimensions(newContainer.containerType, newContainer.sampleType).total;
     const container: PlasmaContainer = {
@@ -426,10 +431,16 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       totalSlots,
       lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
     };
-    onContainersChange([...containers, container]);
+    try {
+      await upsertContainer(container);
+      const updated = await fetchContainers();
+      setLocalContainers(updated);
+    } catch (error) {
+      console.error('Error creating container in Supabase:', error);
+    }
   };
 
-  const handleContainerUpdate = (updatedContainer: PlasmaContainer) => {
+  const handleContainerUpdate = async (updatedContainer: PlasmaContainer) => {
     // Add audit trail entry
     const now = new Date().toISOString();
     const auditEntry = {
@@ -438,62 +449,56 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       user: currentUser,
       notes: 'Container edited'
     };
-    // Defensive: ensure history exists
     let updatedHistory = Array.isArray(updatedContainer.history) ? [...updatedContainer.history] : [];
     updatedHistory.push(auditEntry);
     const containerWithAudit = {
       ...updatedContainer,
       history: updatedHistory
     };
-    if (typeof onContainersChange !== 'function') {
-      console.error('onContainersChange is not a function:', onContainersChange);
-      return;
+    try {
+      await upsertContainer(containerWithAudit);
+      const updated = await fetchContainers();
+      setLocalContainers(updated);
+    } catch (error) {
+      console.error('Error updating container in Supabase:', error);
     }
-    // Only update containers state, do NOT update snapshot/backup here
-    const updatedContainers = containers.map(container =>
-      container.id === updatedContainer.id ? containerWithAudit : container
-    );
-    onContainersChange(updatedContainers);
   };
 
   // ...existing code...
   // Remove the inner handleEditContainer and related inner render logic
   // Helper to get today's nightly snapshot
-  const getTodayNightlySnapshot = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const backupDataRaw = localStorage.getItem(backupKey);
-    if (!backupDataRaw) return [];
-    try {
-      return JSON.parse(backupDataRaw);
-    } catch {
-      return [];
-    }
-  };
+  // Fetch latest backup from Supabase for snapshot display
+  const [latestBackup, setLatestBackup] = useState<any[]>([]);
+  useEffect(() => {
+    getLatestBackup()
+      .then(backup => {
+        if (backup && Array.isArray(backup.data)) setLatestBackup(backup.data);
+        else setLatestBackup([]);
+      })
+      .catch(() => setLatestBackup([]));
+  }, [snapshotRefreshKey]);
 
   // Render admin nightly snapshot
   const renderAdminNightlySnapshot = () => {
-    const todaySnapshot: Array<{ container: PlasmaContainer; samples: any[] }> = getTodayNightlySnapshot();
     return (
       <Card className="p-4 mb-6">
-        <h3 className="mb-2">Nightly Snapshot (2am ET)</h3>
+        <h3 className="mb-2">Nightly Snapshot (Supabase Backup)</h3>
         <div className="flex gap-2 mb-4">
           <Button size="sm" variant="outline" onClick={handleManualBackup}>Manual Backup</Button>
-          <Button size="sm" variant="outline" onClick={handleDownloadSnapshot}>Download Snapshot</Button>
         </div>
-        {todaySnapshot.length === 0 ? (
-          <p className="text-muted-foreground">No snapshot found for today.</p>
+        {latestBackup.length === 0 ? (
+          <p className="text-muted-foreground">No snapshot found in Supabase.</p>
         ) : (
           <div>
-            {todaySnapshot.map(({ container, samples }) => (
-              <Card key={container.id} className="mb-4">
+            {latestBackup.map((container: any) => (
+              <Card key={container.id || container.container?.id} className="mb-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h4>{container.name}</h4>
-                    <p className="text-xs text-muted-foreground">Location: {container.location}</p>
+                    <h4>{container.name || container.container?.name}</h4>
+                    <p className="text-xs text-muted-foreground">Location: {container.location || container.container?.location}</p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id)}>
-                    Revert to Last Nightly Save
+                  <Button size="sm" variant="outline" onClick={() => handleRevertContainer(container.id || container.container?.id)}>
+                    Revert to Last Backup
                   </Button>
                 </div>
                 {/* ...other container details... */}

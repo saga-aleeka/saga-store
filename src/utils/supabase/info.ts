@@ -1,0 +1,3 @@
+// Fill these in with your Supabase project details
+export const projectId = 'saga-store-solutions';
+export const publicAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwc2F1a2d2Z2FkbmFlcGxzZ2NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyNzQxNDMsImV4cCI6MjA3NDg1MDE0M30.Md7ALQW2BJFwIJHL3ojg2TiBDM73F_Z98Bclp5KbHaM';
