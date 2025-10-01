@@ -119,11 +119,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           }
           rowParts = rowParts.map(cell => {
             if (typeof cell === 'string') {
-              return cell.replace(/\u00A0/g, '').trim();
+              return typeof cell.replace === 'function' ? cell.replace(/\u00A0/g, '').trim() : '';
             } else if (cell == null) {
               return '';
             } else {
-              return String(cell).replace(/\u00A0/g, '').trim();
+              const str = String(cell);
+              return typeof str.replace === 'function' ? str.replace(/\u00A0/g, '').trim() : '';
             }
           });
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
@@ -137,13 +138,14 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           }
           const isRowHeader = /^[A-I]$/.test(rowLabel);
           for (let c = 0; c < colHeaders.length; c++) {
-            let sampleId = rowParts[sampleStartIdx + c] || '';
-            if (typeof sampleId === 'string') {
+            let sampleId = rowParts[sampleStartIdx + c];
+            if (typeof sampleId !== 'string') {
+              sampleId = sampleId == null ? '' : String(sampleId);
+            }
+            if (typeof sampleId.replace === 'function') {
               sampleId = sampleId.replace(/\u00A0/g, '').trim();
-            } else if (sampleId == null) {
-              sampleId = '';
             } else {
-              sampleId = String(sampleId).replace(/\u00A0/g, '').trim();
+              sampleId = '';
             }
             // Never import the row header as a sample ID
             if (isRowHeader && c === 0 && sampleId === rowLabel) {
@@ -151,7 +153,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
               continue;
             }
             // Only allow row/column form for position (e.g., A1, B2)
-            const colNum = colHeaders[c] || String(c + 1);
+            const colNum = (colHeaders && typeof colHeaders[c] === 'string') ? colHeaders[c] : String(c + 1);
             const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
             if (sampleId && position) {
               samples.push({
@@ -162,8 +164,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
               });
               console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
             } else if (
-              rowParts[sampleStartIdx + c] &&
               typeof rowParts[sampleStartIdx + c] === 'string' &&
+              typeof rowParts[sampleStartIdx + c].replace === 'function' &&
               rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 &&
               rowParts[sampleStartIdx + c].length > 0
             ) {
