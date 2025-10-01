@@ -270,6 +270,19 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
       else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
       let type = samples.length === 25 ? 'box_5x5' : 'box_9x9';
+      // Determine temperature for localStorage/sample compatibility
+      let temperature = '-80°C';
+      if (["dp pools", "dp", "mnc", "pa pool tubes", "pa", "idt", "cfdna"].some(t => nameLower.includes(t))) {
+        temperature = '-20°C';
+      } else if (nameLower.includes('dtc')) {
+        temperature = '4°C';
+      } else if (nameLower.includes('plasma') || nameLower.includes('bc')) {
+        temperature = '-80°C';
+      }
+
+      // Add temperature to each sample for localStorage compatibility
+      const samplesWithTemp = samples.map((s: any) => ({ ...s, temperature }));
+
       // Map to Supabase schema: id (uuid, let Supabase generate), name, type, sample_type, status, location_freezer, samples, etc.
       const containerObj = {
         name: containerName,
@@ -277,8 +290,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         sample_type: sampleType,
         status: 'active',
         location_freezer: location,
-        samples: samples.length > 0 ? samples : null,
-        temperature: '-80°C', // Not in schema, but kept for reference
+        samples: samplesWithTemp.length > 0 ? samplesWithTemp : null,
+        // temperature not sent to Supabase, but included in samples for localStorage compatibility
       };
       // Only upsert if required fields are present
       if (!containerObj.name || !containerObj.type) {
