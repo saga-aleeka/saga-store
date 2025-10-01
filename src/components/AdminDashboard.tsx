@@ -78,13 +78,15 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   if (typeof lines[i] === 'string' && lines[i].includes('Box Name:')) {
         console.log(`Parsing container block at line ${i}:`, lines[i]);
         // Parse header line: can be [rack, 'Box Name:', box] or ['', 'Box Name:', box]
-  let parts = lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/);
+  let parts = typeof lines[i] === 'string'
+    ? (lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/))
+    : [];
   parts = parts.map(p => (typeof p === 'string' ? p.trim() : ''));
   console.log('Header parts:', parts);
         let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
         let containerName = '';
         // Find the part after 'Box Name:'
-        const boxNameIdx = parts.findIndex(p => p.includes('Box Name:'));
+  const boxNameIdx = parts.findIndex(p => typeof p === 'string' && p.includes('Box Name:'));
         if (boxNameIdx !== -1 && parts.length > boxNameIdx + 1) {
           containerName = typeof parts[boxNameIdx + 1] === 'string' ? parts[boxNameIdx + 1].trim() : '';
         } else if (parts.length > 2) {
@@ -94,9 +96,9 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         let samples: any[] = [];
         i++;
         // Skip empty lines
-        while (i < lines.length && lines[i].trim() === '') i++;
+  while (i < lines.length && typeof lines[i] === 'string' && lines[i].trim() === '') i++;
         // Next line: column headers (should start with two empty columns, then numbers)
-        const colHeaderLine = lines[i] || '';
+        const colHeaderLine = typeof lines[i] === 'string' ? lines[i] : '';
         let colHeaders: string[] = [];
         if (typeof colHeaderLine === 'string' && colHeaderLine.includes(',')) {
           colHeaders = colHeaderLine.split(',').slice(2).map(h => (typeof h === 'string' ? h.trim() : '')).filter(Boolean);
@@ -108,7 +110,12 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         console.log('Column headers:', colHeaders);
         i++;
         // Parse all rows until next container or end of file
-        while (i < lines.length && lines[i] && !lines[i].includes('Box Name:')) {
+        while (
+          i < lines.length &&
+          typeof lines[i] === 'string' &&
+          lines[i] &&
+          !lines[i].includes('Box Name:')
+        ) {
           let rowParts: string[] = [];
           if (typeof lines[i] === 'string' && lines[i].includes(',')) {
             rowParts = lines[i].split(',');
@@ -142,10 +149,10 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             if (typeof sampleId !== 'string') {
               sampleId = sampleId == null ? '' : String(sampleId);
             }
-            if (typeof sampleId.replace === 'function') {
-              sampleId = sampleId.replace(/\u00A0/g, '').trim();
-            } else {
+            if (!sampleId || typeof sampleId.replace !== 'function') {
               sampleId = '';
+            } else {
+              sampleId = sampleId.replace(/\u00A0/g, '').trim();
             }
             // Never import the row header as a sample ID
             if (isRowHeader && c === 0 && sampleId === rowLabel) {
@@ -153,7 +160,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
               continue;
             }
             // Only allow row/column form for position (e.g., A1, B2)
-            const colNum = (colHeaders && typeof colHeaders[c] === 'string') ? colHeaders[c] : String(c + 1);
+            const colNum = (Array.isArray(colHeaders) && typeof colHeaders[c] === 'string') ? colHeaders[c] : String(c + 1);
             const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
             if (sampleId && position) {
               samples.push({
@@ -167,6 +174,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
               typeof rowParts[sampleStartIdx + c] === 'string' &&
               typeof rowParts[sampleStartIdx + c].replace === 'function' &&
               rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 &&
+              rowParts[sampleStartIdx + c] &&
               rowParts[sampleStartIdx + c].length > 0
             ) {
               console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
