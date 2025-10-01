@@ -3,6 +3,7 @@ import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supa
 import { fetchSamples } from '../utils/supabase/samples';
 import { supabase } from '../utils/supabase/client';
 import { saveBackup, getLatestBackup } from '../utils/supabase/backup';
+import { SupabaseRealtimePayload } from '@supabase/supabase-js';
 import {
   Dialog,
   DialogContent,
@@ -114,7 +115,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
     try {
       await saveBackup(containersToBackup, currentUser);
       alert('Manual backup completed to Supabase.');
-      setSnapshotRefreshKey(k => k + 1);
+      setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after manual backup
     } catch (error) {
       alert('Failed to save backup to Supabase.');
       console.error(error);
@@ -192,7 +193,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           toDelete.forEach(k => localStorage.removeItem(k));
           console.log('[SNAPSHOT] Deleted old backups:', toDelete);
         }
-  setSnapshotRefreshKey(k => k + 1); // trigger snapshot UI refresh after 2am backup
+        setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after 2am backup
   scheduleNightlyBackup();
       }, msUntil2am);
       return () => clearTimeout(timer);
@@ -252,9 +253,9 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
       // Real-time sync for containers
       const containerSub = supabase.channel('public:containers')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, payload => {
-          fetchContainers().then(data => {
-            if (Array.isArray(data)) setLocalContainers(data);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: SupabaseRealtimePayload<PlasmaContainer>) => {
+          fetchContainers().then((data: PlasmaContainer[]) => {
+        if (Array.isArray(data)) setLocalContainers(data);
           });
         })
         .subscribe();
@@ -458,6 +459,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       await upsertContainer(containerWithAudit);
       const updated = await fetchContainers();
       setLocalContainers(updated);
+      // Do NOT trigger setSnapshotRefreshKey here
     } catch (error) {
       console.error('Error updating container in Supabase:', error);
     }
