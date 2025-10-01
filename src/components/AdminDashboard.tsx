@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { SAMPLE_TYPES, getSampleTypeColor } from './PlasmaContainerList';
 import { getLatestBackup, saveBackup } from '../utils/supabase/backup';
-import { fetchContainers } from '../utils/supabase/containers';
-import { fetchSamples } from '../utils/supabase/samples';
+import { fetchContainers, upsertContainer } from '../utils/supabase/containers';
+import { fetchSamples, upsertSample } from '../utils/supabase/samples';
 // Types for preview objects
 interface Preview<T> {
   valid: boolean;
@@ -207,9 +207,8 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   const containerFileRef = useRef(null);
   const sampleFileRef = useRef(null);
 
-  const importSamples = () => {
-    console.log('Importing samples...');
-    // Example: Assume samplePreview.data is [{ containerName, sampleId, position }]
+  const importSamples = async () => {
+    console.log('Importing samples to Supabase...');
     if (!samplePreview || !samplePreview.valid) {
       alert('No valid sample data to import.');
       return;
@@ -220,114 +219,69 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       nameToId[c.name] = c.id;
     });
     let importedCount = 0;
-    samplePreview.data.forEach((sample: any) => {
+    for (const sample of samplePreview.data) {
       const containerId = nameToId[sample.containerName];
       if (!containerId) {
         console.warn(`No container found for name: ${sample.containerName}`);
-        return;
+        continue;
       }
-      // Load samples for this container
-      const storageKey = `samples-${containerId}`;
-      let samples: Record<string, any> = {};
-      const savedSamples = localStorage.getItem(storageKey);
-      if (savedSamples) {
-        samples = JSON.parse(savedSamples);
+      try {
+        await upsertSample({
+          id: sample.sampleId,
+          containerId,
+          position: sample.position,
+          // Add other fields as needed
+        });
+        importedCount++;
+      } catch (e) {
+        console.error('Failed to upsert sample:', e);
       }
-      // Assign sample to position
-      samples[sample.position] = { id: sample.sampleId, ...sample };
-      localStorage.setItem(storageKey, JSON.stringify(samples));
-      importedCount++;
-    });
-    alert(`Imported ${importedCount} samples by container name.`);
+    }
+    alert(`Imported ${importedCount} samples to Supabase.`);
   };
 
-  const importContainers = () => {
+  const importContainers = async () => {
     if (!containerPreview || !containerPreview.valid) {
       alert('No valid container data to import.');
       return;
     }
     setIsImporting(true);
-    setTimeout(() => {
-      // For each container, create or update in saga-containers
-      const savedContainers = JSON.parse(localStorage.getItem('saga-containers') || '[]');
-      let containers = Array.isArray(savedContainers) ? savedContainers : [];
-      let importedCount = 0;
-      let retainedCount = 0;
-      containerPreview.data.forEach((c: any) => {
-        // Use containerName as unique name, location as location (preserve all input, including underscores/symbols)
-        let existing = containers.find((x: any) => x.name === c.containerName);
-        // Determine sampleType from containerName (case-insensitive keyword match)
-        const nameLower = (c.containerName || '').toLowerCase();
-        let sampleType = 'Unknown';
-  if (nameLower.includes('dp pool') || nameLower.includes('dp_pools') || nameLower.includes('dp_pools') || nameLower.includes('dp')) sampleType = 'DP Pools';
-  else if (nameLower.includes('cfdna')) sampleType = 'cfDNA Tubes';
-  else if (nameLower.includes('dtc')) sampleType = 'DTC Tubes';
-  else if (nameLower.includes('mnc')) sampleType = 'MNC Tubes';
-  else if (nameLower.includes('pa pool') || nameLower.includes('pap')) sampleType = 'PA Pool Tubes';
-  else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
-  else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
-  else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
-        let type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
-        if (!existing) {
-          existing = {
-            id: `${c.containerName}_${Date.now()}`,
-            name: c.containerName, // preserve exactly as input
-            location: c.location,
-            containerType: type,
-            sampleType,
-            temperature: '-80°C',
-          };
-          containers.push(existing);
-        } else {
-          // Update sampleType if needed
-          existing.sampleType = sampleType;
-        }
-        // Save samples for this container
-        const storageKey = `samples-${existing.id}`;
-        let samples: Record<string, any> = {};
-        // Load existing samples for this container (if any)
-        const savedSamples = localStorage.getItem(storageKey);
-        if (savedSamples) {
-          try {
-            samples = JSON.parse(savedSamples);
-          } catch {}
-        }
-        c.samples.forEach((sample: any) => {
-          // If a sample already exists at this position and has the same ID, retain it
-          const existingSample = samples[sample.position];
-          if (existingSample && existingSample.id === sample.sampleId) {
-            retainedCount++;
-            // Retain the existing sample object (including history)
-            return;
-          }
-          // Otherwise, overwrite or add new
-          samples[sample.position] = {
-            id: sample.sampleId, // PlasmaBoxDashboard expects 'id' property
-            position: sample.position,
-            containerName: c.containerName,
-            location: c.location,
-            timestamp: new Date().toISOString(),
-            history: [{
-              timestamp: new Date().toISOString(),
-              action: 'check-in',
-              notes: `Imported from grid at position ${sample.position}`
-            }]
-          };
-          importedCount++;
-        });
-        localStorage.setItem(storageKey, JSON.stringify(samples));
-      });
-      localStorage.setItem('saga-containers', JSON.stringify(containers));
-      // Update containers state/UI after import
-      if (typeof onContainersChange === 'function') {
-        onContainersChange(containers);
+    let importedCount = 0;
+    for (const c of containerPreview.data) {
+      // Determine sampleType from containerName (case-insensitive keyword match)
+      const nameLower = (c.containerName || '').toLowerCase();
+      let sampleType = 'Unknown';
+      if (nameLower.includes('dp pool') || nameLower.includes('dp_pools') || nameLower.includes('dp')) sampleType = 'DP Pools';
+      else if (nameLower.includes('cfdna')) sampleType = 'cfDNA Tubes';
+      else if (nameLower.includes('dtc')) sampleType = 'DTC Tubes';
+      else if (nameLower.includes('mnc')) sampleType = 'MNC Tubes';
+      else if (nameLower.includes('pa pool') || nameLower.includes('pap')) sampleType = 'PA Pool Tubes';
+      else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
+      else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
+      else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
+      let type = c.samples.length === 25 ? '5x5-box' : '9x9-box';
+      const containerObj = {
+        id: `${c.containerName}_${Date.now()}`,
+        name: c.containerName,
+        location: c.location,
+        containerType: type,
+        sampleType,
+        temperature: '-80°C',
+      };
+      try {
+        await upsertContainer(containerObj);
+        importedCount++;
+      } catch (e) {
+        console.error('Failed to upsert container:', e);
       }
-      setIsImporting(false);
-      // Show confirmation dialog
-      window.setTimeout(() => {
-        window.confirm(`Import complete! ${importedCount} samples imported. ${retainedCount} samples retained in their original positions.\n\nClick OK to continue.`);
-      }, 100);
-    }, 100);
+    }
+    setIsImporting(false);
+    alert(`Imported ${importedCount} containers to Supabase.`);
+    // Optionally, refresh containers from Supabase and update UI
+    if (typeof onContainersChange === 'function') {
+      const updatedContainers = await fetchContainers();
+      onContainersChange(updatedContainers);
+    }
   };
 
   // Templates
