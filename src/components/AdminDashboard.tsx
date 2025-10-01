@@ -299,8 +299,38 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         continue;
       }
       try {
-        await upsertContainer(containerObj);
+        // Upsert container first
+        const upsertedContainers = await upsertContainer(containerObj);
         importedCount++;
+        // If container upserted, upsert samples to Supabase as well
+        // Find the container id (from upsertedContainers or by fetching containers)
+        let containerId = null;
+        if (Array.isArray(upsertedContainers) && upsertedContainers.length > 0 && upsertedContainers[0].id) {
+          containerId = upsertedContainers[0].id;
+        } else {
+          // fallback: fetch by name
+          const all = await fetchContainers();
+          const found = all.find((x: any) => x.name === containerName);
+          if (found) containerId = found.id;
+        }
+        if (containerId && samplesWithTemp.length > 0) {
+          for (const s of samplesWithTemp) {
+            // Map to Supabase schema for samples
+            const sampleObj = {
+              container_id: containerId,
+              sample_id: s.sampleId || s.id || s.sample || s.code,
+              position: s.position || s.pos || s.slot,
+              data: s,
+            };
+            if (sampleObj.sample_id && sampleObj.position) {
+              try {
+                await upsertSample(sampleObj);
+              } catch (err) {
+                console.error('Failed to upsert sample:', err);
+              }
+            }
+          }
+        }
       } catch (e) {
         console.error('Failed to upsert container:', e);
       }
