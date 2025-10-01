@@ -1,7 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-
-// State to trigger snapshot UI refresh
-const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
 import { fetchSamples } from '../utils/supabase/samples';
 import { supabase } from '../utils/supabase/client';
