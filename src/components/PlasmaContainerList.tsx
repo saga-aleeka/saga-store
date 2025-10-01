@@ -3,7 +3,7 @@ import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supa
 import { fetchSamples } from '../utils/supabase/samples';
 import { supabase } from '../utils/supabase/client';
 import { saveBackup, getLatestBackup } from '../utils/supabase/backup';
-import { SupabaseRealtimePayload } from '@supabase/supabase-js';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import {
   Dialog,
   DialogContent,
@@ -193,7 +193,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
           toDelete.forEach(k => localStorage.removeItem(k));
           console.log('[SNAPSHOT] Deleted old backups:', toDelete);
         }
-        setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after 2am backup
+  setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after 2am backup
   scheduleNightlyBackup();
       }, msUntil2am);
       return () => clearTimeout(timer);
@@ -253,7 +253,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
       // Real-time sync for containers
       const containerSub = supabase.channel('public:containers')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: SupabaseRealtimePayload<PlasmaContainer>) => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: RealtimePostgresChangesPayload<PlasmaContainer>) => {
           fetchContainers().then((data: PlasmaContainer[]) => {
         if (Array.isArray(data)) setLocalContainers(data);
           });
