@@ -229,13 +229,15 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
         console.warn(`Missing required fields for sample:`, sample);
         continue;
       }
+      // Map to Supabase schema: id (uuid, let Supabase generate), container_id, sample_id, position, data
+      const sampleObj = {
+        container_id: containerId,
+        sample_id: sampleId,
+        position,
+        data: sample.data || null,
+      };
       try {
-        await upsertSample({
-          id: sampleId,
-          containerId,
-          position,
-          // Add other fields as needed, e.g. storageDate, type, etc.
-        });
+        await upsertSample(sampleObj);
         importedCount++;
       } catch (e) {
         console.error('Failed to upsert sample:', e);
@@ -267,17 +269,19 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
       else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
       else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
-      let type = samples.length === 25 ? '5x5-box' : '9x9-box';
+      let type = samples.length === 25 ? 'box_5x5' : 'box_9x9';
+      // Map to Supabase schema: id (uuid, let Supabase generate), name, type, sample_type, status, location_freezer, samples, etc.
       const containerObj = {
-        id: `${containerName}_${Date.now()}`,
         name: containerName,
-        location,
-        containerType: type,
-        sampleType,
-        temperature: '-80°C',
+        type,
+        sample_type: sampleType,
+        status: 'active',
+        location_freezer: location,
+        samples: samples.length > 0 ? samples : null,
+        temperature: '-80°C', // Not in schema, but kept for reference
       };
       // Only upsert if required fields are present
-      if (!containerObj.name || !containerObj.location || !containerObj.containerType) {
+      if (!containerObj.name || !containerObj.type) {
         console.warn('Skipping container with missing required fields:', containerObj);
         continue;
       }
