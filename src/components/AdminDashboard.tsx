@@ -149,10 +149,11 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             if (typeof sampleId !== 'string') {
               sampleId = sampleId == null ? '' : String(sampleId);
             }
-            if (!sampleId || typeof sampleId.replace !== 'function') {
-              sampleId = '';
-            } else {
+            // Only treat as a sample if sampleId is a non-empty string after trimming
+            if (typeof sampleId.replace === 'function') {
               sampleId = sampleId.replace(/\u00A0/g, '').trim();
+            } else {
+              sampleId = '';
             }
             // Never import the row header as a sample ID
             if (isRowHeader && c === 0 && sampleId === rowLabel) {
@@ -162,6 +163,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
             // Only allow row/column form for position (e.g., A1, B2)
             const colNum = (Array.isArray(colHeaders) && typeof colHeaders[c] === 'string') ? colHeaders[c] : String(c + 1);
             const position = /^[A-I]$/.test(rowLabel) && /^\d+$/.test(colNum) ? `${rowLabel}${colNum}` : '';
+            // Only push if sampleId is a non-empty string (not empty position)
             if (sampleId && position) {
               samples.push({
                 sampleId,
@@ -170,17 +172,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
                 location,
               });
               console.log(`Parsed sample: ${sampleId} at ${position} in ${containerName}`);
-            } else if (
-              typeof rowParts[sampleStartIdx + c] === 'string' &&
-              typeof rowParts[sampleStartIdx + c].replace === 'function' &&
-              rowParts[sampleStartIdx + c].replace(/\u00A0/g, '').trim().length === 0 &&
-              rowParts[sampleStartIdx + c] &&
-              rowParts[sampleStartIdx + c].length > 0
-            ) {
-              console.log(`Skipped cell at ${rowLabel}${colNum}: only spaces/invisible chars`);
-            } else {
-              console.log(`Empty cell at ${rowLabel}${colNum}`);
-            }
+            } // else: do not push empty positions as samples
           }
           i++;
         }
