@@ -1,5 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { SAMPLE_TYPES, getSampleTypeColor } from './PlasmaContainerList';
+import { getLatestBackup, saveBackup } from '../utils/supabase/backup';
+import { fetchContainers } from '../utils/supabase/containers';
+import { fetchSamples } from '../utils/supabase/samples';
 // Types for preview objects
 interface Preview<T> {
   valid: boolean;
@@ -30,26 +33,39 @@ interface Container {
 
 export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmin }: { containers: Container[]; onContainersChange: (containers: Container[]) => void; onExitAdmin: () => void }) => {
   // --- Snapshot date selection state and logic ---
-  const availableSnapshotDates = React.useMemo(() => {
-    return Object.keys(localStorage)
-      .filter(k => k.startsWith('nightly-backup-'))
-      .map(k => k.replace('nightly-backup-', ''))
-      .sort()
-      .reverse()
-      .slice(0, 7);
-  }, [containers]);
-  const [selectedSnapshotDate, setSelectedSnapshotDate] = React.useState(() => {
-    // Default to today if available, else most recent
-    const today = new Date().toISOString().slice(0, 10);
-    if (availableSnapshotDates.includes(today)) return today;
-    return availableSnapshotDates[0] || '';
-  });
-  // Update selectedSnapshotDate if available dates change and current selection is missing
-  React.useEffect(() => {
-    if (!availableSnapshotDates.includes(selectedSnapshotDate)) {
-      setSelectedSnapshotDate(availableSnapshotDates[0] || '');
+  // Supabase snapshot state
+  const [snapshotContainers, setSnapshotContainers] = React.useState<any[]>([]);
+  const [snapshotLoading, setSnapshotLoading] = React.useState(true);
+  const [snapshotError, setSnapshotError] = React.useState<string | null>(null);
+  const [lastBackupTime, setLastBackupTime] = React.useState<string | null>(null);
+
+  // Fetch latest backup from Supabase
+  const loadSnapshotFromSupabase = React.useCallback(async () => {
+    setSnapshotLoading(true);
+    setSnapshotError(null);
+    try {
+      const backup = await getLatestBackup();
+      if (backup && Array.isArray(backup.data)) {
+        setSnapshotContainers(backup.data.map((entry: any) => ({
+          ...entry.container,
+          samples: entry.samples || [],
+        })));
+        setLastBackupTime(backup.created_at || null);
+      } else {
+        setSnapshotContainers([]);
+        setLastBackupTime(null);
+      }
+    } catch (e: any) {
+      setSnapshotError(e.message || 'Failed to load snapshot from Supabase');
+      setSnapshotContainers([]);
+      setLastBackupTime(null);
     }
-  }, [availableSnapshotDates, selectedSnapshotDate]);
+    setSnapshotLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    loadSnapshotFromSupabase();
+  }, [loadSnapshotFromSupabase]);
   // Utility: Parse grid-style import template
   function parseGridImport(content: string) {
   console.log('--- Grid Import Debug Start ---');
@@ -364,31 +380,29 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
     window.URL.revokeObjectURL(url);
   };
 
-  // Helper: Manual backup
-  const handleManualBackup = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const backupKey = `nightly-backup-${today}`;
-    const containersToBackup = Array.isArray(containers) ? containers : [];
-    const backupData = containersToBackup.map(container => {
-      const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
-      return {
+  // Helper: Manual backup to Supabase
+  const handleManualBackup = async () => {
+    try {
+      // Fetch all containers and samples from Supabase
+      const containersData = await fetchContainers();
+      const samplesData = await fetchSamples();
+      // Group samples by containerId
+      const samplesByContainer: Record<string, any[]> = {};
+      samplesData.forEach((sample: any) => {
+        if (!samplesByContainer[sample.containerId]) samplesByContainer[sample.containerId] = [];
+        samplesByContainer[sample.containerId].push(sample);
+      });
+      // Build backup data
+      const backupData = containersData.map((container: any) => ({
         container,
-        samples: savedSamples ? JSON.parse(savedSamples) : []
-      };
-    });
-    console.log('[SNAPSHOT] Manual backup: writing to', backupKey, backupData);
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
-    // 7-day rolling retention: keep only 7 most recent backups
-    const backupKeys = Object.keys(localStorage)
-      .filter(k => k.startsWith('nightly-backup-'))
-      .sort();
-    if (backupKeys.length > 7) {
-      const toDelete = backupKeys.slice(0, backupKeys.length - 7);
-      toDelete.forEach(k => localStorage.removeItem(k));
-      console.log('[SNAPSHOT] Deleted old backups:', toDelete);
+        samples: samplesByContainer[container.id] || [],
+      }));
+      await saveBackup(backupData, 'admin');
+      alert('Manual backup completed to Supabase.');
+      await loadSnapshotFromSupabase();
+    } catch (e: any) {
+      alert('Failed to save backup to Supabase: ' + (e.message || e));
     }
-    alert('Manual backup completed. This will be overwritten at the next 2am snapshot.');
   };
 
   // Helper: Download snapshot as CSV
@@ -739,161 +753,27 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
                 <p className="text-sm text-muted-foreground">
                   Download your current container and sample data, or perform a manual backup of the current state. Manual backup will be overwritten at the next 2am snapshot.
                 </p>
-                {/* Show last snapshot date/time */}
-                {(() => {
-                  // Find the latest nightly-backup key in localStorage
-                  const backupKeys = Object.keys(localStorage).filter(k => k.startsWith('nightly-backup-'));
-                  if (backupKeys.length === 0) return null;
-                  // Sort by date descending
-                  const latestKey = backupKeys.sort().reverse()[0];
-                  // Extract date from key
-                  const dateStr = latestKey.replace('nightly-backup-', '');
-                  // Try to get the time from the backup data if available
-                  let timeStr = '';
-                  try {
-                    const backupData = JSON.parse(localStorage.getItem(latestKey) || 'null');
-                    if (Array.isArray(backupData) && backupData.length > 0 && backupData[0].timestamp) {
-                      // Use the timestamp from the first container if present
-                      timeStr = backupData[0].timestamp;
-                    }
-                  } catch {}
-                  return (
-                    <div className="text-xs text-muted-foreground">
-                      Last snapshot: <b>{dateStr}</b>{timeStr ? `, time: ${timeStr}` : ''}
-                    </div>
-                  );
-                })()}
+                <div className="text-xs text-muted-foreground">
+                  Last snapshot: <b>{lastBackupTime ? new Date(lastBackupTime).toLocaleString() : 'None'}</b>
+                </div>
                 <div className="flex gap-4 flex-wrap items-center">
-                  <Button onClick={handleManualBackup}>
+                  <Button onClick={handleManualBackup} disabled={snapshotLoading}>
                     <Database className="w-4 h-4 mr-2" />
                     Manual Backup
                   </Button>
-                  {/* Download button, only enabled if grid view is filtered to one sample type */}
-                  <Button
-                    onClick={handleDownloadSnapshot}
-                    disabled={filteredSampleType === null || filteredSampleType === 'All'}
-                    variant="outline"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </Button>
-                  {/* Calendar dropdown for snapshot selection */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Snapshot date:</span>
-                    <select
-                      className="border rounded px-2 py-1 text-xs"
-                      value={selectedSnapshotDate}
-                      onChange={e => setSelectedSnapshotDate(e.target.value)}
-                    >
-                      {availableSnapshotDates.map(date => (
-                        <option key={date} value={date}>{date}</option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
+                {snapshotError && <div className="text-red-600 text-xs mt-2">{snapshotError}</div>}
               </div>
             </Card>
             <Card className="p-6 mt-6">
               <h3 className="mb-4">Snapshot Grid View</h3>
-              {/* Sample type filter UI */}
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm text-muted-foreground">Filter by sample type:</span>
-                <Button
-                  variant={filteredSampleType === 'All' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilteredSampleType('All')}
-                >
-                  All Types
-                </Button>
-                {SAMPLE_TYPES.map((sampleType: string) => (
-                  <Button
-                    key={sampleType}
-                    variant={filteredSampleType === sampleType ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setFilteredSampleType(sampleType)}
-                    className={filteredSampleType === sampleType ? '' : getSampleTypeColor(sampleType as any)}
-                  >
-                    {sampleType}
-                  </Button>
-                ))}
-              </div>
-              <GridSnapshotView
-                containers={(() => {
-                  // Use selected snapshot date
-                  const backupKey = `nightly-backup-${selectedSnapshotDate}`;
-                  const backupDataRaw = localStorage.getItem(backupKey);
-                  if (!backupDataRaw) {
-                    // fallback to live containers if no snapshot
-                    return containers
-                      .filter(container => filteredSampleType === 'All' || container.sampleType === filteredSampleType)
-                      .map(container => {
-                        const storageKey = `samples-${container.id}`;
-                        const savedSamples = localStorage.getItem(storageKey);
-                        let samples = [];
-                        if (savedSamples) {
-                          try {
-                            samples = Object.entries(JSON.parse(savedSamples)).map(([position, sample]: [string, any]) => ({
-                              ...sample,
-                              position,
-                            }));
-                          } catch (e) {}
-                        }
-                        return {
-                          ...container,
-                          samples,
-                        };
-                      });
-                  }
-                  // Parse snapshot backup data
-                  let backupData = [];
-                  try {
-                    backupData = JSON.parse(backupDataRaw);
-                  } catch {}
-                  return backupData
-                    .map((entry: any) => {
-                      const c = entry.container;
-                      let samples = [];
-                      if (Array.isArray(entry.samples)) {
-                        samples = entry.samples;
-                      } else if (entry.samples && typeof entry.samples === 'object') {
-                        samples = Object.entries(entry.samples).map(([position, sample]: [string, any]) => ({
-                          ...sample,
-                          position,
-                        }));
-                      }
-                      return {
-                        ...c,
-                        samples,
-                      };
-                    })
-                    .filter((container: any) => filteredSampleType === 'All' || container.sampleType === filteredSampleType);
-                })()}
-                onConvert={(container) => {
-                  // Overwrite the container's samples in localStorage and update dashboard
-                  const storageKey = `samples-${container.id}`;
-                  // Build a map of position -> sample (removing any extra fields)
-                  const sampleMap: Record<string, any> = {};
-                  container.samples.forEach(s => {
-                    sampleMap[s.position] = { id: s.id || s.sampleId };
-                  });
-                  localStorage.setItem(storageKey, JSON.stringify(sampleMap));
-                  // Optionally update the container list if needed
-                  if (typeof onContainersChange === 'function') {
-                    // Re-read all containers and their samples
-                    const updated = containers.map(c => {
-                      if (c.id === container.id) {
-                        return {
-                          ...c,
-                          samples: container.samples,
-                        };
-                      }
-                      return c;
-                    });
-                    onContainersChange(updated);
-                  }
-                  alert('Container has been converted and updated from snapshot.');
-                }}
-              />
+              {snapshotLoading ? (
+                <div className="text-muted-foreground">Loading snapshot from Supabase...</div>
+              ) : (
+                <GridSnapshotView
+                  containers={snapshotContainers}
+                />
+              )}
             </Card>
           </TabsContent>
           <TabsContent value="manage" className="space-y-6">
