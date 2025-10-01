@@ -147,7 +147,13 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           for (let c = 0; c < colHeaders.length; c++) {
             let sampleId = rowParts[sampleStartIdx + c];
             if (typeof sampleId !== 'string') {
-              sampleId = sampleId == null ? '' : String(sampleId);
+              if (sampleId == null) {
+                sampleId = '';
+              } else {
+                // Log problematic value for debugging
+                console.warn('Non-string sampleId encountered:', sampleId, 'at row', i, 'col', c);
+                sampleId = String(sampleId);
+              }
             }
             // Only treat as a sample if sampleId is a non-empty string after trimming
             if (typeof sampleId.replace === 'function') {
