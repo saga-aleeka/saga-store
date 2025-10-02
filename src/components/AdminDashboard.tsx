@@ -68,6 +68,15 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   }, [loadSnapshotFromSupabase]);
   // Utility: Parse grid-style import template
   function parseGridImport(content: string) {
+  // Utility: safely normalize any value to a string, removing \u00A0 and trimming, or '' for null/undefined
+  function safeString(val: any): string {
+    if (typeof val === 'string') {
+      return val.replace ? val.replace(/\u00A0/g, '').trim() : '';
+    }
+    if (val == null) return '';
+    const str = String(val);
+    return str.replace ? str.replace(/\u00A0/g, '').trim() : '';
+  }
   console.log('--- Grid Import Debug Start ---');
     // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
   const lines = content.split(/\r?\n/).map(l => (typeof l === 'string' ? l.trimEnd() : ''));
@@ -124,16 +133,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           } else {
             rowParts = [];
           }
-          rowParts = rowParts.map(cell => {
-            if (typeof cell === 'string') {
-              return typeof cell.replace === 'function' ? cell.replace(/\u00A0/g, '').trim() : '';
-            } else if (cell == null) {
-              return '';
-            } else {
-              const str = String(cell);
-              return typeof str.replace === 'function' ? str.replace(/\u00A0/g, '').trim() : '';
-            }
-          });
+          rowParts = rowParts.map(safeString);
           console.log(`Row ${i} (${lines[i]}):`, rowParts);
           // Use first cell as row label if present, else use blank or row number
           // Detect offset: if first cell is empty and second is a single letter, use second as row label
@@ -145,22 +145,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           }
           const isRowHeader = /^[A-I]$/.test(rowLabel);
           for (let c = 0; c < colHeaders.length; c++) {
-            let sampleId = rowParts[sampleStartIdx + c];
-            if (typeof sampleId !== 'string') {
-              if (sampleId == null) {
-                sampleId = '';
-              } else {
-                // Log problematic value for debugging
-                console.warn('Non-string sampleId encountered:', sampleId, 'at row', i, 'col', c);
-                sampleId = String(sampleId);
-              }
-            }
-            // Only treat as a sample if sampleId is a non-empty string after trimming
-            if (typeof sampleId.replace === 'function') {
-              sampleId = sampleId.replace(/\u00A0/g, '').trim();
-            } else {
-              sampleId = '';
-            }
+            let sampleId = safeString(rowParts[sampleStartIdx + c]);
             // Never import the row header as a sample ID
             if (isRowHeader && c === 0 && sampleId === rowLabel) {
               // This is the row header, skip
