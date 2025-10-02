@@ -1,3 +1,4 @@
+import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -598,7 +599,7 @@ export function UserManagement({
                     {Object.entries(role.permissions).map(([key, value]) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm capitalize">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
+                          {safeTrim(safeReplace(key, /([A-Z])/g, ' $1'))}
                         </span>
                         <Badge variant={value ? 'default' : 'secondary'} className="text-xs">
                           {value ? 'Yes' : 'No'}

@@ -1,3 +1,4 @@
+import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -143,7 +144,7 @@ export function ContainerCard({
   };
 
   const getUserInitials = (userName: string) => {
-    return userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    return safeTrim(userName).split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const getActivityIcon = (action: UserActivity['action']) => {
@@ -294,12 +295,12 @@ export function ContainerCard({
             <Thermometer className="h-4 w-4 text-blue-500" />
             <span className="text-sm">{container.temperature}</span>
           </div>
-          <Badge 
-            variant="outline" 
-            className="text-xs"
-          >
-            {container.containerType.replace('-', ' ')}
-          </Badge>
+            <Badge 
+              variant="outline" 
+              className="text-xs"
+            >
+              {safeReplace(container.containerType, '-', ' ')}
+            </Badge>
         </div>
 
         <div className="space-y-2">

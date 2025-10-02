@@ -1,3 +1,4 @@
+import { safeReplace } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -404,7 +405,7 @@ export function ConflictResolution({
                               <Badge className={getSeverityColor(conflict.severity)}>
                                 {conflict.severity}
                               </Badge>
-                              <Badge variant="outline">{conflict.type.replace('_', ' ')}</Badge>
+                              <Badge variant="outline">{safeReplace(conflict.type, '_', ' ')}</Badge>
                               <span className="text-sm text-muted-foreground">
                                 {formatTimestamp(conflict.timestamp)}
                               </span>
@@ -569,7 +570,7 @@ export function ConflictResolution({
                           </TableCell>
                           <TableCell>
                             <Badge variant="secondary">
-                              {conflict.resolutionStrategy?.replace('_', ' ')}
+                              {conflict.resolutionStrategy ? safeReplace(conflict.resolutionStrategy, '_', ' ') : ''}
                             </Badge>
                           </TableCell>
                           <TableCell>{conflict.resolvedBy}</TableCell>

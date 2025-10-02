@@ -70,16 +70,20 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   function parseGridImport(content: string) {
   // Utility: safely normalize any value to a string, removing \u00A0 and trimming, or '' for null/undefined
   function safeString(val: any): string {
-    if (typeof val === 'string') {
-      return val.replace ? val.replace(/\u00A0/g, '').trim() : '';
+    if (typeof val !== 'string') {
+      if (val == null) return '';
+      val = String(val);
     }
-    if (val == null) return '';
-    const str = String(val);
-    return str.replace ? str.replace(/\u00A0/g, '').trim() : '';
+    // Only call .replace and .trim on actual strings
+    try {
+      return val.replace(/\u00A0/g, '').trim();
+    } catch {
+      return '';
+    }
   }
   console.log('--- Grid Import Debug Start ---');
     // Returns: { containers: Array<{rackId, containerName, location, samples: Array<{sampleId, position}>}> }
-  const lines = content.split(/\r?\n/).map(l => (typeof l === 'string' ? l.trimEnd() : ''));
+  const lines = content.split(/\r?\n/).map(safeString);
     const containers: any[] = [];
     let i = 0;
   while (i < lines.length) {
@@ -90,29 +94,29 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
   let parts = typeof lines[i] === 'string'
     ? (lines[i].includes(',') ? lines[i].split(',') : lines[i].split(/\t|\s{2,}/))
     : [];
-  parts = parts.map(p => (typeof p === 'string' ? p.trim() : ''));
+  parts = parts.map(safeString);
   console.log('Header parts:', parts);
         let rackId = parts[0] && !parts[0].includes('Box Name:') ? parts[0] : '';
         let containerName = '';
         // Find the part after 'Box Name:'
   const boxNameIdx = parts.findIndex(p => typeof p === 'string' && p.includes('Box Name:'));
         if (boxNameIdx !== -1 && parts.length > boxNameIdx + 1) {
-          containerName = typeof parts[boxNameIdx + 1] === 'string' ? parts[boxNameIdx + 1].trim() : '';
+          containerName = safeString(parts[boxNameIdx + 1]);
         } else if (parts.length > 2) {
-          containerName = typeof parts[2] === 'string' ? parts[2].trim() : '';
+          containerName = safeString(parts[2]);
         }
         let location = rackId || '';
         let samples: any[] = [];
         i++;
         // Skip empty lines
-  while (i < lines.length && typeof lines[i] === 'string' && lines[i].trim() === '') i++;
+  while (i < lines.length && typeof lines[i] === 'string' && safeString(lines[i]) === '') i++;
         // Next line: column headers (should start with two empty columns, then numbers)
         const colHeaderLine = typeof lines[i] === 'string' ? lines[i] : '';
         let colHeaders: string[] = [];
         if (typeof colHeaderLine === 'string' && colHeaderLine.includes(',')) {
-          colHeaders = colHeaderLine.split(',').slice(2).map(h => (typeof h === 'string' ? h.trim() : '')).filter(Boolean);
+          colHeaders = colHeaderLine.split(',').slice(2).map(safeString).filter(Boolean);
         } else if (typeof colHeaderLine === 'string') {
-          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(h => (typeof h === 'string' ? h.trim() : '')).filter(Boolean);
+          colHeaders = colHeaderLine.split(/\t|\s{2,}/).slice(2).map(safeString).filter(Boolean);
         } else {
           colHeaders = [];
         }

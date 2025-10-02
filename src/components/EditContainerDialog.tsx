@@ -1,3 +1,4 @@
+import { safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 import { Sheet } from './ui/sheet';
 import { SheetHeader, SheetTitle, SheetContent } from './ui/sheet';
@@ -110,7 +111,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim() || !formData.location.trim() || !container) {
+    if (!safeTrim(formData.name) || !safeTrim(formData.location) || !container) {
       alert('Please fill in all required fields (Name and Location)');
       return;
     }

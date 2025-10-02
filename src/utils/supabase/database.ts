@@ -1,10 +1,11 @@
+import { safeReplace } from '../../utils/safeString';
 import { supabase } from './client'
-import { projectId, publicAnonKey } from './info'
+import { supabaseUrl, supabaseAnonKey } from './info'
 import { PlasmaContainer } from '../../components/PlasmaContainerList'
 import { AuditLogEntry } from '../../components/AuditTrail'
 
 // API base URL for server functions
-const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-aaac77aa`
+const API_BASE_URL = `${supabaseUrl}/functions/v1/make-server-aaac77aa`
 
 // Connection timeout (5 seconds)
 const FETCH_TIMEOUT = 5000
@@ -19,7 +20,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
       ...options,
       signal: controller.signal,
       headers: {
-        'Authorization': `Bearer ${publicAnonKey}`,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'Content-Type': 'application/json',
         ...options.headers
       }
@@ -177,7 +178,7 @@ export async function createContainer(container: Omit<PlasmaContainer, 'id'>, us
     const newContainer: PlasmaContainer = {
       ...container,
       id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+  lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
     }
     return newContainer
   }
@@ -203,7 +204,7 @@ export async function updateContainer(id: string, container: Partial<PlasmaConta
     return {
       ...container,
       id,
-      lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+  lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
     } as PlasmaContainer
   }
 }

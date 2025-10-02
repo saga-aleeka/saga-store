@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { safeReplace, safeTrim } from '../utils/safeString';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -56,22 +57,22 @@ export function BulkSampleSearch({ allSamples, onNavigateToSample }: BulkSampleS
 
   // Parse CSV content
   const parseCSVContent = useCallback((csvContent: string): string[] => {
-    const lines = csvContent.trim().split('\n');
+    const lines = safeTrim(csvContent).split('\n');
     const sampleIds: string[] = [];
 
     lines.forEach((line, index) => {
       // Handle CSV with headers or without
       if (index === 0 && (
-        line.toLowerCase().includes('sample') || 
-        line.toLowerCase().includes('id') ||
-        line.toLowerCase().includes('tube')
+        safeTrim(line).toLowerCase().includes('sample') || 
+        safeTrim(line).toLowerCase().includes('id') ||
+        safeTrim(line).toLowerCase().includes('tube')
       )) {
         return; // Skip header row
       }
 
       // Split by comma and take first column, clean up
       const columns = line.split(',');
-      const sampleId = columns[0]?.trim().replace(/['"]/g, '');
+      const sampleId = safeReplace(safeTrim(columns[0]), /['"]/g, '');
       
       if (sampleId && sampleId.length > 0) {
         sampleIds.push(sampleId);

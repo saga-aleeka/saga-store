@@ -1,3 +1,4 @@
+import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 
 // Utility to infer storage temperature from sample/container type
@@ -138,7 +139,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           const updatedContainer = {
             ...container,
             occupiedSlots: samples.length,
-            lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' '),
             storageTemperature: inferredTemp || container.storageTemperature || ''
           };
           onContainerUpdate(updatedContainer);
@@ -747,7 +748,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
             const updatedSourceContainer = {
               ...sourceContainer,
               occupiedSlots: sourceOccupiedSlots,
-              lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+              lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
             };
             
             // Update the containers list
@@ -1166,7 +1167,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <p className="font-medium text-sm capitalize">{entry.action.replace('-', ' ')}</p>
+                            <p className="font-medium text-sm capitalize">{safeReplace(entry.action, '-', ' ')}</p>
                             <span className="text-xs text-muted-foreground">
                               {new Date(entry.timestamp).toLocaleString()}
                             </span>
@@ -1205,7 +1206,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                 size="sm"
                 className="w-full"
                 onClick={() => {
-                  if (!userInitials.trim()) {
+              if (!safeTrim(userInitials)) {
                     alert('Please enter your initials in scan mode to clear this position.');
                     return;
                   }

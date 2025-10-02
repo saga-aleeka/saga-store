@@ -1,4 +1,5 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
+import { safeReplace, safeTrim } from '../utils/safeString';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
@@ -64,7 +65,7 @@ export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className 
   };
 
   const parseWorklistFile = (content: string, fileName: string): ParsedWorklistData => {
-    const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  const lines = content.split('\n').map(line => safeTrim(line)).filter(line => line.length > 0);
     if (lines.length === 0) {
       throw new Error('File appears to be empty');
     }
@@ -72,7 +73,7 @@ export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className 
     // Try to detect if it's CSV or tab-separated
     const firstLine = lines[0];
     const separator = firstLine.includes('\t') ? '\t' : ',';
-    const headers = firstLine.split(separator).map(h => h.trim().replace(/"/g, ''));
+  const headers = firstLine.split(separator).map(h => safeReplace(safeTrim(h), /"/g, ''));
 
     // Special logic: If fileName contains DPQ or DPc, use column P (index 15) for sample IDs
     const isDPQorDPc = /dpq|dpc/i.test(fileName);
@@ -113,7 +114,7 @@ export function WorklistUpload({ onSamplesExtracted, onClearWorklist, className 
 
     // Parse data rows (skip header) and collect all sample IDs
     for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(separator).map(cell => cell.trim().replace(/"/g, ''));
+  const row = lines[i].split(separator).map(cell => safeReplace(safeTrim(cell), /"/g, ''));
       
       if (row.length <= sampleIdColumnIndex) {
         invalidRows++;

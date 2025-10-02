@@ -1,3 +1,4 @@
+import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
 import { fetchSamples } from '../utils/supabase/samples';
@@ -383,11 +384,11 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId)
       );
     } else {
-      if (!sampleSearchQuery.trim()) {
+  if (!safeTrim(sampleSearchQuery)) {
         setManualSearchSampleIds([]);
         return [];
       }
-      const searchTerms = sampleSearchQuery.split(',').map(term => term.trim().toLowerCase()).filter(term => term.length > 0);
+  const searchTerms = sampleSearchQuery.split(',').map(term => safeTrim(term).toLowerCase()).filter(term => term.length > 0);
       const results = (Array.isArray(allSamples) ? allSamples : []).filter(({ sample, container }) => {
         return searchTerms.some(query => {
           return (
@@ -429,7 +430,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       id,
       occupiedSlots: 0,
       totalSlots,
-      lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
+  lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
     };
     try {
       await upsertContainer(container);

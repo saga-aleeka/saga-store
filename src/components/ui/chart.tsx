@@ -1,3 +1,4 @@
+import { safeReplace } from '../../utils/safeString';
 "use client";
 
 import * as React from "react";
@@ -47,7 +48,7 @@ function ChartContainer({
   >["children"];
 }) {
   const uniqueId = React.useId();
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
+  const chartId = `chart-${id || safeReplace(uniqueId, /:/g, "")}`;
 
   return (
     <ChartContext.Provider value={{ config }}>
