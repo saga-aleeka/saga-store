@@ -219,78 +219,79 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     }
   };
 
-  // Utility function to check for duplicate conflicts and find existing samples for movement
-  const checkForDuplicateConflicts = (sampleId: string) => {
-    // Load all containers to check for duplicates across all containers
-    const savedContainers = localStorage.getItem('saga-containers');
-    let allContainers: PlasmaContainer[] = [];
-    
-    if (savedContainers) {
-      try {
-        const parsedContainers = JSON.parse(savedContainers);
-        if (Array.isArray(parsedContainers)) {
-          allContainers = parsedContainers;
-        }
-      } catch (error) {
-        console.error('Error loading containers for duplicate check:', error);
-      }
-    }
 
-    // Find all samples with this ID across all containers (excluding current container)
-    const duplicateLocations: Array<{ container: PlasmaContainer; position: string; sample: any }> = [];
+    // Utility function to check for duplicate conflicts and find existing samples for movement
+    const checkForDuplicateConflicts = (sampleId: string) => {
+      // Load all containers to check for duplicates across all containers
+      const savedContainers = localStorage.getItem('saga-containers');
+      let allContainers: PlasmaContainer[] = [];
     
-    allContainers.forEach(containerItem => {
-      // Skip the current container - we handle that separately
-      if (containerItem.id === container.id) return;
-      
-      const containerStorageKey = `samples-${containerItem.id}`;
-      const savedSamples = localStorage.getItem(containerStorageKey);
-      
-      if (savedSamples) {
+      if (savedContainers) {
         try {
-          const parsedData = JSON.parse(savedSamples);
-          
-          // Handle both formats: object and array
-          if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-            Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
-              if (data.id === sampleId) {
-                duplicateLocations.push({ container: containerItem, position, sample: data });
-              }
-            });
-          } else if (Array.isArray(parsedData)) {
-            parsedData.forEach((sample: any) => {
-              if (sample.sampleId === sampleId) {
-                duplicateLocations.push({ container: containerItem, position: sample.position, sample });
-              }
-            });
+          const parsedContainers = JSON.parse(savedContainers);
+          if (Array.isArray(parsedContainers)) {
+            allContainers = parsedContainers;
           }
         } catch (error) {
-          console.error(`Error checking samples in container ${containerItem.id}:`, error);
+          console.error('Error loading containers for duplicate check:', error);
         }
       }
-    });
 
-    // Apply the duplicate rules:
-    // 1. Archive containers can have duplicates (no restrictions)
-    // 2. General population can duplicate samples that exist only in archive OR move samples from other containers
-    // 3. If sample exists in other containers, offer to move it instead of treating as duplicate error
+      // Find all samples with this ID across all containers (excluding current container)
+      const duplicateLocations: Array<{ container: PlasmaContainer; position: string; sample: any }> = [];
     
-    if (container.isArchived) {
-      // Archive containers allow all duplicates
+      allContainers.forEach(containerItem => {
+        // Skip the current container - we handle that separately
+        if (containerItem.id === container.id) return;
+      
+        const containerStorageKey = `samples-${containerItem.id}`;
+        const savedSamples = localStorage.getItem(containerStorageKey);
+      
+        if (savedSamples) {
+          try {
+            const parsedData = JSON.parse(savedSamples);
+          
+            // Handle both formats: object and array
+            if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
+              Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
+                if (data.id === sampleId) {
+                  duplicateLocations.push({ container: containerItem, position, sample: data });
+                }
+              });
+            } else if (Array.isArray(parsedData)) {
+              parsedData.forEach((sample: any) => {
+                if (sample.sampleId === sampleId) {
+                  duplicateLocations.push({ container: containerItem, position: sample.position, sample });
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`Error checking samples in container ${containerItem.id}:`, error);
+          }
+        }
+      });
+
+      // Apply the duplicate rules:
+      // 1. Archive containers can have duplicates (no restrictions)
+      // 2. General population can duplicate samples that exist only in archive OR move samples from other containers
+      // 3. If sample exists in other containers, offer to move it instead of treating as duplicate error
+    
+      if (container.isArchived) {
+        // Archive containers allow all duplicates
+        return { allowed: true, conflicts: [], foundInOtherContainers: duplicateLocations };
+      }
+
+      // For general population containers, check if duplicates exist in other general population containers
+      const genPopConflicts = duplicateLocations.filter(loc => !loc.container.isArchived);
+    
+      if (genPopConflicts.length > 0) {
+        // Found duplicates in general population - offer to move instead of blocking
+        return { allowed: true, conflicts: genPopConflicts, foundInOtherContainers: duplicateLocations, shouldMove: true };
+      }
+
+      // No conflicts found in general population - allow the duplicate
       return { allowed: true, conflicts: [], foundInOtherContainers: duplicateLocations };
-    }
-
-    // For general population containers, check if duplicates exist in other general population containers
-    const genPopConflicts = duplicateLocations.filter(loc => !loc.container.isArchived);
-    
-    if (genPopConflicts.length > 0) {
-      // Found duplicates in general population - offer to move instead of blocking
-      return { allowed: true, conflicts: genPopConflicts, foundInOtherContainers: duplicateLocations, shouldMove: true };
-    }
-
-    // No conflicts found in general population - allow the duplicate
-    return { allowed: true, conflicts: [], foundInOtherContainers: duplicateLocations };
-  };
+    };
 
   const handleBarcodeSubmit = () => {
     if (!scannedBarcode.trim()) return;
