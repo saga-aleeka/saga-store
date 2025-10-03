@@ -19,6 +19,10 @@ export async function upsertSample(sample: any) {
   const isArchive = thisContainer?.isArchived || thisContainer?.status === 'archived';
   // Only include fields that exist in the Supabase schema
   const { container_name, storage_date, last_accessed, ...sampleToSave } = sample;
+  // Only include status if present
+  if ('status' in sample) {
+    sampleToSave.status = sample.status;
+  }
 
   // Only enforce uniqueness if not archive
   if (!isArchive) {

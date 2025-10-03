@@ -37,6 +37,7 @@ interface PlasmaSample {
   sampleId: string;
   storageDate: string;
   lastAccessed?: string;
+  status?: 'in_container' | 'checked_out' | string;
   history: SampleHistoryEntry[];
 }
 
@@ -52,6 +53,9 @@ type ViewMode = 'view' | 'edit';
 
 export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
   const [selectedSample, setSelectedSample] = useState<PlasmaSample | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('view');
@@ -101,27 +105,36 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   useEffect(() => {
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
-        // Upsert all samples for this container to Supabase
         async function saveSamples() {
+          setIsSaving(true);
+          setSaveStatus('saving');
+          setSaveError(null);
           try {
             const { upsertSample } = await import('../utils/supabase/samples');
             await Promise.all(samples.map(sample => {
-              // Only include fields that exist in the Supabase schema
-              const samplePayload = {
+              const samplePayload: any = {
                 container_id: container.id,
                 position: sample.position,
                 sample_id: sample.sampleId,
-                // Map storageDate to created_at, lastAccessed to updated_at if present
                 created_at: sample.storageDate ? new Date(sample.storageDate).toISOString() : undefined,
                 updated_at: sample.lastAccessed ? new Date(sample.lastAccessed).toISOString() : undefined
               };
               if ('history' in sample) {
                 samplePayload.history = sample.history;
               }
+              if ('status' in sample) {
+                samplePayload.status = sample.status;
+              }
               return upsertSample(samplePayload);
             }));
-          } catch (error) {
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 1200);
+          } catch (error: any) {
+            setSaveStatus('error');
+            setSaveError(error?.message || 'Failed to save samples to Supabase.');
             console.error('Error saving samples to Supabase:', error);
+          } finally {
+            setIsSaving(false);
           }
         }
         saveSamples();
@@ -470,6 +483,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       position,
       sampleId: scannedBarcode.trim(),
       storageDate: new Date().toISOString().split('T')[0],
+      status: 'in_container',
       history: baseHistory.length > 0 ? [
         ...baseHistory,
         {
@@ -551,6 +565,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...existingSample,
       position: toPosition,
       lastAccessed: new Date().toISOString().split('T')[0],
+      status: 'in_container',
       history: [
         ...existingSample.history,
         {
@@ -627,6 +642,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...existingSample,
       position: toPosition,
       lastAccessed: new Date().toISOString().split('T')[0],
+      status: 'in_container',
       history: [
         ...existingSample.history,
         {
@@ -790,6 +806,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       // Add check-out entry to history before removing
       const updatedSample: PlasmaSample = {
         ...selectedSample,
+        status: 'checked_out',
         history: [
           ...selectedSample.history,
           {
@@ -839,7 +856,9 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         userId
       );
       // Remove from current container
-      setSamples(prev => prev.filter(s => s.position !== selectedPosition));
+      setSamples(prev => prev.map(s =>
+        s.sampleId === updatedSample.sampleId ? updatedSample : s
+      ));
       setSelectedSample(null);
     }
   };
@@ -919,6 +938,18 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       <div className="flex-1 p-6 space-y-6">
         {/* Action Bar */}
         <Card className="p-4">
+          {/* Save Status Indicator */}
+          <div className="mb-2 min-h-[24px]">
+            {isSaving && (
+              <span className="text-xs text-blue-600">Saving...</span>
+            )}
+            {saveStatus === 'saved' && !isSaving && (
+              <span className="text-xs text-green-600">Saved</span>
+            )}
+            {saveStatus === 'error' && saveError && (
+              <span className="text-xs text-red-600">{saveError}</span>
+            )}
+          </div>
           {/* Move Notification */}
           {moveNotification && (
             <Alert className="mb-4 border-blue-200 bg-blue-50">
