@@ -10,11 +10,19 @@ export async function fetchSamples() {
 
 
 // Upsert sample with uniqueness enforcement for general population
+
+// Upsert sample with correct container_name and uniqueness enforcement
 export async function upsertSample(sample: any) {
-  // Fetch all containers to determine status
+  // Fetch all containers to determine status and name
   const containers = await fetchContainers();
   const thisContainer = containers.find((c: any) => c.id === sample.container_id);
   const isArchive = thisContainer?.isArchived || thisContainer?.status === 'archived';
+  // Always set container_name to the container's name
+  const sampleToSave = {
+    ...sample,
+    container_name: thisContainer?.name || '',
+    // Remove/ignore location if present
+  };
 
   // Only enforce uniqueness if not archive
   if (!isArchive) {
@@ -38,7 +46,7 @@ export async function upsertSample(sample: any) {
     }
   }
   // Upsert the sample (insert or update)
-  const { data, error } = await supabase.from('samples').upsert(sample).select();
+  const { data, error } = await supabase.from('samples').upsert(sampleToSave).select();
   if (error) throw error;
   return data;
 }
