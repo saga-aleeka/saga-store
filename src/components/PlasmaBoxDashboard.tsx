@@ -135,6 +135,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   useEffect(() => {
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
+          // This is a placeholder comment to provide context
+          // rect sche
         // Upsert all samples for this container to Supabase
         async function saveSamples() {
           try {
