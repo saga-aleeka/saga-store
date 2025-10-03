@@ -313,7 +313,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         container.sampleType === selectedSampleType;
 
       const effectiveTotalSlots = getGridDimensions(container.containerType, container.sampleType).total;
-      const liveOccupiedSlots = getLiveOccupiedSlots(container);
+      const liveOccupiedSlots = getLiveOccupiedSlots([container]);
       const hasAvailableSlots = !showAvailableOnly ||
         liveOccupiedSlots < effectiveTotalSlots;
 
@@ -814,6 +814,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
                   <div key={container.id}>
                     <ContainerCard
                       container={container}
+                      liveOccupiedSlots={getLiveOccupiedSlots([container])}
                       onSelect={setSelectedContainer}
                       onEdit={handleEditContainer}
                     />
@@ -912,6 +913,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
                   <div key={container.id}>
                     <ContainerCard
                       container={container}
+                      liveOccupiedSlots={getLiveOccupiedSlots([container])}
                       onSelect={setSelectedContainer}
                       onEdit={handleEditContainer}
                     />

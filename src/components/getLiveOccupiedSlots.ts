@@ -1,21 +1,6 @@
-import { useRealtimeSamples } from './useRealtimeSamples';
-import { PlasmaContainer } from './PlasmaContainerList';
 
-export function getLiveOccupiedSlots(container: PlasmaContainer): number {
-  // Defensive: fallback to occupiedSlots if localStorage is unavailable
-  try {
-    const storageKey = `samples-${container.id}`;
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        return parsed.length;
-      } else if (typeof parsed === 'object' && parsed !== null) {
-        return Object.keys(parsed).length;
-      }
-    }
-  } catch (e) {
-    // fallback
-  }
-  return container.occupiedSlots || 0;
+// Accepts a sample array (or count) for the container, returns the count
+export function getLiveOccupiedSlots(samples: any[] | undefined | null): number {
+  if (Array.isArray(samples)) return samples.length;
+  return 0;
 }
