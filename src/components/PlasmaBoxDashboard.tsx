@@ -52,6 +52,10 @@ interface PlasmaBoxDashboardProps {
 type ViewMode = 'view' | 'edit';
 
 export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
+  // Import Supabase client for real-time
+  // (If not already imported at the top)
+  // import { supabase } from '../utils/supabase/client';
+  const supabase = require('../utils/supabase/client').supabase;
   const hasMounted = React.useRef(false);
   const prevSamplesRef = React.useRef<PlasmaSample[] | null>(null);
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
@@ -101,6 +105,39 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     }
     loadSamples();
     return () => { isMounted = false; };
+  }, [container.id]);
+
+  // Real-time subscription to samples table for this container
+  useEffect(() => {
+    const channel = supabase
+      .channel('samples-changes-' + container.id)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'samples',
+          filter: `container_id=eq.${container.id}`
+        },
+        (payload: any) => {
+          // On any insert/update/delete, reload samples
+          import('../utils/supabase/samples').then(m => m.fetchSamples()).then(allSamples => {
+            const filtered = allSamples.filter((s: any) => s.container_id === container.id);
+            const mapped = filtered.map((s: any) => ({
+              position: s.position,
+              sampleId: s.sample_id || s.sampleId || s.id,
+              storageDate: s.storage_date || s.storageDate || '',
+              lastAccessed: s.last_accessed || s.lastAccessed || '',
+              history: s.history || []
+            }));
+            setSamples(mapped);
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [container.id]);
 
   // Auto-save samples whenever they change, but not on initial load

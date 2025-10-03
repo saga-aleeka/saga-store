@@ -1,7 +1,6 @@
 import { safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
-import { Sheet } from './ui/sheet';
-import { SheetHeader, SheetTitle, SheetContent } from './ui/sheet';
+import { Sheet, SheetHeader, SheetTitle, SheetContent, SheetDescription } from './ui/sheet';
 import { Button } from './ui/button'; // Ensure this path points to the correct Button component
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -36,6 +35,44 @@ const detectContainerTypeFromSampleType = (sampleType: SampleType): ContainerTyp
 };
 
 export function EditContainerDialog({ open, onOpenChange, container, onUpdateContainer }: EditContainerDialogProps) {
+  // Sample and container types (should match your app's logic)
+  const sampleTypes: SampleType[] = [
+    'DP Pools',
+    'Plasma Tubes',
+    'cfDNA Tubes',
+    'DTC Tubes',
+    'MNC Tubes',
+    'PA Pool Tubes',
+    'BC Tubes',
+  ];
+  const containerTypes: ContainerType[] = [
+    '9x9-box',
+    '5x5-box'
+    // Add more valid ContainerType values here if needed
+  ];
+
+  // Handlers
+  const handleSampleTypeChange = (value: SampleType) => {
+    setFormData((prev) => ({ ...prev, sampleType: value }));
+  };
+
+  const handleContainerTypeChange = (value: ContainerType) => {
+    setFormData((prev) => ({ ...prev, containerType: value }));
+    setShowContainerTypeWarning(true);
+  };
+
+  const handleCancel = () => {
+    setShowContainerTypeWarning(false);
+    onOpenChange(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+  // Call the update callback with the new container data
+  if (!container?.id) return;
+  onUpdateContainer({ ...container, ...formData, id: container.id });
+  onOpenChange(false);
+  };
   // Defensive: ensure container is always an object or null
   if (container === undefined) container = null;
 
@@ -57,121 +94,12 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     isArchived: false
   });
 
-  // Defensive: ensure containerTypes and sampleTypes are arrays
-  const containerTypes: ContainerType[] = ['9x9-box', '5x5-box', '5x4-rack', '9x9-rack'];
-  const sampleTypes: SampleType[] = ['DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'PA Pool Tubes', 'Plasma Tubes', 'BC Tubes'];
-
-  // Defensive: only update form if container is not null
-  useEffect(() => {
-    if (container) {
-      setFormData({
-        name: container.name ?? '',
-        location: container.location ?? '',
-        containerType: container.containerType ?? '9x9-box',
-        temperature: container.temperature ?? '-80°C',
-        sampleType: container.sampleType ?? 'DP Pools',
-        isTraining: container.isTraining || false,
-        isArchived: container.isArchived || false
-      });
-      setShowContainerTypeWarning(false);
-    }
-  }, [container]);
-
-  // Handle sample type change and auto-update container type
-  const handleSampleTypeChange = (value: SampleType) => {
-    const recommendedContainerType = detectContainerTypeFromSampleType(value);
-    const currentContainerType = formData.containerType;
-    
-    setFormData({ 
-      ...formData, 
-      sampleType: value,
-      containerType: recommendedContainerType
-    });
-
-    // Show warning if changing from different container type with samples
-    if (container && container.occupiedSlots > 0 && currentContainerType !== recommendedContainerType) {
-      setShowContainerTypeWarning(true);
-    } else {
-      setShowContainerTypeWarning(false);
-    }
-  };
-
-  // Handle manual container type change
-  const handleContainerTypeChange = (value: ContainerType) => {
-    setFormData({ ...formData, containerType: value });
-    
-    // Show warning if changing container type with samples
-    if (container && container.occupiedSlots > 0 && container.containerType !== value) {
-      setShowContainerTypeWarning(true);
-    } else {
-      setShowContainerTypeWarning(false);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!safeTrim(formData.name) || !safeTrim(formData.location) || !container) {
-      alert('Please fill in all required fields (Name and Location)');
-      return;
-    }
-
-    // Defensive: check onUpdateContainer
-    if (typeof onUpdateContainer !== 'function') {
-      alert('Error: Unable to save changes. Please try closing and reopening this dialog.');
-      return;
-    }
-
-    // Defensive: getGridDimensions fallback
-    const dimensions = getGridDimensions(formData.containerType) ?? { total: 0, rows: 0, cols: 0 };
-
-    const updatedContainer: PlasmaContainer = {
-      ...container,
-      name: formData.name,
-      location: formData.location,
-      containerType: formData.containerType,
-      temperature: formData.temperature,
-      sampleType: formData.sampleType,
-      isTraining: formData.isTraining,
-      isArchived: formData.isArchived,
-      totalSlots: dimensions.total,
-      lastUpdated: new Date().toISOString().slice(0, 16).replace('T', ' ')
-    };
-
-    try {
-      onUpdateContainer(updatedContainer);
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error updating container:', error);
-      alert('Error: Failed to save changes. Please try again.');
-    }
-  };
-
-  // Defensive: handleCancel only runs if container exists
-  const handleCancel = () => {
-    if (container) {
-      setFormData({
-        name: container.name ?? '',
-        location: container.location ?? '',
-        containerType: container.containerType ?? '9x9-box',
-        temperature: container.temperature ?? '-80°C',
-        sampleType: container.sampleType ?? 'DP Pools',
-        isTraining: container.isTraining || false,
-        isArchived: container.isArchived || false
-      });
-    }
-    setShowContainerTypeWarning(false);
-    onOpenChange(false);
-  };
-
   // Defensive: don't render if container is null
   if (!container) return null;
 
   // Defensive: getGridDimensions fallback
   const selectedDimensions = getGridDimensions(formData.containerType) ?? { rows: 0, cols: 0, total: 0 };
   const recommendedContainerType = detectContainerTypeFromSampleType(formData.sampleType);
-
-  // Move showContainerTypeWarning state to top of function
   const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
 
   return (

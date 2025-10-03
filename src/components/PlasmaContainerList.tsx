@@ -409,6 +409,12 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleCreateContainer = async (newContainer: Omit<PlasmaContainer, 'id' | 'occupiedSlots' | 'lastUpdated'>) => {
+    // Check for duplicate name before creating
+    const allContainers = await fetchContainers();
+    if (allContainers.some(c => c.name.trim().toLowerCase() === newContainer.name.trim().toLowerCase())) {
+      alert('A container with this name already exists. Please choose a unique name.');
+      return;
+    }
     // Generate a valid UUID for the id field
     let id: string;
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -450,8 +456,14 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       const updated = await fetchContainers();
       setLocalContainers(updated);
       setIsCreateDialogOpen(false);
-    } catch (error) {
-      alert('Error creating container in Supabase.');
+    } catch (error: any) {
+      const code = error && typeof error === 'object' ? (error as any).code : undefined;
+      const message = error && typeof error === 'object' ? (error as any).message : undefined;
+      if (code === '23505' || (typeof message === 'string' && message.includes('unique'))) {
+        alert('A container with this name already exists. Please choose a unique name.');
+      } else {
+        alert('Error creating container in Supabase.');
+      }
       console.error('Error creating container in Supabase:', error);
     }
   };
@@ -481,8 +493,15 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       const updated = await fetchContainers();
       setLocalContainers(updated);
       setIsEditDialogOpen(false);
-    } catch (error) {
-      alert('Error updating container in Supabase.');
+      alert('Container updated successfully.');
+    } catch (error: any) {
+      const code = error && typeof error === 'object' ? (error as any).code : undefined;
+      const message = error && typeof error === 'object' ? (error as any).message : undefined;
+      if (code === '23505' || (typeof message === 'string' && message.includes('unique'))) {
+        alert('A container with this name already exists. Please choose a unique name.');
+      } else {
+        alert('Error updating container in Supabase.');
+      }
       console.error('Error updating container in Supabase:', error);
     }
   };
