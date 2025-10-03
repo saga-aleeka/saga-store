@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../utils/supabase/client';
 import { safeReplace, safeTrim } from '../utils/safeString';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -55,7 +56,6 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   // Import Supabase client for real-time
   // (If not already imported at the top)
   // import { supabase } from '../utils/supabase/client';
-  const supabase = require('../utils/supabase/client').supabase;
   const hasMounted = React.useRef(false);
   const prevSamplesRef = React.useRef<PlasmaSample[] | null>(null);
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
