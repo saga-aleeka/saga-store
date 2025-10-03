@@ -44,6 +44,11 @@ export async function upsertSample(sample: any) {
         }
       }
     }
+    // If a sample with this sample_id already exists in this container, include its id for upsert
+    const existingInThisContainer = (existingSamples || []).find(s => s.container_id === sample.container_id);
+    if (existingInThisContainer && existingInThisContainer.id) {
+      sampleToSave.id = existingInThisContainer.id;
+    }
   }
   // Upsert the sample (insert or update)
   const { data, error } = await supabase.from('samples').upsert(sampleToSave).select();
