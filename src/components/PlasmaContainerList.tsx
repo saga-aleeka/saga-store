@@ -431,8 +431,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         }
       ]
     };
+    // Only send valid fields to Supabase (strip out 'history' and any extra fields)
+    const {
+      history, // eslint-disable-line @typescript-eslint/no-unused-vars
+      ...containerForUpsert
+    } = container;
     try {
-      await upsertContainer(container);
+      await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
       setLocalContainers(updated);
       // Do NOT trigger setSnapshotRefreshKey here (prevents export UI from updating after every edit)
@@ -457,8 +462,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       ...updatedContainer,
       history: updatedHistory
     };
+    // Only send valid fields to Supabase (strip out 'history' and any extra fields)
+    const {
+      history, // eslint-disable-line @typescript-eslint/no-unused-vars
+      ...containerForUpsert
+    } = containerWithAudit;
     try {
-      await upsertContainer(containerWithAudit);
+      await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
       setLocalContainers(updated);
       // Do NOT trigger setSnapshotRefreshKey here (prevents export UI from updating after every edit)
