@@ -409,14 +409,27 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleCreateContainer = async (newContainer: Omit<PlasmaContainer, 'id' | 'occupiedSlots' | 'lastUpdated'>) => {
-    const id = `PB${String(containers.length + 1).padStart(3, '0')}`;
-    const totalSlots = getGridDimensions(newContainer.containerType, newContainer.sampleType).total;
+    // Generate a unique ID (PB + timestamp + random)
+    const id = `PB${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    // Defensive: ensure containerType is a valid frontend value
+    const containerType = newContainer.containerType;
+    const totalSlots = getGridDimensions(containerType, newContainer.sampleType).total;
+    const now = new Date();
     const container: PlasmaContainer = {
       ...newContainer,
       id,
+      containerType,
       occupiedSlots: 0,
       totalSlots,
-  lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
+      lastUpdated: safeReplace(now.toISOString().slice(0, 16), 'T', ' '),
+      history: [
+        {
+          timestamp: now.toISOString(),
+          action: 'create',
+          user: currentUser,
+          notes: 'Container created'
+        }
+      ]
     };
     try {
       await upsertContainer(container);
@@ -424,6 +437,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
       setLocalContainers(updated);
       // Do NOT trigger setSnapshotRefreshKey here (prevents export UI from updating after every edit)
     } catch (error) {
+      alert('Error creating container in Supabase.');
       console.error('Error creating container in Supabase:', error);
     }
   };
