@@ -1,3 +1,9 @@
+  // Debug: log all containers loaded from Supabase
+  useEffect(() => {
+    if (Array.isArray(containers)) {
+      console.log('All containers loaded from Supabase:', containers);
+    }
+  }, [containers]);
 import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';

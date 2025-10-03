@@ -75,17 +75,10 @@ export function ContainerCard(props: ContainerCardProps) {
     }
   };
 
-  // Calculate effective total slots and utilization
-  let effectiveTotalSlots = 0;
-  try {
-    // Dynamically import getGridDimensions to avoid circular dependency
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getGridDimensions } = require('./PlasmaContainerList');
-    effectiveTotalSlots = getGridDimensions(container.containerType, container.sampleType).total;
-  } catch {
-    effectiveTotalSlots = 0;
-  }
-  const utilizationPercent = effectiveTotalSlots > 0 ? Math.round((liveOccupiedSlots / effectiveTotalSlots) * 100) : 0;
+  // Use Supabase values for capacity
+  const effectiveTotalSlots = container.totalSlots ?? 0;
+  const effectiveOccupiedSlots = container.occupiedSlots ?? 0;
+  const utilizationPercent = effectiveTotalSlots > 0 ? Math.round((effectiveOccupiedSlots / effectiveTotalSlots) * 100) : 0;
 
   // Helper for occupancy color
   const getOccupancyColor = () => {
@@ -254,14 +247,17 @@ export function ContainerCard(props: ContainerCardProps) {
             <span className="text-sm">Capacity</span>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">
-                {liveOccupiedSlots}/{effectiveTotalSlots}
+                {effectiveOccupiedSlots}/{effectiveTotalSlots}
               </span>
-              {liveOccupiedSlots !== container.occupiedSlots && (
+              {/* Optionally show live badge if you want to indicate dynamic count */}
+              {/*
+              {liveOccupiedSlots !== effectiveOccupiedSlots && (
                 <div className="flex items-center gap-1 text-xs text-green-600">
                   <Wifi className="h-3 w-3" />
                   Live
                 </div>
               )}
+              */}
             </div>
           </div>
           <div className="w-full bg-muted rounded-full h-2">
