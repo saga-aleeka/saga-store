@@ -1,12 +1,27 @@
 import { supabase } from './client';
 
 
-// Map Supabase DB fields to frontend fields
+// Map between DB and frontend containerType values
+const dbToFrontendType: Record<string, string> = {
+  'box_9x9': '9x9-box',
+  'box_5x5': '5x5-box',
+  'rack_5x4': '5x4-rack',
+  'rack_9x9': '9x9-rack',
+  'rack_7x14': '7x14-rack',
+};
+const frontendToDbType: Record<string, string> = {
+  '9x9-box': 'box_9x9',
+  '5x5-box': 'box_5x5',
+  '5x4-rack': 'rack_5x4',
+  '9x9-rack': 'rack_9x9',
+  '7x14-rack': 'rack_7x14',
+};
+
 function mapContainerFromDb(db: any) {
   return {
     id: db.id,
     name: db.name,
-    containerType: db.type, // e.g. 'box_9x9'
+    containerType: dbToFrontendType[db.type] || db.type, // map DB to frontend
     sampleType: db.sample_type, // e.g. 'cfDNA Tubes'
     status: db.status, // 'active' | 'inactive'
     location: db.location_freezer, // storage rack name
@@ -33,7 +48,7 @@ function mapContainerToDb(container: any) {
   return {
     id: container.id,
     name: container.name,
-    type: container.containerType, // e.g. 'box_9x9'
+    type: frontendToDbType[container.containerType] || container.containerType, // map frontend to DB
     sample_type: container.sampleType, // e.g. 'cfDNA Tubes'
     status: container.status,
     location_freezer: container.location,
