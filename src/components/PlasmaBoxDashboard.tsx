@@ -1,3 +1,37 @@
+  // Real-time sync: subscribe to Supabase changes for samples in this container
+  useEffect(() => {
+    const { supabase } = require('../utils/supabase/client');
+    const channel = supabase
+      .channel('samples-realtime-' + container.id)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'samples',
+          filter: `container_id=eq.${container.id}`
+        },
+        payload => {
+          // On any insert/update/delete, reload samples for this container
+          (async () => {
+            const allSamples = await import('../utils/supabase/samples').then(m => m.fetchSamples());
+            const filtered = allSamples.filter((s: any) => s.container_id === container.id);
+            const mapped = filtered.map((s: any) => ({
+              position: s.position,
+              sampleId: s.sample_id || s.sampleId || s.id,
+              storageDate: s.storage_date || s.storageDate || '',
+              lastAccessed: s.last_accessed || s.lastAccessed || '',
+              history: s.history || []
+            }));
+            setSamples(mapped);
+          })();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [container.id]);
 import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
 
@@ -70,85 +104,69 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const [moveNotification, setMoveNotification] = useState<{ from: string; to: string; sampleId: string } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const storageKey = `samples-${container.id}`;
 
-  // Load samples from localStorage on mount
+  // Load samples from Supabase for this container on mount or when container.id changes
   useEffect(() => {
-    const savedSamples = localStorage.getItem(storageKey);
-    if (savedSamples) {
+    let isMounted = true;
+    async function loadSamples() {
       try {
-        const parsedData = JSON.parse(savedSamples);
-        // Convert from admin import format {position: {id, timestamp}} to PlasmaSample format
-        if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-          const sampleArray: PlasmaSample[] = Object.entries(parsedData).map(([position, data]: [string, any]) => ({
-            position,
-            sampleId: data.id,
-            storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
-            lastAccessed: data.lastAccessed,
-            history: data.history || [{
-              timestamp: data.timestamp || new Date().toISOString(),
-              action: 'check-in',
-              notes: `Initial storage in position ${position}`
-            }]
-          }));
-          setSamples(sampleArray);
-        } else if (Array.isArray(parsedData)) {
-          // Ensure all samples have history arrays
-          const samplesWithHistory = parsedData.map((sample: any) => ({
-            ...sample,
-            history: sample.history || [{
-              timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
-              action: 'check-in' as const,
-              notes: `Initial storage in position ${sample.position}`
-            }]
-          }));
-          setSamples(samplesWithHistory);
-        } else {
-          setSamples([]);
-        }
+        // fetchSamples returns all samples; filter by container.id
+        const allSamples = await import('../utils/supabase/samples').then(m => m.fetchSamples());
+        const filtered = allSamples.filter((s: any) => s.container_id === container.id);
+        // Map to PlasmaSample shape if needed
+        const mapped = filtered.map((s: any) => ({
+          position: s.position,
+          sampleId: s.sample_id || s.sampleId || s.id,
+          storageDate: s.storage_date || s.storageDate || '',
+          lastAccessed: s.last_accessed || s.lastAccessed || '',
+          history: s.history || []
+        }));
+        if (isMounted) setSamples(mapped);
       } catch (error) {
-        console.error('Error loading samples:', error);
-        setSamples([]);
+        console.error('Error loading samples from Supabase:', error);
+        if (isMounted) setSamples([]);
       }
-    } else {
-      setSamples([]);
     }
-  }, [container.id, storageKey]);
+    loadSamples();
+    return () => { isMounted = false; };
+  }, [container.id]);
 
   // Auto-save samples whenever they change
   useEffect(() => {
-    if (samples.length >= 0) { // Allow saving empty arrays
+    if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
-        // Convert to admin import format {position: {id, timestamp}} with history
-        const sampleData: Record<string, any> = {};
-        samples.forEach(sample => {
-          sampleData[sample.position] = {
-            id: sample.sampleId,
-            timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
-            lastAccessed: sample.lastAccessed,
-            history: sample.history
-          };
-        });
-        localStorage.setItem(storageKey, JSON.stringify(sampleData));
+        // Upsert all samples for this container to Supabase
+        async function saveSamples() {
+          try {
+            const { upsertSample } = await import('../utils/supabase/samples');
+            // Upsert each sample with container_id and correct schema
+            await Promise.all(samples.map(sample => upsertSample({
+              container_id: container.id,
+              position: sample.position,
+              sample_id: sample.sampleId,
+              storage_date: sample.storageDate,
+              last_accessed: sample.lastAccessed,
+              history: sample.history
+            })));
+          } catch (error) {
+            console.error('Error saving samples to Supabase:', error);
+          }
+        }
+        saveSamples();
 
-        // Infer storage temperature for this container
-        const inferredTemp = inferStorageTemperature(container.sampleType || container.containerType || '');
-
-        // Update container occupancy and storage temperature
+        // Update container occupancy and lastUpdated
         if (onContainerUpdate) {
           const updatedContainer = {
             ...container,
             occupiedSlots: samples.length,
-            lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' '),
-            storageTemperature: inferredTemp || container.storageTemperature || ''
+            lastUpdated: safeReplace(new Date().toISOString().slice(0, 16), 'T', ' ')
           };
           onContainerUpdate(updatedContainer);
         }
       }, 500);
-
       return () => clearTimeout(timeoutId);
     }
-  }, [samples, storageKey, container, onContainerUpdate]);
+  }, [samples, container, onContainerUpdate]);
 
   // Handle initial sample selection from search navigation
   useEffect(() => {
