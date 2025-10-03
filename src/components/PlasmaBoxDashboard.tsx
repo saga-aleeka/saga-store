@@ -52,6 +52,7 @@ interface PlasmaBoxDashboardProps {
 type ViewMode = 'view' | 'edit';
 
 export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
+  const hasMounted = React.useRef(false);
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -101,8 +102,12 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     return () => { isMounted = false; };
   }, [container.id]);
 
-  // Auto-save samples whenever they change
+  // Auto-save samples whenever they change, but not on initial load
   useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
         async function saveSamples() {
