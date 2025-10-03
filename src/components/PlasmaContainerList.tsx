@@ -1,3 +1,6 @@
+  // ...existing code...
+  // Use props if provided, otherwise use local state
+  const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
   // Debug: log all containers loaded from Supabase
   useEffect(() => {
     if (Array.isArray(containers)) {
@@ -155,6 +158,13 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   // Use props if provided, otherwise use local state
   const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
   const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
+
+  // Debug: log all containers loaded from Supabase
+  useEffect(() => {
+    if (Array.isArray(containers)) {
+      console.log('All containers loaded from Supabase:', containers);
+    }
+  }, [containers]);
 
   // Nightly backup logic (2am Eastern Time, overwrite previous)
   React.useEffect(() => {
