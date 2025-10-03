@@ -101,21 +101,24 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   useEffect(() => {
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
-          // This is a placeholder comment to provide context
-          // rect sche
         // Upsert all samples for this container to Supabase
         async function saveSamples() {
           try {
             const { upsertSample } = await import('../utils/supabase/samples');
-            // Upsert each sample with container_id and correct schema
-            await Promise.all(samples.map(sample => upsertSample({
-              container_id: container.id,
-              position: sample.position,
-              sample_id: sample.sampleId,
-              storage_date: sample.storageDate,
-              last_accessed: sample.lastAccessed,
-              history: sample.history
-            })));
+            await Promise.all(samples.map(sample => {
+              // Only include 'history' if it is defined and the column exists
+              const samplePayload = {
+                container_id: container.id,
+                position: sample.position,
+                sample_id: sample.sampleId,
+                storage_date: sample.storageDate,
+                last_accessed: sample.lastAccessed
+              };
+              if ('history' in sample) {
+                samplePayload.history = sample.history;
+              }
+              return upsertSample(samplePayload);
+            }));
           } catch (error) {
             console.error('Error saving samples to Supabase:', error);
           }
