@@ -106,13 +106,14 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           try {
             const { upsertSample } = await import('../utils/supabase/samples');
             await Promise.all(samples.map(sample => {
-              // Only include 'history' if it is defined and the column exists
+              // Only include fields that exist in the Supabase schema
               const samplePayload = {
                 container_id: container.id,
                 position: sample.position,
                 sample_id: sample.sampleId,
-                storage_date: sample.storageDate,
-                last_accessed: sample.lastAccessed
+                // Map storageDate to created_at, lastAccessed to updated_at if present
+                created_at: sample.storageDate ? new Date(sample.storageDate).toISOString() : undefined,
+                updated_at: sample.lastAccessed ? new Date(sample.lastAccessed).toISOString() : undefined
               };
               if ('history' in sample) {
                 samplePayload.history = sample.history;

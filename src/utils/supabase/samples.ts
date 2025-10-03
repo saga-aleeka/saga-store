@@ -18,7 +18,7 @@ export async function upsertSample(sample: any) {
   const thisContainer = containers.find((c: any) => c.id === sample.container_id);
   const isArchive = thisContainer?.isArchived || thisContainer?.status === 'archived';
   // Only include fields that exist in the Supabase schema
-  const { container_name, ...sampleToSave } = sample;
+  const { container_name, storage_date, last_accessed, ...sampleToSave } = sample;
 
   // Only enforce uniqueness if not archive
   if (!isArchive) {
