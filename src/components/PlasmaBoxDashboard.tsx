@@ -53,6 +53,7 @@ type ViewMode = 'view' | 'edit';
 
 export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
   const hasMounted = React.useRef(false);
+  const prevSamplesRef = React.useRef<PlasmaSample[] | null>(null);
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -106,8 +107,15 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   useEffect(() => {
     if (!hasMounted.current) {
       hasMounted.current = true;
+      prevSamplesRef.current = samples;
       return;
     }
+    // Only save if samples actually changed (deep compare by JSON.stringify)
+    const prevSamples = prevSamplesRef.current;
+    if (JSON.stringify(samples) === JSON.stringify(prevSamples)) {
+      return;
+    }
+    prevSamplesRef.current = samples;
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
         async function saveSamples() {
