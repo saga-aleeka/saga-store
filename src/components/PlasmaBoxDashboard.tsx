@@ -1,53 +1,5 @@
-
-export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
-  // ...existing code...
-
-  // Real-time sync: subscribe to Supabase changes for samples in this container
-  useEffect(() => {
-    const { supabase } = require('../utils/supabase/client');
-    const channel = supabase
-      .channel('samples-realtime-' + container.id)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'samples',
-          filter: `container_id=eq.${container.id}`
-        },
-        payload => {
-          // On any insert/update/delete, reload samples for this container
-          (async () => {
-            const allSamples = await import('../utils/supabase/samples').then(m => m.fetchSamples());
-            const filtered = allSamples.filter((s: any) => s.container_id === container.id);
-            const mapped = filtered.map((s: any) => ({
-              position: s.position,
-              sampleId: s.sample_id || s.sampleId || s.id,
-              storageDate: s.storage_date || s.storageDate || '',
-              lastAccessed: s.last_accessed || s.lastAccessed || '',
-              history: s.history || []
-            }));
-            setSamples(mapped);
-          })();
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [container.id]);
-import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect } from 'react';
-
-// Utility to infer storage temperature from sample/container type
-function inferStorageTemperature(type: string) {
-  // Normalize type for matching
-  const t = (type || '').toLowerCase();
-  if (/(dp|cf\s*dna|mnc|pa|idt)/i.test(t)) return '-20C';
-  if (/dtc/i.test(t)) return '4C';
-  if (/(plasma|bc|buffy)/i.test(t)) return '-80C';
-  return '';
-}
+import { safeReplace, safeTrim } from '../utils/safeString';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -58,6 +10,18 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Calendar, User, TestTube, Clock, Scan, AlertTriangle, Trash2, Edit3, Info } from 'lucide-react';
 import { PlasmaContainer, getGridDimensions } from './PlasmaContainerList';
 import { createAuditLog } from './AuditTrail';
+
+// Utility to infer storage temperature from sample/container type
+function inferStorageTemperature(type: string) {
+  // Normalize type for matching
+  const t = (type || '').toLowerCase();
+  if (/(dp|cf\s*dna|mnc|pa|idt)/i.test(t)) return '-20C';
+  if (/dtc/i.test(t)) return '4C';
+  if (/(plasma|bc|buffy)/i.test(t)) return '-80C';
+  return '';
+}
+
+// Sample history is now stored within each sample's history array
 
 interface SampleHistoryEntry {
   timestamp: string;
@@ -75,8 +39,6 @@ interface PlasmaSample {
   lastAccessed?: string;
   history: SampleHistoryEntry[];
 }
-
-// Sample history is now stored within each sample's history array
 
 interface PlasmaBoxDashboardProps {
   container: PlasmaContainer;
