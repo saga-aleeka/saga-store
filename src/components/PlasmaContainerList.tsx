@@ -409,8 +409,17 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   };
 
   const handleCreateContainer = async (newContainer: Omit<PlasmaContainer, 'id' | 'occupiedSlots' | 'lastUpdated'>) => {
-    // Generate a unique ID (PB + timestamp + random)
-    const id = `PB${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    // Generate a valid UUID for the id field
+    let id: string;
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      id = crypto.randomUUID();
+    } else {
+      // Fallback simple UUID v4 generator
+      id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
     // Defensive: ensure containerType is a valid frontend value
     const containerType = newContainer.containerType;
     const totalSlots = getGridDimensions(containerType, newContainer.sampleType).total;
