@@ -324,51 +324,37 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
 
   // Defensive: always arrays
-  const allSamples = useMemo(() => {
-    const samples: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
-    (Array.isArray(containers) ? containers : []).forEach(container => {
-      const storageKey = `samples-${container.id}`;
-      const savedSamples = localStorage.getItem(storageKey);
+  const [allSamples, setAllSamples] = useState<Array<{ sample: PlasmaSample; container: PlasmaContainer }>>([]);
 
-      if (savedSamples) {
-        try {
-          const parsedData = JSON.parse(savedSamples);
-
-          if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-            Object.entries(parsedData).forEach(([position, data]: [string, any]) => {
-              const sample: PlasmaSample = {
-                position,
-                sampleId: data.id,
-                storageDate: data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0],
-                lastAccessed: data.lastAccessed,
-                history: data.history || [{
-                  timestamp: data.timestamp || new Date().toISOString(),
-                  action: 'check-in',
-                  notes: `Initial storage in position ${position}`
-                }]
-              };
-              samples.push({ sample, container });
-            });
-          } else if (Array.isArray(parsedData)) {
-            parsedData.forEach((sample: any) => {
-              const sampleWithHistory = {
-                ...sample,
-                history: sample.history || [{
-                  timestamp: sample.storageDate ? `${sample.storageDate}T00:00:00.000Z` : new Date().toISOString(),
-                  action: 'check-in' as const,
-                  notes: `Initial storage in position ${sample.position}`
-                }]
-              };
-              samples.push({ sample: sampleWithHistory, container });
+  useEffect(() => {
+    async function loadAllSamples() {
+      try {
+        const samples = await fetchSamples();
+        if (!Array.isArray(containers)) return;
+        // Map samples to their containers
+        const mapped: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
+        for (const container of containers) {
+          const containerSamples = samples.filter((s: any) => s.container_id === container.id);
+          for (const s of containerSamples) {
+            mapped.push({
+              sample: {
+                position: s.position,
+                sampleId: s.sample_id || s.sampleId || s.id,
+                storageDate: s.storage_date || s.storageDate || '',
+                lastAccessed: s.last_accessed || s.lastAccessed || '',
+                history: s.history || []
+              },
+              container
             });
           }
-        } catch (error) {
-          console.error(`Error loading samples for container ${container.id}:`, error);
         }
+        setAllSamples(mapped);
+      } catch (error) {
+        setAllSamples([]);
+        console.error('Error loading samples from Supabase:', error);
       }
-    });
-
-    return samples;
+    }
+    loadAllSamples();
   }, [containers]);
 
   // Defensive: always arrays
