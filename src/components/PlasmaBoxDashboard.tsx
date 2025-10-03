@@ -1,3 +1,7 @@
+
+export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelectedSample, onSampleSelectionHandled, highlightSampleIds = [] }: PlasmaBoxDashboardProps) {
+  // ...existing code...
+
   // Real-time sync: subscribe to Supabase changes for samples in this container
   useEffect(() => {
     const { supabase } = require('../utils/supabase/client');
