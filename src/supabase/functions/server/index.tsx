@@ -1,8 +1,8 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { Hono } from "https://deno.land/x/hono@v3.11.6/mod.ts";
-import { cors, logger } from "https://deno.land/x/hono@v3.11.6/middleware.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import * as kv from './kv_store.tsx'
+import { serve } from "https://deno.land/std/http/server.ts";
+import { Hono } from "https://deno.land/x/hono/mod.ts";
+import { cors, logger } from "https://deno.land/x/hono@v3.1.0/middleware.ts";
+import { createClient } from "@supabase/supabase-js";
+import * as kv from './kv_store'
 
 const app = new Hono()
 
@@ -16,156 +16,138 @@ app.use('*', logger(console.log))
 
 // Initialize Supabase client
 const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  process.env.SUPABASE_URL ?? '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 )
 
 // Routes for SAGA Storage System
-app.get('/make-server-aaac77aa/health', (c) => {
-  return c.json({ 
-    status: 'healthy', 
+interface HealthResponse {
+  status: string;
+  timestamp: string;
+  service: string;
+}
+
+app.get('/make-server-aaac77aa/health', (c: any) => {
+  const response: HealthResponse = {
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'SAGA Storage System API'
-  })
-})
+  };
+  return c.json(response);
+});
 
 // Container management routes
-app.get('/make-server-aaac77aa/containers', async (c) => {
+app.get('/make-server-aaac77aa/containers', async (c: any) => {
   try {
-    // For now, use KV store until database tables are properly set up
-    const containers = await kv.get('saga-containers') || []
-    return c.json({ containers })
+    const { data, error } = await supabase.from('containers').select('*');
+    if (error) throw error;
+    return c.json({ containers: data || [] });
   } catch (error) {
-    console.error('Server error fetching containers:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    console.error('Server error fetching containers:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }
 })
 
-app.post('/make-server-aaac77aa/containers', async (c) => {
+app.post('/make-server-aaac77aa/containers', async (c: any) => {
   try {
-    const body = await c.req.json()
-    const { container, userId } = body
-
+    const body = await c.req.json();
+    const { container, userId } = body;
     if (!container || !userId) {
-      return c.json({ error: 'Container data and userId required' }, 400)
+      return c.json({ error: 'Container data and userId required' }, 400);
     }
-
     // Add timestamps and IDs
     const newContainer = {
       ...container,
-      id: container.id || `container_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: container.id || undefined, // Let Supabase generate if not provided
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: userId,
       updated_by: userId
-    }
-
-    // Get existing containers
-    const existingContainers = await kv.get('saga-containers') || []
-    const updatedContainers = [...existingContainers, newContainer]
-
-    // Save to KV store
-    await kv.set('saga-containers', updatedContainers)
-
+    };
+    const { data, error } = await supabase.from('containers').insert([newContainer]).select();
+    if (error) throw error;
     // Create audit log
-    await createAuditLogEntry('container_created', 'container', newContainer.id, userId, {
+    await createAuditLogEntry('container_created', 'container', data[0]?.id, userId, {
       description: `Container created: ${newContainer.name}`,
       containerType: newContainer.type,
-      location: `${newContainer.location_freezer}${newContainer.location_rack ? '/' + newContainer.location_rack : ''}${newContainer.location_drawer ? '/' + newContainer.location_drawer : ''}`
-    })
-
-    return c.json({ container: newContainer })
+      location: `${newContainer.location_freezer || ''}${newContainer.location_rack ? '/' + newContainer.location_rack : ''}${newContainer.location_drawer ? '/' + newContainer.location_drawer : ''}`
+    });
+    return c.json({ container: data[0] });
   } catch (error) {
-    console.error('Server error creating container:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    console.error('Server error creating container:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }
 })
 
-app.put('/make-server-aaac77aa/containers/:id', async (c) => {
+app.put('/make-server-aaac77aa/containers/:id', async (c: any) => {
   try {
-    const id = c.req.param('id')
-    const body = await c.req.json()
-    const { container, userId } = body
-
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    const { container, userId } = body;
     if (!container || !userId) {
-      return c.json({ error: 'Container data and userId required' }, 400)
+      return c.json({ error: 'Container data and userId required' }, 400);
     }
-
-    // Get existing containers
-    const existingContainers = await kv.get('saga-containers') || []
-    const containerIndex = existingContainers.findIndex((c: any) => c.id === id)
-
-    if (containerIndex === -1) {
-      return c.json({ error: 'Container not found' }, 404)
+    // Fetch old container for audit log
+    const { data: oldData, error: oldError } = await supabase.from('containers').select('*').eq('id', id).single();
+    if (oldError || !oldData) {
+      return c.json({ error: 'Container not found' }, 404);
     }
-
     // Update container
-    const oldContainer = existingContainers[containerIndex]
     const updatedContainer = {
-      ...oldContainer,
+      ...oldData,
       ...container,
       id,
       updated_at: new Date().toISOString(),
       updated_by: userId
-    }
-
-    existingContainers[containerIndex] = updatedContainer
-
-    // Save to KV store
-    await kv.set('saga-containers', existingContainers)
-
+    };
+    const { data, error } = await supabase.from('containers').update(updatedContainer).eq('id', id).select();
+    if (error) throw error;
     // Create audit log
     await createAuditLogEntry('container_updated', 'container', id, userId, {
       description: `Container updated: ${updatedContainer.name}`,
-      changes: getContainerChanges(oldContainer, updatedContainer)
-    })
-
-    return c.json({ container: updatedContainer })
+      changes: getContainerChanges(oldData, updatedContainer)
+    });
+    return c.json({ container: data[0] });
   } catch (error) {
-    console.error('Server error updating container:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    console.error('Server error updating container:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }
 })
 
-app.delete('/make-server-aaac77aa/containers/:id', async (c) => {
+app.delete('/make-server-aaac77aa/containers/:id', async (c: any) => {
   try {
-    const id = c.req.param('id')
-    const userId = c.req.query('userId')
-
+    const id = c.req.param('id');
+    const userId = c.req.query('userId');
     if (!userId) {
-      return c.json({ error: 'userId required' }, 400)
+      return c.json({ error: 'userId required' }, 400);
     }
-
-    // Get existing containers
-    const existingContainers = await kv.get('saga-containers') || []
-    const containerToDelete = existingContainers.find((c: any) => c.id === id)
-
-    if (!containerToDelete) {
-      return c.json({ error: 'Container not found' }, 404)
+    // Fetch container to delete for audit log
+    const { data: containerToDelete, error: fetchError } = await supabase.from('containers').select('*').eq('id', id).single();
+    if (fetchError || !containerToDelete) {
+      return c.json({ error: 'Container not found' }, 404);
     }
-
-    // Remove container
-    const updatedContainers = existingContainers.filter((c: any) => c.id !== id)
-
-    // Save to KV store
-    await kv.set('saga-containers', updatedContainers)
-
+    // Delete container
+    const { error } = await supabase.from('containers').delete().eq('id', id);
+    if (error) throw error;
     // Create audit log
     await createAuditLogEntry('container_deleted', 'container', id, userId, {
       description: `Container deleted: ${containerToDelete.name}`,
       containerType: containerToDelete.type,
       sampleCount: containerToDelete.samples ? Object.keys(containerToDelete.samples).length : 0
-    })
-
-    return c.json({ success: true })
+    });
+    return c.json({ success: true });
   } catch (error) {
-    console.error('Server error deleting container:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    console.error('Server error deleting container:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }
 })
 
 // Container locking routes
-app.post('/make-server-aaac77aa/containers/:id/lock', async (c) => {
+app.post('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
   try {
     const id = c.req.param('id')
     const body = await c.req.json()
@@ -205,11 +187,12 @@ app.post('/make-server-aaac77aa/containers/:id/lock', async (c) => {
     return c.json({ container })
   } catch (error) {
     console.error('Server error locking container:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
-app.delete('/make-server-aaac77aa/containers/:id/lock', async (c) => {
+app.delete('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
   try {
     const id = c.req.param('id')
     const userId = c.req.query('userId')
@@ -243,12 +226,13 @@ app.delete('/make-server-aaac77aa/containers/:id/lock', async (c) => {
     return c.json({ container })
   } catch (error) {
     console.error('Server error unlocking container:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
 // User session management
-app.post('/make-server-aaac77aa/sessions', async (c) => {
+app.post('/make-server-aaac77aa/sessions', async (c: any) => {
   try {
     const body = await c.req.json()
     const { userId, userName, activityType, containerId, metadata } = body
@@ -280,11 +264,12 @@ app.post('/make-server-aaac77aa/sessions', async (c) => {
     return c.json({ session })
   } catch (error) {
     console.error('Server error updating session:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
-app.get('/make-server-aaac77aa/sessions', async (c) => {
+app.get('/make-server-aaac77aa/sessions', async (c: any) => {
   try {
     const sessions = await kv.get('saga-user-sessions') || {}
     const sessionArray = Object.values(sessions)
@@ -292,12 +277,13 @@ app.get('/make-server-aaac77aa/sessions', async (c) => {
     return c.json({ sessions: sessionArray })
   } catch (error) {
     console.error('Server error fetching sessions:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
 // Audit log routes
-app.post('/make-server-aaac77aa/audit-logs', async (c) => {
+app.post('/make-server-aaac77aa/audit-logs', async (c: any) => {
   try {
     const body = await c.req.json()
     const { actionType, resourceType, resourceId, userId, userName, details, oldValues, newValues, metadata, severity, success } = body
@@ -332,11 +318,12 @@ app.post('/make-server-aaac77aa/audit-logs', async (c) => {
     return c.json({ auditLog })
   } catch (error) {
     console.error('Server error creating audit log:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
-app.get('/make-server-aaac77aa/audit-logs', async (c) => {
+app.get('/make-server-aaac77aa/audit-logs', async (c: any) => {
   try {
     const limit = parseInt(c.req.query('limit') || '100')
     const offset = parseInt(c.req.query('offset') || '0')
@@ -370,7 +357,8 @@ app.get('/make-server-aaac77aa/audit-logs', async (c) => {
     return c.json({ logs: paginatedLogs })
   } catch (error) {
     console.error('Server error fetching audit logs:', error)
-    return c.json({ error: 'Internal server error', details: error.message }, 500)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500)
   }
 })
 
