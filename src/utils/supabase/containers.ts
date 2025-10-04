@@ -39,6 +39,7 @@ function mapContainerFromDb(db: any) {
 export async function fetchContainers() {
   const { data, error } = await supabase.from('containers').select('*');
   if (error) throw error;
+  console.log('[fetchContainers] Raw data from Supabase:', data);
   return (data || []).map(mapContainerFromDb);
 }
 
