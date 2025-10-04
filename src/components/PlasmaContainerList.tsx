@@ -1,12 +1,9 @@
-  // ...existing code...
-  // Use props if provided, otherwise use local state
-  const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
-  // Debug: log all containers loaded from Supabase
-  useEffect(() => {
-    if (Array.isArray(containers)) {
-      console.log('All containers loaded from Supabase:', containers);
-    }
-  }, [containers]);
+
+// ...existing code...
+
+
+
+
 import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
@@ -41,6 +38,8 @@ import { SamplesTab } from './SamplesTab';
 import { ContainerCard } from './ContainerCard';
 import { Header } from './Header';
 import { ScrollArea } from './ui/scroll-area';
+
+
 
 export type ContainerType = '9x9-box' | '5x5-box' | '5x4-rack' | '9x9-rack' | '7x14-rack';
 export type SampleType = 'DP Pools' | 'cfDNA Tubes' | 'DTC Tubes' | 'MNC Tubes' | 'PA Pool Tubes' | 'Plasma Tubes' | 'BC Tubes' | 'IDT Plates';
@@ -112,7 +111,7 @@ interface PlasmaContainerListProps {
   onContainersChange?: (containers: PlasmaContainer[]) => void;
 }
 
-export function PlasmaContainerList({ containers: propsContainers, onContainersChange: propsOnContainersChange }: PlasmaContainerListProps = {}) {
+export function PlasmaContainerList(props: PlasmaContainerListProps) {
   // State to trigger snapshot UI refresh
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   // Example: get current user (replace with your actual logic)
@@ -156,8 +155,8 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
   const STORAGE_KEY = 'plasma-containers';
 
   // Use props if provided, otherwise use local state
-  const containers = Array.isArray(propsContainers) ? propsContainers : (Array.isArray(localContainers) ? localContainers : []);
-  const onContainersChange = typeof propsOnContainersChange === 'function' ? propsOnContainersChange : setLocalContainers;
+  const containers = Array.isArray(props.containers) ? props.containers : (Array.isArray(localContainers) ? localContainers : []);
+  const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setLocalContainers;
 
   // Debug: log all containers loaded from Supabase
   useEffect(() => {
@@ -190,7 +189,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
       const timer = setTimeout(() => {
         // Only perform backup at 2am, not after every edit
-        const containersToBackup = Array.isArray(propsContainers) ? propsContainers : localContainers;
+        const containersToBackup = Array.isArray(containers) ? containers : localContainers;
         const backupData = (Array.isArray(containersToBackup) ? containersToBackup : []).map(container => {
           const storageKey = `samples-${container.id}`;
           const savedSamples = localStorage.getItem(storageKey);
@@ -259,7 +258,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
 
   // Load containers from Supabase if using local state
   useEffect(() => {
-    if (!propsContainers) {
+  if (!props.containers) {
       fetchContainers()
         .then(data => {
           if (Array.isArray(data)) setLocalContainers(data);
@@ -269,7 +268,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         });
 
       // Real-time sync for containers
-      const containerSub = supabase.channel('public:containers')
+  const containerSub = supabase.channel('public:containers')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: RealtimePostgresChangesPayload<PlasmaContainer>) => {
           fetchContainers().then((data: PlasmaContainer[]) => {
         if (Array.isArray(data)) setLocalContainers(data);
@@ -289,7 +288,7 @@ export function PlasmaContainerList({ containers: propsContainers, onContainersC
         // supabase.removeChannel(sampleSub);
       };
     }
-  }, [propsContainers]);
+  }, [props.containers]);
 
 
 

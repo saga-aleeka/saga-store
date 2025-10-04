@@ -9,7 +9,7 @@ import { Card } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Switch } from './ui/switch';
 import { AlertTriangle, GraduationCap, Archive } from 'lucide-react';
-import { PlasmaContainer, ContainerType, SampleType, getGridDimensions, getContainerTypeLabel } from './PlasmaContainerList';
+import { PlasmaContainer, ContainerType, SampleType, getContainerTypeLabel } from './PlasmaContainerList';
 
 interface EditContainerDialogProps {
   open: boolean;
@@ -88,7 +88,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     name: '',
     location: '',
     containerType: '9x9-box' as ContainerType,
-    temperature: '-80°C',
+    temperature: '-20°C',
     sampleType: 'DP Pools' as SampleType,
     isTraining: false,
     isArchived: false
@@ -97,8 +97,8 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
   // Defensive: don't render if container is null
   if (!container) return null;
 
-  // Defensive: getGridDimensions fallback
-  const selectedDimensions = getGridDimensions(formData.containerType) ?? { rows: 0, cols: 0, total: 0 };
+  // Placeholder dimensions as fallback
+  const selectedDimensions = { rows: 0, cols: 0, total: 0 };
   const recommendedContainerType = detectContainerTypeFromSampleType(formData.sampleType);
   const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
 
