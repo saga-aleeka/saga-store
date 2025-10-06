@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std/http/server.ts";
-import { Hono } from "https://deno.land/x/hono/mod.ts";
-import { cors, logger } from "https://deno.land/x/hono@v3.1.0/middleware.ts";
+import { serve } from 'hono/node'
+import { Hono } from "hono";
+import { cors, logger } from "hono/middleware";
 import { createClient } from "@supabase/supabase-js";
 import * as kv from './kv_store'
 
@@ -421,4 +421,9 @@ function getContainerChanges(oldContainer: any, newContainer: any) {
 }
 
 console.log('SAGA Storage System API server starting...')
-serve(app.fetch)
+const port = process.env.PORT || 3000;
+serve({
+  fetch: app.fetch,
+  port: Number(port),
+})
+console.log(`SAGA Storage System API server running on http://localhost:${port}`);
