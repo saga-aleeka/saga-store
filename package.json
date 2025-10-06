@@ -1,5 +1,5 @@
 {
-      "name": "clinical-lab-storage-tracking-system-copy",
+      "name": "clinical-lab-storage-tracking-system",
       "version": "0.1.0",
       "private": true,
       "dependencies": {
