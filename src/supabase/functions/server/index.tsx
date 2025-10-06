@@ -39,7 +39,13 @@ app.get('/make-server-aaac77aa/health', (c: any) => {
 // Container management routes
 app.get('/make-server-aaac77aa/containers', async (c: any) => {
   try {
+    // Debug: Log Supabase URL and masked key
+    console.log('Supabase URL:', process.env.SUPABASE_URL);
+    console.log('Supabase Key (first 6 chars):', (process.env.SUPABASE_SERVICE_ROLE_KEY || '').slice(0, 6) + '...');
+
     const { data, error } = await supabase.from('containers').select('*');
+    // Debug: Log query result
+    console.log('Supabase containers query result:', { data, error });
     if (error) throw error;
     return c.json({ containers: data || [] });
   } catch (error) {
