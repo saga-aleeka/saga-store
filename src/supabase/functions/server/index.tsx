@@ -1,6 +1,7 @@
-import { serve } from 'hono/node'
+import { serve } from '@hono/node-server'
 import { Hono } from "hono";
-import { cors, logger } from "hono/middleware";
+import { cors } from 'hono/cors'
+import { logger } from 'hono/logger'
 import { createClient } from "@supabase/supabase-js";
 import * as kv from './kv_store'
 
