@@ -151,6 +151,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     URL.revokeObjectURL(url);
   };
 
+
   // Local state for containers always from Supabase
   const [containers, setContainers] = useState<PlasmaContainer[]>([]);
   const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setContainers;
@@ -162,31 +163,64 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     }
   }, [containers]);
 
+  // Ref to always have latest containers for backup timer
+  const containersRef = React.useRef<PlasmaContainer[]>(Array.isArray(containers) ? containers : []);
+  React.useEffect(() => {
+    containersRef.current = Array.isArray(containers) ? containers : [];
+  }, [containers]);
+
   // Nightly backup logic (2am Eastern Time, overwrite previous)
   React.useEffect(() => {
-    // Only schedule nightly backup, do not update snapshot after every edit
-    function getEasternTimeDate() {
+    // Robust Eastern Time calculation
+    const getEasternTimeDate = () => {
       const now = new Date();
-      const utcOffset = -5; // hours
-      const eastern = new Date(now.getTime() + utcOffset * 60 * 60 * 1000);
-      return eastern;
-    }
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      const parts = formatter.formatToParts(now);
+      const getPart = (type: string): number => {
+        const part = parts.find(p => p.type === type)?.value ?? '0';
+        return Number.parseInt(part, 10);
+      };
+      return new Date(
+        Date.UTC(
+          getPart('year'),
+          getPart('month') - 1,
+          getPart('day'),
+          getPart('hour'),
+          getPart('minute'),
+          getPart('second')
+        )
+      );
+    };
 
-    function scheduleNightlyBackup() {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
+
+    const scheduleNightlyBackup = () => {
       const easternNow = getEasternTimeDate();
-      const today = easternNow.toISOString().slice(0, 10);
-      const backupKey = `nightly-backup-${today}`;
 
       const next2am = new Date(easternNow);
       next2am.setHours(2, 0, 0, 0);
       if (easternNow > next2am) {
         next2am.setDate(next2am.getDate() + 1);
       }
-      const msUntil2am = next2am.getTime() - easternNow.getTime();
+      const msUntil2am = Math.max(next2am.getTime() - easternNow.getTime(), 0);
 
-      const timer = setTimeout(() => {
+      timeoutId = setTimeout(() => {
+        const easternExecution = getEasternTimeDate();
+        const today = easternExecution.toISOString().slice(0, 10);
+        const backupKey = `nightly-backup-${today}`;
+
         // Only perform backup at 2am, not after every edit
-        const containersToBackup = Array.isArray(containers) ? containers : [];
+        const containersToBackup = containersRef.current;
         const backupData = (Array.isArray(containersToBackup) ? containersToBackup : []).map(container => {
           const storageKey = `samples-${container.id}`;
           const savedSamples = localStorage.getItem(storageKey);
@@ -206,14 +240,22 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
           toDelete.forEach(k => localStorage.removeItem(k));
           console.log('[SNAPSHOT] Deleted old backups:', toDelete);
         }
-  setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after 2am backup
-  scheduleNightlyBackup();
-      }, msUntil2am);
-      return () => clearTimeout(timer);
-    }
+        setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after 2am backup
 
-    const cancel = scheduleNightlyBackup();
-    return cancel;
+        if (!isCancelled) {
+          scheduleNightlyBackup();
+        }
+      }, msUntil2am);
+    };
+
+    scheduleNightlyBackup();
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []); // Remove dependencies to avoid running after every edit
 
   // Revert container to last nightly backup
