@@ -150,13 +150,10 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-  // Local state for containers if not provided by props
-  const [localContainers, setLocalContainers] = useState<PlasmaContainer[]>([]);
-  const STORAGE_KEY = 'plasma-containers';
 
-  // Use props if provided, otherwise use local state
-  const containers = Array.isArray(props.containers) ? props.containers : (Array.isArray(localContainers) ? localContainers : []);
-  const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setLocalContainers;
+  // Local state for containers always from Supabase
+  const [containers, setContainers] = useState<PlasmaContainer[]>([]);
+  const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setContainers;
 
   // Debug: log all containers loaded from Supabase
   useEffect(() => {
@@ -257,38 +254,38 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   };
 
   // Load containers from Supabase if using local state
+
+
   useEffect(() => {
-  if (!props.containers) {
-      fetchContainers()
-        .then(data => {
-          if (Array.isArray(data)) setLocalContainers(data);
-        })
-        .catch(error => {
-          console.error('Error loading containers from Supabase:', error);
+    fetchContainers()
+      .then(data => {
+        if (Array.isArray(data)) setContainers(data);
+      })
+      .catch(error => {
+        console.error('Error loading containers from Supabase:', error);
+      });
+
+    // Real-time sync for containers
+    const containerSub = supabase.channel('public:containers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: RealtimePostgresChangesPayload<PlasmaContainer>) => {
+        fetchContainers().then((data: PlasmaContainer[]) => {
+          if (Array.isArray(data)) setContainers(data);
         });
+      })
+      .subscribe();
 
-      // Real-time sync for containers
-  const containerSub = supabase.channel('public:containers')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, (payload: RealtimePostgresChangesPayload<PlasmaContainer>) => {
-          fetchContainers().then((data: PlasmaContainer[]) => {
-        if (Array.isArray(data)) setLocalContainers(data);
-          });
-        })
-        .subscribe();
+    // Real-time sync for samples (optional, for future sample migration)
+    // const sampleSub = supabase.channel('public:samples')
+    //   .on('postgres_changes', { event: '*', schema: 'public', table: 'samples' }, payload => {
+    //     fetchSamples().then(data => {/* update local state if needed */});
+    //   })
+    //   .subscribe();
 
-      // Real-time sync for samples (optional, for future sample migration)
-      // const sampleSub = supabase.channel('public:samples')
-      //   .on('postgres_changes', { event: '*', schema: 'public', table: 'samples' }, payload => {
-      //     fetchSamples().then(data => {/* update local state if needed */});
-      //   })
-      //   .subscribe();
-
-      return () => {
-        supabase.removeChannel(containerSub);
-        // supabase.removeChannel(sampleSub);
-      };
-    }
-  }, [props.containers]);
+    return () => {
+      supabase.removeChannel(containerSub);
+      // supabase.removeChannel(sampleSub);
+    };
+  }, []);
 
 
 
