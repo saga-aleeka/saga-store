@@ -1,4 +1,4 @@
-@custom-variant dark (&:is(.dark *));
+/* Removed unsupported @custom-variant rule. Ensure dark mode is handled via Tailwind's dark variant. */
 
 :root {
   --font-size: 14px;
@@ -94,7 +94,7 @@
   --archive-border: #6b7280;
 }
 
-@theme inline {
+:root {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
