@@ -186,7 +186,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
 
       const timer = setTimeout(() => {
         // Only perform backup at 2am, not after every edit
-        const containersToBackup = Array.isArray(containers) ? containers : localContainers;
+        const containersToBackup = Array.isArray(containers) ? containers : [];
         const backupData = (Array.isArray(containersToBackup) ? containersToBackup : []).map(container => {
           const storageKey = `samples-${container.id}`;
           const savedSamples = localStorage.getItem(storageKey);
@@ -243,7 +243,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       // Restore container in Supabase
       await upsertContainer(containerBackup.container || containerBackup);
       const updated = await fetchContainers();
-      setLocalContainers(updated);
+      setContainers(updated);
       setRevertDialogOpen(false);
       alert('Container reverted to last backup from Supabase.');
     } catch (error) {
@@ -466,7 +466,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     try {
       await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
-      setLocalContainers(updated);
+      setContainers(updated);
       setIsCreateDialogOpen(false);
     } catch (error: any) {
       const code = error && typeof error === 'object' ? (error as any).code : undefined;
@@ -503,7 +503,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     try {
       await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
-      setLocalContainers(updated);
+      setContainers(updated);
       setIsEditDialogOpen(false);
       alert('Container updated successfully.');
     } catch (error: any) {
