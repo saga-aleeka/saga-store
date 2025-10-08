@@ -371,14 +371,23 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
 
       const effectiveTotalSlots = getGridDimensions(container.containerType, container.sampleType).total;
       // Compute live occupied slots from the loaded samples for accuracy
-      const liveOccupiedSlots = (Array.isArray(allSamples) ? allSamples.filter(({ container: c }) => c.id === container.id).length : 0);
-      const hasAvailableSlots = !showAvailableOnly || liveOccupiedSlots < effectiveTotalSlots;
+      const liveOccupiedSlots = (Array.isArray(allSamples)
+        ? allSamples.filter(({ container: c }) => String(c.id) === String(container.id)).length
+        : 0);
+      // Prefer live sample counts when available; fall back to stored container.occupiedSlots
+      const numericOccupiedSlots = Number(container.occupiedSlots);
+      const occupiedSlots = liveOccupiedSlots > 0
+        ? liveOccupiedSlots
+        : Number.isNaN(numericOccupiedSlots)
+          ? 0
+          : numericOccupiedSlots;
+      const hasAvailableSlots = !showAvailableOnly || occupiedSlots < effectiveTotalSlots;
 
       const matchesTraining = !showTrainingOnly || container.isTraining === true;
 
       return matchesSearch && matchesSampleType && hasAvailableSlots && matchesTraining;
     });
-  }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
+  }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly, allSamples]);
 
   useEffect(() => {
     async function loadAllSamples() {
