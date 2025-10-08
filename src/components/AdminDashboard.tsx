@@ -289,7 +289,9 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       else if (nameLower.includes('plasma')) sampleType = 'Plasma Tubes';
       else if (nameLower.includes('bc')) sampleType = 'BC Tubes';
       else if (nameLower.includes('idt')) sampleType = 'IDT Plates';
-      let type = samples.length === 25 ? 'box_5x5' : 'box_9x9';
+  // Determine container type using the frontend enum so the Supabase helper
+  // can convert it to the database enum.
+  const containerType = samples.length === 25 ? '5x5-box' : '9x9-box';
       // Determine temperature for localStorage/sample compatibility
       let temperature = '-80°C';
       if (["dp pools", "dp", "mnc", "pa pool tubes", "pa", "idt", "cfdna"].some(t => nameLower.includes(t))) {
@@ -306,15 +308,18 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
       // Map to Supabase schema: id (uuid, let Supabase generate), name, type, sample_type, status, location_freezer, samples, etc.
       const containerObj = {
         name: containerName,
-        type,
-        sample_type: sampleType,
+        containerType,
+        sampleType,
         status: 'active',
-        location_freezer: location,
+        location,
+        temperature,
+        occupiedSlots: samplesWithTemp.length,
+        totalSlots: containerType === '5x5-box' ? 25 : 81,
         samples: samplesWithTemp.length > 0 ? samplesWithTemp : null,
         // temperature not sent to Supabase, but included in samples for localStorage compatibility
       };
       // Only upsert if required fields are present
-      if (!containerObj.name || !containerObj.type) {
+      if (!containerObj.name || !containerObj.containerType) {
         console.warn('Skipping container with missing required fields:', containerObj);
         continue;
       }

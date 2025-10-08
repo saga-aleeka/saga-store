@@ -1,4 +1,55 @@
+// Helper to get current user context from localStorage or default
+function getCurrentUserContext() {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return { id: 'system', name: 'System' };
+  }
+  try {
+    const storedInfo = localStorage.getItem('saga-user-info');
+    if (storedInfo) {
+      const parsed = JSON.parse(storedInfo);
+      if (parsed && typeof parsed === 'object') {
+        const id = parsed.id || parsed.initials || 'anonymous';
+        const name = parsed.name || parsed.fullName || parsed.initials || id;
+        return { id, name };
+      }
+    }
+  } catch (error) {
+    // ignore
+  }
+  return { id: 'anonymous', name: 'Anonymous User' };
+}
+const totalSlotToDbType: Record<number, string> = {
+  81: 'box_9x9',
+  25: 'box_5x5',
+  20: 'rack_5x4',
+  63: 'rack_7x14',
+};
+
+function resolveDbType(container: any): string | undefined {
+  const rawType = container?.containerType ?? container?.type;
+  if (typeof rawType === 'string' && rawType) {
+    return frontendToDbType[rawType] || rawType;
+  }
+
+  const totalSlots = Number(container?.totalSlots ?? container?.total_slots);
+  if (!Number.isNaN(totalSlots) && totalSlotToDbType[totalSlots]) {
+    return totalSlotToDbType[totalSlots];
+  }
+
+  const occupiedSlots = Number(
+    container?.occupiedSlots ??
+      container?.occupied_slots ??
+      (Array.isArray(container?.samples) ? container.samples.length : undefined)
+  );
+  if (!Number.isNaN(occupiedSlots) && totalSlotToDbType[occupiedSlots]) {
+    return totalSlotToDbType[occupiedSlots];
+  }
+
+  return undefined;
+}
 import { supabase } from './client';
+// ...existing code...
+// Ensure getCurrentUserContext is defined above or here
 
 
 // Map between DB and frontend containerType values
@@ -46,11 +97,16 @@ export async function fetchContainers() {
 
 // Map frontend fields to DB fields for upsert
 function mapContainerToDb(container: any) {
-  return {
+  const dbType = resolveDbType(container);
+  if (!dbType) {
+    throw new Error('Unable to determine container type for Supabase upsert');
+  }
+
+  const dbContainer: Record<string, any> = {
     id: container.id,
     name: container.name,
-    type: frontendToDbType[container.containerType] || container.containerType, // map frontend to DB
-    sample_type: container.sampleType, // e.g. 'cfDNA Tubes'
+    type: dbType,
+    sample_type: container.sampleType,
     status: container.status,
     location_freezer: container.location,
     occupied_slots: container.occupiedSlots,
@@ -62,6 +118,24 @@ function mapContainerToDb(container: any) {
     history: container.history,
     // add any other fields as needed
   };
+
+  const user = getCurrentUserContext();
+  if (user.id) {
+    dbContainer.updated_by = user.id;
+    if (!dbContainer.id && !dbContainer.created_by) {
+      dbContainer.created_by = user.id;
+    }
+  }
+
+  const now = new Date().toISOString();
+  if (!dbContainer.updated_at) {
+    dbContainer.updated_at = now;
+  }
+  if (!dbContainer.id && !dbContainer.created_at) {
+    dbContainer.created_at = now;
+  }
+
+  return dbContainer;
 }
 
 export async function upsertContainer(container: any) {
