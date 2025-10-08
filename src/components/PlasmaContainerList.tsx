@@ -575,8 +575,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
       setContainers(updated);
-  setIsEditDialogOpen(false);
-  toast.success('Container updated successfully.');
+    setIsEditDialogOpen(false);
     } catch (error: any) {
       const code = error && typeof error === 'object' ? (error as any).code : undefined;
       const message = error && typeof error === 'object' ? (error as any).message : undefined;
