@@ -1,3 +1,67 @@
+const frontendToDbType: Record<string, string> = {
+  '9x9-box': 'box_9x9',
+  '5x5-box': 'box_5x5',
+  '5x4-rack': 'rack_5x4',
+  '9x9-rack': 'rack_9x9',
+  '7x14-rack': 'rack_7x14',
+};
+
+function normaliseContainerPayload(container: any) {
+  if (!container || typeof container !== 'object') {
+    return {};
+  }
+
+  const payload: Record<string, any> = { ...container };
+
+  if ('containerType' in payload && !payload.type) {
+    const containerTypeValue = payload.containerType;
+    if (typeof containerTypeValue === 'string' && containerTypeValue) {
+      payload.type = frontendToDbType[containerTypeValue] || containerTypeValue;
+    }
+  }
+
+  if ('sampleType' in payload && !payload.sample_type) {
+    const sampleTypeValue = payload.sampleType;
+    if (typeof sampleTypeValue === 'string' && sampleTypeValue) {
+      payload.sample_type = sampleTypeValue;
+    }
+  }
+
+  if ('location' in payload && payload.location_freezer === undefined) {
+    payload.location_freezer = payload.location;
+  }
+
+  if (payload.occupiedSlots !== undefined && payload.occupied_slots === undefined) {
+    payload.occupied_slots = payload.occupiedSlots;
+  }
+
+  if (payload.totalSlots !== undefined && payload.total_slots === undefined) {
+    payload.total_slots = payload.totalSlots;
+  }
+
+  if (payload.isTraining !== undefined && payload.is_training === undefined) {
+    payload.is_training = payload.isTraining;
+  }
+
+  if (payload.isArchived !== undefined && payload.is_archived === undefined) {
+    payload.is_archived = payload.isArchived;
+  }
+
+  if (payload.samplesWithTemp && !payload.samples) {
+    payload.samples = payload.samplesWithTemp;
+  }
+
+  delete payload.containerType;
+  delete payload.sampleType;
+  delete payload.location;
+  delete payload.occupiedSlots;
+  delete payload.totalSlots;
+  delete payload.isTraining;
+  delete payload.isArchived;
+  delete payload.samplesWithTemp;
+
+  return payload;
+}
 import { serve } from '@hono/node-server'
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
@@ -64,21 +128,24 @@ app.post('/make-server-aaac77aa/containers', async (c: any) => {
       return c.json({ error: 'Container data and userId required' }, 400);
     }
     // Add timestamps and IDs
+    const containerPayload = normaliseContainerPayload(container);
+    const timestamp = new Date().toISOString();
     const newContainer = {
-      ...container,
-      id: container.id || undefined, // Let Supabase generate if not provided
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: userId,
+      ...containerPayload,
+      id: containerPayload.id || undefined, // Let Supabase generate if not provided
+      created_at: containerPayload.created_at || timestamp,
+      updated_at: timestamp,
+      created_by: containerPayload.created_by || userId,
       updated_by: userId
     };
     const { data, error } = await supabase.from('containers').insert([newContainer]).select();
     if (error) throw error;
     // Create audit log
-    await createAuditLogEntry('container_created', 'container', data[0]?.id, userId, {
-      description: `Container created: ${newContainer.name}`,
-      containerType: newContainer.type,
-      location: `${newContainer.location_freezer || ''}${newContainer.location_rack ? '/' + newContainer.location_rack : ''}${newContainer.location_drawer ? '/' + newContainer.location_drawer : ''}`
+    const created = data[0] || {};
+    await createAuditLogEntry('container_created', 'container', created.id, userId, {
+      description: `Container created: ${created.name || ''}`,
+      containerType: created.type || '',
+      location: `${created.location_freezer || ''}${created.location_rack ? '/' + created.location_rack : ''}${created.location_drawer ? '/' + created.location_drawer : ''}`
     });
     return c.json({ container: data[0] });
   } catch (error) {
@@ -102,13 +169,18 @@ app.put('/make-server-aaac77aa/containers/:id', async (c: any) => {
       return c.json({ error: 'Container not found' }, 404);
     }
     // Update container
+    const containerPayload = normaliseContainerPayload(container);
+    const timestamp = new Date().toISOString();
     const updatedContainer = {
       ...oldData,
-      ...container,
+      ...containerPayload,
       id,
-      updated_at: new Date().toISOString(),
-      updated_by: userId
+      updated_at: timestamp,
+      updated_by: userId,
     };
+    if (!updatedContainer.created_by) {
+      updatedContainer.created_by = userId;
+    }
     const { data, error } = await supabase.from('containers').update(updatedContainer).eq('id', id).select();
     if (error) throw error;
     // Create audit log
