@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase/client';
+import { fetchSamples, upsertSample } from '../utils/supabase/samples';
 import { safeReplace, safeTrim } from '../utils/safeString';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -86,9 +87,9 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     let isMounted = true;
     async function loadSamples() {
       try {
-        // fetchSamples returns all samples; filter by container.id
-        const allSamples = await import('../utils/supabase/samples').then(m => m.fetchSamples());
-        const filtered = allSamples.filter((s: any) => s.container_id === container.id);
+        // fetchSamples returns all samples; filter by container.id (normalize types)
+        const allSamples = await fetchSamples();
+        const filtered = allSamples.filter((s: any) => String(s.container_id) === String(container.id));
         // Map to PlasmaSample shape if needed
         const mapped = filtered.map((s: any) => ({
           // Normalize position to uppercase trimmed string so grid matching is deterministic
@@ -123,8 +124,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         },
         (payload: any) => {
           // On any insert/update/delete, reload samples
-          import('../utils/supabase/samples').then(m => m.fetchSamples()).then(allSamples => {
-            const filtered = allSamples.filter((s: any) => s.container_id === container.id);
+          fetchSamples().then(allSamples => {
+            const filtered = allSamples.filter((s: any) => String(s.container_id) === String(container.id));
             const mapped = filtered.map((s: any) => ({
               position: safeTrim(s.position || '').toUpperCase(),
               sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
@@ -162,7 +163,6 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           setSaveStatus('saving');
           setSaveError(null);
           try {
-            const { upsertSample } = await import('../utils/supabase/samples');
             await Promise.all(samples.map(sample => {
               const samplePayload: any = {
                 container_id: container.id,
@@ -230,17 +230,32 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     }
     
     const grid: GridItem[] = [];
-    for (let row = 0; row < dimensions.rows; row++) {
-      for (let col = 0; col < dimensions.cols; col++) {
-        const position = `${String.fromCharCode(65 + row)}${col + 1}`;
-        const sample = samples.find(s => s.position === position);
-        
-        // For DP Pools, position I9 (81st position) should be disabled since effective capacity is 80
-        const isDisabled = container.sampleType === 'DP Pools' && 
-                          container.containerType === '9x9-box' && 
-                          position === 'I9';
-        
-        grid.push({ position, sample, isDisabled });
+    const isIDTRack = dimensions.rows === 14 && dimensions.cols === 7;
+    if (isIDTRack) {
+      // For IDT Plates (7x14), columns are letters A..G and rows are numbered 14..1 (top->bottom)
+      for (let r = 0; r < dimensions.rows; r++) {
+        const rowNumber = dimensions.rows - r; // 14..1
+        for (let c = 0; c < dimensions.cols; c++) {
+          const colLetter = String.fromCharCode(65 + c); // A..G
+          const position = `${colLetter}${rowNumber}`;
+          const sample = samples.find(s => s.position === position);
+          const isDisabled = false; // No special disabled positions for IDT
+          grid.push({ position, sample, isDisabled });
+        }
+      }
+    } else {
+      for (let row = 0; row < dimensions.rows; row++) {
+        for (let col = 0; col < dimensions.cols; col++) {
+          const position = `${String.fromCharCode(65 + row)}${col + 1}`;
+          const sample = samples.find(s => s.position === position);
+          
+          // For DP Pools, position I9 (81st position) should be disabled since effective capacity is 80
+          const isDisabled = container.sampleType === 'DP Pools' && 
+                            container.containerType === '9x9-box' && 
+                            position === 'I9';
+          
+          grid.push({ position, sample, isDisabled });
+        }
       }
     }
     return grid;
@@ -253,7 +268,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     // Make cells wider to accommodate full sample IDs like "C01039DPP1B" (11 characters)
     // Updated with more generous spacing for better sample ID visibility
     // Special handling for 7x14 racks (IDT Plates) - smaller cells due to large grid
-    if (dimensions.rows === 14 && dimensions.cols === 7) return 'w-20 h-8';
+  // For IDT Plates (7x14), make cells flexible to expand and use available whitespace
+  if (dimensions.rows === 14 && dimensions.cols === 7) return 'flex-1 h-12 min-w-[48px]';
     if (dimensions.rows <= 5 && dimensions.cols <= 5) return 'w-32 h-14';
     if (dimensions.rows <= 7 && dimensions.cols <= 7) return 'w-28 h-12';
     return 'w-24 h-10';
@@ -263,7 +279,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     // Header cells need to match the width of regular cells
     // Updated to match the new cell sizes for better sample ID visibility
     // Special handling for 7x14 racks (IDT Plates) - smaller cells due to large grid
-    if (dimensions.rows === 14 && dimensions.cols === 7) return 'w-20 h-8';
+  if (dimensions.rows === 14 && dimensions.cols === 7) return 'flex-1 h-12 min-w-[48px]';
     if (dimensions.rows <= 5 && dimensions.cols <= 5) return 'w-32 h-14';
     if (dimensions.rows <= 7 && dimensions.cols <= 7) return 'w-28 h-12';
     return 'w-24 h-10';
@@ -1125,66 +1141,91 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           </div>
           
           <div className="overflow-auto">
-            <div className="flex flex-col gap-1 w-fit min-w-full">
+            <div className={`flex flex-col gap-1 ${dimensions.rows === 14 && dimensions.cols === 7 ? 'w-full' : 'w-fit min-w-full'}`}>
             {/* Column Headers */}
-            <div className="flex gap-1 mb-2">
-              <div className={headerCellSize}></div>
-              {Array.from({ length: dimensions.cols }, (_, i) => (
-                <div key={i} className={`${headerCellSize} flex items-center justify-center font-medium ${fontSize}`}>
-                  {i + 1}
-                </div>
-              ))}
-            </div>
-            
-            {/* Grid Rows */}
-            {Array.from({ length: dimensions.rows }, (_, row) => (
-              <div key={row} className="flex gap-1">
-                <div className={`${headerCellSize} flex items-center justify-center font-medium ${fontSize}`}>
-                  {String.fromCharCode(65 + row)}
-                </div>
-                {Array.from({ length: dimensions.cols }, (_, col) => {
-                  const position = `${String.fromCharCode(65 + row)}${col + 1}`;
-                  const gridItem = grid.find(item => item.position === position);
-                  const sample = gridItem?.sample;
-                  const isDisabled = gridItem?.isDisabled;
-                  const isSelected = selectedPosition === position;
-                  const isHighlighted = sample && highlightSampleIds.includes(sample.sampleId);
-                  
-                  return (
-                    <div
-                      key={position}
-                      className={`${cellSize} border-2 rounded transition-all duration-200 flex items-center justify-center ${
-                        isDisabled
-                          ? 'bg-gray-800 border-gray-600 cursor-not-allowed opacity-50'
-                          : sample 
-                            ? isHighlighted 
-                              ? 'bg-yellow-500 text-black border-yellow-600 cursor-pointer hover:scale-105' 
-                              : 'bg-blue-500 text-white cursor-pointer hover:scale-105'
-                            : 'bg-gray-100 border-gray-300 hover:bg-gray-200 cursor-pointer hover:scale-105'
-                      } ${isSelected ? 'ring-2 ring-primary' : ''} ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}`}
-                      onClick={() => !isDisabled && handlePositionClick(position, sample)}
-                      title={
-                        isDisabled
-                          ? `Position ${position} disabled - DP Pools come in sets of 4 (effective capacity: 80)`
-                          : sample 
-                            ? `${sample.sampleId}${isHighlighted ? ' (From Worklist)' : ''}` 
-                            : `Empty position ${position}`
-                      }
-                    >
-                      {isDisabled ? (
-                        <div className={`${fontSize} font-medium leading-tight text-center px-1 text-gray-400`}>
-                          ✕
-                        </div>
-                      ) : sample ? (
-                        <div className={`${fontSize} font-medium leading-tight text-center px-1 whitespace-nowrap`}>
-                          {sample.sampleId}
-                        </div>
-                      ) : null}
+            {(() => {
+              const isIDTRack = dimensions.rows === 14 && dimensions.cols === 7;
+              if (isIDTRack) {
+                // IDT: columns are letters A..G
+                return (
+                  <div className="flex gap-1 mb-2">
+                    <div className={headerCellSize}></div>
+                    {Array.from({ length: dimensions.cols }, (_, i) => (
+                      <div key={i} className={`${headerCellSize} flex items-center justify-center font-medium ${fontSize}`}>
+                        {String.fromCharCode(65 + i)}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // Default: columns are numbers
+              return (
+                <div className="flex gap-1 mb-2">
+                  <div className={headerCellSize}></div>
+                  {Array.from({ length: dimensions.cols }, (_, i) => (
+                    <div key={i} className={`${headerCellSize} flex items-center justify-center font-medium ${fontSize}`}>
+                      {i + 1}
                     </div>
-                  );
-                })}
-              </div>
-            ))}
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Grid Rows */}
+            {Array.from({ length: dimensions.rows }).map((_, row) => {
+              const isIDTRack = dimensions.rows === 14 && dimensions.cols === 7;
+              const rowLabel = isIDTRack ? String(dimensions.rows - row) : String.fromCharCode(65 + row);
+              return (
+                <div key={row} className="flex gap-1">
+                  <div className={`${headerCellSize} flex items-center justify-center font-medium ${fontSize}`}>
+                    {rowLabel}
+                  </div>
+
+                  {Array.from({ length: dimensions.cols }).map((_, col) => {
+                    const position = isIDTRack ? `${String.fromCharCode(65 + col)}${dimensions.rows - row}` : `${String.fromCharCode(65 + row)}${col + 1}`;
+                    const gridItem = grid.find(item => item.position === position);
+                    const sample = gridItem?.sample;
+                    const isDisabled = gridItem?.isDisabled;
+                    const isSelected = selectedPosition === position;
+                    const isHighlighted = Boolean(sample && highlightSampleIds.includes(sample.sampleId));
+
+                    return (
+                      <div
+                        key={position}
+                        className={`${cellSize} border-2 rounded transition-all duration-200 flex items-center justify-center ${
+                          isDisabled
+                            ? 'bg-gray-800 border-gray-600 cursor-not-allowed opacity-50'
+                            : sample
+                              ? isHighlighted
+                                ? 'bg-yellow-500 text-black border-yellow-600 cursor-pointer hover:scale-105'
+                                : 'bg-blue-500 text-white cursor-pointer hover:scale-105'
+                              : 'bg-gray-100 border-gray-300 hover:bg-gray-200 cursor-pointer hover:scale-105'
+                        } ${isSelected ? 'ring-2 ring-primary' : ''} ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}`}
+                        onClick={() => !isDisabled && handlePositionClick(position, sample)}
+                        title={
+                          isDisabled
+                            ? `Position ${position} disabled - DP Pools come in sets of 4 (effective capacity: 80)`
+                            : sample
+                              ? `${sample.sampleId}${isHighlighted ? ' (From Worklist)' : ''}`
+                              : `Empty position ${position}`
+                        }
+                      >
+                        {isDisabled ? (
+                          <div className={`${fontSize} font-medium leading-tight text-center px-1 text-gray-400`}>
+                            ✕
+                          </div>
+                        ) : sample ? (
+                          <div className={`${fontSize} font-medium leading-tight text-center px-1 whitespace-nowrap`}>
+                            {sample.sampleId}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
             </div>
           </div>
         </Card>

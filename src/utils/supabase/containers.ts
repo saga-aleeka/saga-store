@@ -76,8 +76,9 @@ function mapContainerFromDb(db: any) {
     sampleType: db.sample_type, // e.g. 'cfDNA Tubes'
     status: db.status, // 'active' | 'inactive'
     location: db.location_freezer, // storage rack name
-    occupiedSlots: db.occupied_slots ?? 0,
-    totalSlots: db.total_slots ?? 0,
+  occupiedSlots: db.occupied_slots ?? 0,
+  // For DP Pools in 9x9 boxes, the effective capacity is 80 (I9 disabled)
+  totalSlots: (db.total_slots ?? 0) === 81 && (db.sample_type === 'DP Pools' || db.sample_type === 'DP Pools') ? 80 : (db.total_slots ?? 0),
     lastUpdated: db.last_updated,
     temperature: db.temperature,
     isTraining: db.is_training,

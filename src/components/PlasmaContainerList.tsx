@@ -388,12 +388,12 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
         // Map samples to their containers
         const mapped: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
         for (const container of containers) {
-          const containerSamples = samples.filter((s: any) => s.container_id === container.id);
+          const containerSamples = samples.filter((s: any) => String(s.container_id) === String(container.id));
           for (const s of containerSamples) {
             mapped.push({
               sample: {
-                position: s.position,
-                sampleId: s.sample_id || s.sampleId || s.id,
+                position: (s.position || '').toString().trim().toUpperCase(),
+                sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
                 storageDate: s.storage_date || s.storageDate || '',
                 lastAccessed: s.last_accessed || s.lastAccessed || '',
                 history: s.history || []
