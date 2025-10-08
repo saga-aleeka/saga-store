@@ -34,6 +34,56 @@ interface GridPositions {
   columns: string[];
   rows: string[];
 }
+function normalisePosition(value: unknown): { row: string | null; column: string | null } {
+  if (typeof value !== 'string') {
+    return { row: null, column: null };
+  }
+  const trimmed = value.trim().toUpperCase();
+  if (!trimmed) return { row: null, column: null };
+  const match = trimmed.match(/^([A-Z]+)(\d+)$/);
+  if (!match) return { row: null, column: null };
+  const [, row, column] = match;
+  return { row, column: String(Number(column)) };
+}
+
+function normaliseSamples(samples: any): Sample[] {
+  // Handle array input and object-mapping input
+  if (Array.isArray(samples)) {
+    return samples.map(s => {
+      const pos = typeof s.position === 'string' ? s.position.trim().toUpperCase() : (s.position ? String(s.position).trim().toUpperCase() : '');
+      const sampleId = (s.sampleId ?? s.sample_id ?? s.id ?? s.code ?? '').toString().trim();
+      return { ...s, position: pos, sampleId } as Sample;
+    });
+  }
+
+  if (samples && typeof samples === 'object') {
+    return Object.entries(samples).map(([position, value]) => {
+      if (value && typeof value === 'object') {
+        const sampleId = (value as any).sampleId ?? (value as any).sample_id ?? (value as any).id ?? (value as any).sample ?? (value as any).code ?? '';
+        const resolvedId = typeof (value as any).id === 'string' ? (value as any).id : typeof sampleId === 'string' ? sampleId : String(sampleId ?? '');
+        const rawPosition = typeof (value as any).position === 'string' && (value as any).position.trim().length > 0 ? (value as any).position : position;
+        const pos = String(rawPosition).trim().toUpperCase();
+        return {
+          ...(value as Record<string, any>),
+          id: resolvedId,
+          sampleId: typeof sampleId === 'string' ? sampleId.trim() : String(sampleId ?? ''),
+          position: pos,
+        } as Sample;
+      }
+      const fallbackId = value != null ? String(value) : '';
+      return { id: fallbackId, sampleId: fallbackId, position: String(position).trim().toUpperCase() } as Sample;
+    });
+  }
+
+  return [];
+}
+
+function getSampleDisplayId(sample: any): string {
+  if (!sample || typeof sample !== 'object') return '';
+  const id = sample.sampleId ?? sample.sample_id ?? sample.id ?? sample.sample ?? sample.code ?? '';
+  return typeof id === 'string' ? id : String(id);
+}
+
 function getPositions(containers: Container[]): GridPositions {
   // Always pad grid to full size based on container type
   if (containers.length === 0) {
@@ -51,18 +101,22 @@ function getPositions(containers: Container[]): GridPositions {
       rows: ['A','B','C','D','E','F','G','H','I']
     };
   } else {
-    // Fallback: use detected positions
-    const columns = new Set<string>();
-    const rows = new Set<string>();
-    containers.forEach(c => c.samples.forEach(s => {
-      if (s.position && typeof s.position === 'string' && s.position.length > 1) {
-        columns.add(s.position[0]);
-        rows.add(s.position.slice(1));
-      }
-    }));
+    // Fallback: infer rows/columns from stored sample positions (row letters, column numbers)
+    const columnSet = new Set<string>();
+    const rowSet = new Set<string>();
+
+    containers.forEach(container => {
+      const samples = Array.isArray(container.samples) ? container.samples : [];
+      samples.forEach(sample => {
+        const { row, column } = normalisePosition((sample && (sample.position ?? sample.pos)) || sample?.position);
+        if (row) rowSet.add(row);
+        if (column) columnSet.add(column);
+      });
+    });
+
     return {
-      columns: Array.from(columns).sort(),
-      rows: Array.from(rows).sort((a,b) => Number(a)-Number(b))
+      columns: Array.from(columnSet).sort((a, b) => Number(a) - Number(b)),
+      rows: Array.from(rowSet).sort((a, b) => a.localeCompare(b)),
     };
   }
 }
