@@ -9,7 +9,7 @@ import { Card } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Switch } from './ui/switch';
 import { AlertTriangle, GraduationCap, Archive } from 'lucide-react';
-import { PlasmaContainer, ContainerType, SampleType, getContainerTypeLabel } from './PlasmaContainerList';
+import { PlasmaContainer, ContainerType, SampleType, getContainerTypeLabel, getGridDimensions } from './PlasmaContainerList';
 
 interface EditContainerDialogProps {
   open: boolean;
@@ -44,10 +44,12 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     'MNC Tubes',
     'PA Pool Tubes',
     'BC Tubes',
+    'IDT Plates'
   ];
   const containerTypes: ContainerType[] = [
     '9x9-box',
-    '5x5-box'
+    '5x5-box',
+    '7x14-rack'
     // Add more valid ContainerType values here if needed
   ];
 
@@ -70,7 +72,10 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     e.preventDefault();
   // Call the update callback with the new container data
   if (!container?.id) return;
-  onUpdateContainer({ ...container, ...formData, id: container.id });
+  // Compute and persist totalSlots for the selected type/sampleType
+  const dims = getGridDimensions(formData.containerType, formData.sampleType);
+  const updated = { ...container, ...formData, id: container.id, totalSlots: dims.total } as PlasmaContainer;
+  onUpdateContainer(updated);
   onOpenChange(false);
   };
   // Defensive: ensure container is always an object or null
@@ -94,11 +99,26 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
     isArchived: false
   });
 
+  // When the container prop changes, populate the form with the saved values
+  useEffect(() => {
+    if (!container) return;
+    setFormData({
+      name: safeTrim(container.name || ''),
+      location: safeTrim(container.location || ''),
+      containerType: (container.containerType || '9x9-box') as ContainerType,
+      temperature: container.temperature || '-20°C',
+      sampleType: (container.sampleType || 'DP Pools') as SampleType,
+      isTraining: !!container.isTraining,
+      isArchived: !!container.isArchived,
+    });
+    setShowContainerTypeWarning(false);
+  }, [container]);
+
   // Defensive: don't render if container is null
   if (!container) return null;
 
-  // Placeholder dimensions as fallback
-  const selectedDimensions = { rows: 0, cols: 0, total: 0 };
+  // Compute grid dimensions for the selected container type/sample type
+  const selectedDimensions = getGridDimensions(formData.containerType, formData.sampleType);
   const recommendedContainerType = detectContainerTypeFromSampleType(formData.sampleType);
   const [showContainerTypeWarning, setShowContainerTypeWarning] = useState(false);
 
@@ -301,7 +321,7 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Grid Size:</span>
-                  <span>{selectedDimensions.rows}×{selectedDimensions.cols}</span>
+                    <span>{selectedDimensions.rows}×{selectedDimensions.cols}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Total Capacity:</span>
@@ -331,34 +351,75 @@ export function EditContainerDialog({ open, onOpenChange, container, onUpdateCon
                 </div>
               </div>
 
+              {/* Orientation note for IDT Plates (7x14 racks) */}
+              {formData.sampleType === 'IDT Plates' && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Note: IDT Plates use a 7×14 layout (columns lettered A–G). Rows are numbered 1–14 with 1 at the bottom and 14 at the top.
+                </div>
+              )}
+
               {/* Mini grid preview */}
               <div className="mt-4">
                 <div className="text-xs text-muted-foreground mb-2">Grid Layout Preview:</div>
                 <div className="flex flex-col gap-1" style={{ maxWidth: 'fit-content' }}>
-                  {Array.from({ length: Math.min(selectedDimensions.rows, 5) }, (_, row) => (
-                    <div key={row} className="flex gap-1">
-                      {Array.from({ length: Math.min(selectedDimensions.cols, 5) }, (_, col) => (
-                        <div
-                          key={col}
-                          className={`w-3 h-3 border rounded-sm ${
-                            formData.isArchived
-                              ? 'bg-archive-background border-archive-border'
-                              : formData.isTraining 
-                              ? 'bg-training-background border-training-border' 
-                              : 'bg-gray-200 border-gray-300'
-                          }`}
-                        />
-                      ))}
-                      {selectedDimensions.cols > 5 && (
-                        <div className="flex items-center text-xs text-muted-foreground ml-1">
-                          ...
+                  {/* Build labels according to container orientation. For IDT (7x14), columns are letters A..G and rows are numbered 14..1 (top->bottom). */}
+                  {(() => {
+                    const rows = selectedDimensions.rows;
+                    const cols = selectedDimensions.cols;
+                    let colLabels: string[] = [];
+                    let rowLabels: string[] = [];
+                    if (formData.containerType === '7x14-rack') {
+                      // columns A.. up to cols
+                      colLabels = Array.from({ length: cols }, (_, i) => String.fromCharCode(65 + i));
+                      // rows numbered 1..rows but display top-to-bottom descending (rows..1)
+                      rowLabels = Array.from({ length: rows }, (_, i) => String(rows - i));
+                    } else {
+                      // default: rows are letters A.., cols are numbers 1..
+                      colLabels = Array.from({ length: cols }, (_, i) => String(i + 1));
+                      rowLabels = Array.from({ length: rows }, (_, i) => String.fromCharCode(65 + i));
+                    }
+
+                    const displayRows = rowLabels.slice(0, Math.min(rowLabels.length, 5));
+                    const displayCols = colLabels.slice(0, Math.min(colLabels.length, 5));
+
+                    return (
+                      <div>
+                        {/* Column labels */}
+                        <div className="flex gap-1 mb-1">
+                          <div className="w-4" />
+                          {displayCols.map((col) => (
+                            <div key={col} className="text-xs text-muted-foreground text-center w-3">
+                              {col}
+                            </div>
+                          ))}
+                          {colLabels.length > 5 && <div className="text-xs text-muted-foreground ml-1">...</div>}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                  {selectedDimensions.rows > 5 && (
-                    <div className="text-xs text-muted-foreground text-center">...</div>
-                  )}
+
+                        {/* Grid rows */}
+                        {displayRows.map((rowLabel) => (
+                          <div key={rowLabel} className="flex items-center gap-1">
+                            <div className="text-xs text-muted-foreground w-4 text-right">{rowLabel}</div>
+                            {displayCols.map((_, colIdx) => (
+                              <div
+                                key={colIdx}
+                                className={`w-3 h-3 border rounded-sm ${
+                                  formData.isArchived
+                                    ? 'bg-archive-background border-archive-border'
+                                    : formData.isTraining
+                                    ? 'bg-training-background border-training-border'
+                                    : 'bg-gray-200 border-gray-300'
+                                }`}
+                              />
+                            ))}
+                            {colLabels.length > 5 && <div className="text-xs text-muted-foreground ml-1">...</div>}
+                          </div>
+                        ))}
+                        {rowLabels.length > 5 && (
+                          <div className="text-xs text-muted-foreground text-center">...</div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </Card>

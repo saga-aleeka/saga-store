@@ -91,8 +91,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         const filtered = allSamples.filter((s: any) => s.container_id === container.id);
         // Map to PlasmaSample shape if needed
         const mapped = filtered.map((s: any) => ({
-          position: s.position,
-          sampleId: s.sample_id || s.sampleId || s.id,
+          // Normalize position to uppercase trimmed string so grid matching is deterministic
+          position: safeTrim(s.position || '').toUpperCase(),
+          // Normalize sample id to a trimmed string
+          sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
           storageDate: s.storage_date || s.storageDate || '',
           lastAccessed: s.last_accessed || s.lastAccessed || '',
           history: s.history || []
@@ -124,8 +126,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           import('../utils/supabase/samples').then(m => m.fetchSamples()).then(allSamples => {
             const filtered = allSamples.filter((s: any) => s.container_id === container.id);
             const mapped = filtered.map((s: any) => ({
-              position: s.position,
-              sampleId: s.sample_id || s.sampleId || s.id,
+              position: safeTrim(s.position || '').toUpperCase(),
+              sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
               storageDate: s.storage_date || s.storageDate || '',
               lastAccessed: s.last_accessed || s.lastAccessed || '',
               history: s.history || []

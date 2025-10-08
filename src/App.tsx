@@ -75,7 +75,7 @@ export default function App() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success("🌐 Back online - local storage mode");
+      toast.success("🌐 Back online - supabase connected");
     };
 
     const handleOffline = () => {
@@ -110,7 +110,7 @@ export default function App() {
     // Set database status to offline mode
     setDatabaseStatus({
       status: "offline",
-      message: "StackBlitz local storage mode",
+      message: "Offline - using local storage",
       serverFunctions: false,
       database: false,
     });
@@ -423,7 +423,6 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs">Admin Mode</Badge>
-              {getDatabaseStatusBadge()}
               <Button variant="outline" onClick={handleExitAdmin}>
                 Exit Admin
               </Button>
@@ -507,7 +506,7 @@ export default function App() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Version</p>
-                      <p>v2.3.0 StackBlitz Edition</p>
+                      <p>v2.3.0 SagaStore Edition</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Storage</p>
@@ -594,9 +593,8 @@ export default function App() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
             <Badge variant="outline">User: {currentUserInitials}</Badge>
-            {getDatabaseStatusBadge()}
             <Dialog open={showSystemDialog} onOpenChange={setShowSystemDialog}>
               <Button variant="ghost" size="sm" onClick={() => setShowSystemDialog(true)}>
                 <Settings className="h-4 w-4" />

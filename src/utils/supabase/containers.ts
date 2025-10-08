@@ -91,7 +91,47 @@ export async function fetchContainers() {
   const { data, error } = await supabase.from('containers').select('*');
   console.log('[fetchContainers] Supabase response:', { data, error });
   if (error) throw error;
-  return (data || []).map(mapContainerFromDb);
+  const mapped = (data || []).map(mapContainerFromDb);
+
+  // Sort containers by type, then by trailing numeric suffix in the name (e.g. 'RACK_001' -> 1)
+  function extractTrailingNumber(name: string | undefined): number | null {
+    if (!name || typeof name !== 'string') return null;
+    const m = name.trim().match(/(\d+)\s*$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  mapped.sort((a, b) => {
+    // Group by containerType first
+    const ta = (a.containerType || '').toLowerCase();
+    const tb = (b.containerType || '').toLowerCase();
+    if (ta < tb) return -1;
+    if (ta > tb) return 1;
+
+    // Same type -> sort by trailing number in name if present
+    const na = extractTrailingNumber(a.name);
+    const nb = extractTrailingNumber(b.name);
+    if (na !== null && nb !== null) {
+      if (na < nb) return -1;
+      if (na > nb) return 1;
+      // numbers equal -> fallback to name
+    } else if (na !== null && nb === null) {
+      // put numbered names before non-numbered
+      return -1;
+    } else if (na === null && nb !== null) {
+      return 1;
+    }
+
+    // Fallback: case-insensitive name compare
+    const naName = (a.name || '').toLowerCase();
+    const nbName = (b.name || '').toLowerCase();
+    if (naName < nbName) return -1;
+    if (naName > nbName) return 1;
+    return 0;
+  });
+
+  return mapped;
 }
 
 

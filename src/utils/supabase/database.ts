@@ -5,7 +5,7 @@ import { PlasmaContainer } from '../../components/PlasmaContainerList'
 import { AuditLogEntry } from '../../components/AuditTrail'
 
 // API base URL for server functions
-const API_BASE_URL = `${supabaseUrl}/functions/v1/make-server-aaac77aa`
+export const API_BASE_URL = `${supabaseUrl}/functions/v1/make-server-aaac77aa`
 
 // Connection timeout (5 seconds)
 const FETCH_TIMEOUT = 5000

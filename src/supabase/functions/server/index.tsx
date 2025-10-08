@@ -15,7 +15,9 @@ const totalSlotToDbType: Record<number, string> = {
 };
 
 function resolveDbType(container: any): string | undefined {
-  const rawType = container?.type ?? container?.containerType;
+  // Prefer the frontend-provided containerType when available (e.g. '5x5-box').
+  // Fall back to DB 'type' if present.
+  const rawType = container?.containerType ?? container?.type;
   if (typeof rawType === 'string' && rawType) {
     return frontendToDbType[rawType] || rawType;
   }
@@ -66,6 +68,25 @@ function normaliseContainerPayload(container: any) {
   }
   if (payload.samplesWithTemp && !payload.samples) {
     payload.samples = payload.samplesWithTemp;
+  }
+  // Normalize any samples included in the payload so positions and sample ids are canonical
+  if (Array.isArray(payload.samples)) {
+    payload.samples = payload.samples.map((s: any) => {
+      const sample: any = { ...s };
+      if (sample.position !== undefined && sample.position !== null) {
+        try { sample.position = String(sample.position).trim().toUpperCase(); } catch {};
+      }
+      if (sample.sampleId && !sample.sample_id) {
+        sample.sample_id = sample.sampleId;
+      }
+      if (sample.sample_id !== undefined && sample.sample_id !== null) {
+        try { sample.sample_id = String(sample.sample_id).trim(); } catch {};
+      }
+      // Normalize camelCase keys to snake_case here to keep DB shape
+      delete sample.sampleId;
+      delete sample.containerId;
+      return sample;
+    });
   }
   delete payload.containerType;
   delete payload.sampleType;
@@ -397,6 +418,31 @@ app.get('/make-server-aaac77aa/audit-logs', async (c: any) => {
     console.error('Server error fetching audit logs:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ error: 'Internal server error', details: errorMessage }, 500)
+  }
+})
+
+// Backups: allow privileged insertion of backups (service-role) and retention cleanup
+app.post('/make-server-aaac77aa/backups', async (c: any) => {
+  try {
+    const body = await c.req.json();
+    const { data: backupPayload, createdBy } = body;
+    if (!backupPayload) {
+      return c.json({ error: 'Backup payload required' }, 400);
+    }
+
+    // Insert into backups table using the service-role client
+    const { error } = await supabase.from('backups').insert([{ data: backupPayload, created_by: createdBy || 'server', created_at: new Date().toISOString() }]);
+    if (error) throw error;
+
+    // Retention: delete backups older than 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('backups').delete().lt('created_at', sevenDaysAgo);
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('Server error inserting backup:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }
 })
 

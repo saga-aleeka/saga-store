@@ -38,13 +38,27 @@ function buildSamplePayload(sample: any) {
 
   const normalised: Record<string, any> = { ...sample };
 
+  // Normalize common fields to canonical forms before building payload
+  if (normalised.position !== undefined && normalised.position !== null) {
+    try {
+      normalised.position = String(normalised.position).trim().toUpperCase();
+    } catch {
+      normalised.position = normalised.position;
+    }
+  }
+
+  // Ensure sample_id is present in snake_case and trimmed
+  if (normalised.sampleId && !normalised.sample_id) {
+    normalised.sample_id = normalised.sampleId;
+  }
+  if (normalised.sample_id !== undefined && normalised.sample_id !== null) {
+    normalised.sample_id = String(normalised.sample_id).trim();
+  }
+
   // Remove fields that should never be persisted directly
   delete normalised.container_name;
 
   // Normalise camelCase identifiers into snake_case variants
-  if (normalised.sampleId && !normalised.sample_id) {
-    normalised.sample_id = normalised.sampleId;
-  }
   delete normalised.sampleId;
 
   if (normalised.containerId && !normalised.container_id) {

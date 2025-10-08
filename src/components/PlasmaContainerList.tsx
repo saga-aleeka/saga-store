@@ -367,9 +367,9 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
         container.sampleType === selectedSampleType;
 
       const effectiveTotalSlots = getGridDimensions(container.containerType, container.sampleType).total;
-      const liveOccupiedSlots = getLiveOccupiedSlots([container]);
-      const hasAvailableSlots = !showAvailableOnly ||
-        liveOccupiedSlots < effectiveTotalSlots;
+      // Compute live occupied slots from the loaded samples for accuracy
+      const liveOccupiedSlots = (Array.isArray(allSamples) ? allSamples.filter(({ container: c }) => c.id === container.id).length : 0);
+      const hasAvailableSlots = !showAvailableOnly || liveOccupiedSlots < effectiveTotalSlots;
 
       const matchesTraining = !showTrainingOnly || container.isTraining === true;
 
