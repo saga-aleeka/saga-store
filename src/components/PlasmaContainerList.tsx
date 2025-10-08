@@ -156,6 +156,9 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   const [containers, setContainers] = useState<PlasmaContainer[]>([]);
   const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setContainers;
 
+  // Defensive: always arrays for sample mapping - declare early to avoid TDZ when used in useMemo
+  const [allSamples, setAllSamples] = useState<Array<{ sample: PlasmaSample; container: PlasmaContainer }>>([]);
+
   // Debug: log all containers loaded from Supabase
   useEffect(() => {
     if (Array.isArray(containers)) {
@@ -376,9 +379,6 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       return matchesSearch && matchesSampleType && hasAvailableSlots && matchesTraining;
     });
   }, [containersToFilter, searchQuery, selectedSampleType, showAvailableOnly, showTrainingOnly]);
-
-  // Defensive: always arrays
-  const [allSamples, setAllSamples] = useState<Array<{ sample: PlasmaSample; container: PlasmaContainer }>>([]);
 
   useEffect(() => {
     async function loadAllSamples() {
