@@ -6,6 +6,7 @@
 
 import { safeReplace, safeTrim } from '../utils/safeString';
 import React, { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
 import { fetchSamples } from '../utils/supabase/samples';
 import { supabase } from '../utils/supabase/client';
@@ -123,7 +124,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     const containersToBackup = Array.isArray(containers) ? containers : [];
     try {
       await saveBackup(containersToBackup, currentUser);
-      alert('Manual backup completed to Supabase.');
+      toast.success('Manual backup completed to Supabase.');
       setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after manual backup
     } catch (error) {
       alert('Failed to save backup to Supabase.');
@@ -288,9 +289,9 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       // Restore container in Supabase
       await upsertContainer(containerBackup.container || containerBackup);
       const updated = await fetchContainers();
-      setContainers(updated);
-      setRevertDialogOpen(false);
-      alert('Container reverted to last backup from Supabase.');
+  setContainers(updated);
+  setRevertDialogOpen(false);
+  toast.success('Container reverted to last backup from Supabase.');
     } catch (error) {
       alert('Failed to restore from Supabase backup.');
       setRevertDialogOpen(false);
@@ -555,8 +556,8 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       await upsertContainer(containerForUpsert);
       const updated = await fetchContainers();
       setContainers(updated);
-      setIsEditDialogOpen(false);
-      alert('Container updated successfully.');
+  setIsEditDialogOpen(false);
+  toast.success('Container updated successfully.');
     } catch (error: any) {
       const code = error && typeof error === 'object' ? (error as any).code : undefined;
       const message = error && typeof error === 'object' ? (error as any).message : undefined;
