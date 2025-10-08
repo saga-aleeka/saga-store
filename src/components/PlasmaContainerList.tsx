@@ -9,6 +9,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { fetchContainers, upsertContainer, deleteContainer } from '../utils/supabase/containers';
 import { fetchSamples } from '../utils/supabase/samples';
+import { normalisePosition, normaliseSampleId } from '../utils/positions';
 import { supabase } from '../utils/supabase/client';
 import { saveBackup, getLatestBackup } from '../utils/supabase/backup';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -156,6 +157,14 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   // Local state for containers always from Supabase
   const [containers, setContainers] = useState<PlasmaContainer[]>([]);
   const onContainersChange = typeof props.onContainersChange === 'function' ? props.onContainersChange : setContainers;
+
+  // Keep local containers state in sync with any containers passed in via props
+  useEffect(() => {
+    if (Array.isArray(props.containers) && props.containers !== containers) {
+      setContainers(props.containers);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.containers]);
 
   // Defensive: always arrays for sample mapping - declare early to avoid TDZ when used in useMemo
   const [allSamples, setAllSamples] = useState<Array<{ sample: PlasmaSample; container: PlasmaContainer }>>([]);
@@ -305,7 +314,13 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   useEffect(() => {
     fetchContainers()
       .then(data => {
-        if (Array.isArray(data)) setContainers(data);
+        if (Array.isArray(data)) {
+          setContainers(data);
+          // If parent passed a callback, notify them as well so both sides stay in sync
+          if (typeof props.onContainersChange === 'function') {
+            try { props.onContainersChange(data); } catch (err) { console.warn('onContainersChange callback failed', err); }
+          }
+        }
       })
       .catch(error => {
         console.error('Error loading containers from Supabase:', error);
@@ -393,25 +408,29 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   useEffect(() => {
     async function loadAllSamples() {
       try {
-        const samples = await fetchSamples();
         if (!Array.isArray(containers)) return;
-        // Map samples to their containers
+        // Map samples to their containers by fetching per-container from the DB to avoid pulling the full table
         const mapped: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
-        for (const container of containers) {
-          const containerSamples = samples.filter((s: any) => String(s.container_id) === String(container.id));
-          for (const s of containerSamples) {
-            mapped.push({
-              sample: {
-                position: (s.position || '').toString().trim().toUpperCase(),
-                sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
-                storageDate: s.storage_date || s.storageDate || '',
-                lastAccessed: s.last_accessed || s.lastAccessed || '',
-                history: s.history || []
-              },
-              container
-            });
+        await Promise.all(containers.map(async (container) => {
+          try {
+            const containerSamples = await fetchSamples(container.id);
+            console.log('[loadAllSamples] container', container.id, 'samples fetched', Array.isArray(containerSamples) ? containerSamples.length : 0);
+            for (const s of containerSamples) {
+              mapped.push({
+                sample: {
+                  position: normalisePosition(s.position || s.pos || '' , container.containerType),
+                  sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
+                  storageDate: s.storage_date || s.storageDate || '',
+                  lastAccessed: s.last_accessed || s.lastAccessed || '',
+                  history: s.history || []
+                },
+                container
+              });
+            }
+          } catch (err) {
+            console.warn('[loadAllSamples] failed to fetch samples for container', container.id, err);
           }
-        }
+        }));
         setAllSamples(mapped);
       } catch (error) {
         setAllSamples([]);

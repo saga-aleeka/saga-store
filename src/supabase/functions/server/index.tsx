@@ -446,6 +446,72 @@ app.post('/make-server-aaac77aa/backups', async (c: any) => {
   }
 })
 
+// Samples: privileged upsert endpoint to satisfy RLS-protected writes
+app.post('/make-server-aaac77aa/samples', async (c: any) => {
+  try {
+    const body = await c.req.json();
+    const sampleRaw = body?.sample ?? body;
+
+    if (!sampleRaw) {
+      return c.json({ error: 'Sample payload required' }, 400);
+    }
+
+    // Basic normalization: position -> uppercase trimmed, sample_id trimmed
+    const sample: any = { ...sampleRaw };
+    if (sample.position !== undefined && sample.position !== null) {
+      try { sample.position = String(sample.position).trim().toUpperCase(); } catch {};
+    }
+    if (sample.sampleId && !sample.sample_id) sample.sample_id = sample.sampleId;
+    if (sample.sample_id !== undefined && sample.sample_id !== null) {
+      try { sample.sample_id = String(sample.sample_id).trim(); } catch {};
+    }
+    if (sample.containerId && !sample.container_id) sample.container_id = sample.containerId;
+
+    // Load containers to reason about archive state
+    const { data: containersData, error: contErr } = await supabase.from('containers').select('*');
+    if (contErr) throw contErr;
+
+    const containers = containersData || [];
+    const thisContainer = containers.find((cn: any) => String(cn.id) === String(sample.container_id));
+    const isArchive = thisContainer?.is_archived || thisContainer?.status === 'archived' || thisContainer?.isArchived;
+
+    // If not archived, enforce uniqueness of sample_id across non-archived containers
+    if (!isArchive) {
+      const targetSampleId = sample.sample_id;
+      if (targetSampleId) {
+        const { data: existingSamples, error: fetchError } = await supabase
+          .from('samples')
+          .select('id, container_id')
+          .eq('sample_id', targetSampleId);
+        if (fetchError) throw fetchError;
+
+        for (const s of existingSamples || []) {
+          if (String(s.container_id) !== String(sample.container_id)) {
+            const otherContainer = containers.find((c2: any) => String(c2.id) === String(s.container_id));
+            const otherIsArchive = otherContainer?.is_archived || otherContainer?.status === 'archived' || otherContainer?.isArchived;
+            if (!otherIsArchive) {
+              await supabase.from('samples').delete().eq('id', s.id);
+            }
+          }
+        }
+
+        const existingInThisContainer = (existingSamples || []).find((s: any) => String(s.container_id) === String(sample.container_id));
+        if (existingInThisContainer && existingInThisContainer.id) {
+          sample.id = existingInThisContainer.id;
+        }
+      }
+    }
+
+    const { data, error } = await supabase.from('samples').upsert(sample).select();
+    if (error) throw error;
+    return c.json({ data });
+  } catch (error) {
+    console.error('Server error upserting sample:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Internal server error', details: errorMessage }, 500);
+  }
+});
+
 // Helper functions
 async function createAuditLogEntry(actionType: string, resourceType: string, resourceId: string, userId: string, details: any) {
   try {

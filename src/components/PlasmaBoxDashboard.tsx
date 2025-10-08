@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase/client';
 import { fetchSamples, upsertSample } from '../utils/supabase/samples';
 import { safeReplace, safeTrim } from '../utils/safeString';
+import { normalisePosition, normaliseSampleId } from '../utils/positions';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -87,15 +88,15 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     let isMounted = true;
     async function loadSamples() {
       try {
-        // fetchSamples returns all samples; filter by container.id (normalize types)
-        const allSamples = await fetchSamples();
-        const filtered = allSamples.filter((s: any) => String(s.container_id) === String(container.id));
+        // Fetch only samples for this container
+        const allSamples = await fetchSamples(container.id);
+        console.log('[PlasmaBoxDashboard] fetched samples for container', container.id, Array.isArray(allSamples) ? allSamples.length : 0);
         // Map to PlasmaSample shape if needed
-        const mapped = filtered.map((s: any) => ({
-          // Normalize position to uppercase trimmed string so grid matching is deterministic
-          position: safeTrim(s.position || '').toUpperCase(),
+        const mapped = (allSamples || []).map((s: any) => ({
+          // Normalize position to canonical form (handles 14A vs A14 etc)
+          position: normalisePosition(s.position || s.pos || '' , container.containerType),
           // Normalize sample id to a trimmed string
-          sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
+          sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
           storageDate: s.storage_date || s.storageDate || '',
           lastAccessed: s.last_accessed || s.lastAccessed || '',
           history: s.history || []
@@ -124,11 +125,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         },
         (payload: any) => {
           // On any insert/update/delete, reload samples
-          fetchSamples().then(allSamples => {
-            const filtered = allSamples.filter((s: any) => String(s.container_id) === String(container.id));
-            const mapped = filtered.map((s: any) => ({
-              position: safeTrim(s.position || '').toUpperCase(),
-              sampleId: String(s.sample_id || s.sampleId || s.id || '').trim(),
+            fetchSamples(container.id).then(allSamples => {
+            const mapped = (allSamples || []).map((s: any) => ({
+              position: normalisePosition(s.position || s.pos || '' , container.containerType),
+              sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
               storageDate: s.storage_date || s.storageDate || '',
               lastAccessed: s.last_accessed || s.lastAccessed || '',
               history: s.history || []

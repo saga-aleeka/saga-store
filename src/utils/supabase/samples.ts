@@ -2,6 +2,8 @@
 
 import { supabase } from './client';
 import { fetchContainers } from './containers';
+import { API_BASE_URL } from './database';
+import { supabaseAnonKey } from './info';
 
 function mergeMetadata(sample: any) {
   const data = sample?.data;
@@ -19,8 +21,13 @@ function normaliseSample(sample: any) {
   };
 }
 
-export async function fetchSamples() {
-  const { data, error } = await supabase.from('samples').select('*');
+export async function fetchSamples(containerId?: string) {
+  // If a containerId is provided, fetch only samples for that container to avoid large client-side filtering.
+  let query = supabase.from('samples').select('*');
+  if (containerId) {
+    query = query.eq('container_id', containerId);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(normaliseSample);
 }
@@ -148,9 +155,38 @@ export async function upsertSample(sample: any) {
     }
   }
   // Upsert the sample (insert or update)
-  const { data, error } = await supabase.from('samples').upsert(sampleToSave).select();
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.from('samples').upsert(sampleToSave).select();
+    if (!error) return data;
+
+    // If error appears to be an RLS/permission error, fall back to calling server function
+    const message = String(error?.message || error || '').toLowerCase();
+    if (message.includes('row-level security') || message.includes('permission') || message.includes('policy')) {
+      console.warn('[upsertSample] Direct upsert blocked by RLS - falling back to server function', message);
+      try {
+        const resp = await fetch(`${API_BASE_URL}/samples`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({ sample: sampleToSave }),
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => 'no body');
+          throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`);
+        }
+        const result = await resp.json();
+        return result.data;
+      } catch (serverErr) {
+        throw serverErr;
+      }
+    }
+
+    throw error;
+  } catch (finalErr) {
+    throw finalErr;
+  }
 }
 
 
