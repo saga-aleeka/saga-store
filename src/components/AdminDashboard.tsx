@@ -436,10 +436,32 @@ DP_POOL_RACK_001,Box Name:,DP_POOL_BOX_001,,,,,,,,,,
         container,
         samples: samplesByContainer[container.id] || [],
       }));
+      // Normalize payload for comparison: sort containers by id and samples by sample_id to make stable
+      const normalize = (payload: any[]) => payload.map((entry: any) => ({
+        container: entry.container && entry.container.id ? { id: entry.container.id, name: entry.container.name, location: entry.container.location } : entry.container,
+        samples: Array.isArray(entry.samples) ? entry.samples.map((s: any) => ({ sample_id: s.sample_id || s.id || s.sampleId, position: s.position })).sort((a: any, b: any) => String(a.sample_id).localeCompare(String(b.sample_id))) : []
+      })).sort((a: any, b: any) => String(a.container?.id || '').localeCompare(String(b.container?.id || '')));
+
+      const newNormalized = JSON.stringify(normalize(backupData));
+      let latest = null;
+      try {
+        latest = await getLatestBackup();
+      } catch (err) {
+        // If we can't fetch latest backup, proceed with save (and show errors if save fails)
+        latest = null;
+      }
+      const latestNormalized = latest && Array.isArray(latest.data) ? JSON.stringify(normalize(latest.data)) : null;
+      if (latestNormalized !== null && latestNormalized === newNormalized) {
+        // No changes since last backup: do not save and do not show a message
+        return;
+      }
+
       await saveBackup(backupData, 'admin');
       alert('Manual backup completed to Supabase.');
       await loadSnapshotFromSupabase();
     } catch (e: any) {
+      // Only show an error if there was an actual attempt to save and it failed.
+      // If we returned early due to no changes, we wouldn't reach here.
       alert('Failed to save backup to Supabase: ' + (e.message || e));
     }
   };

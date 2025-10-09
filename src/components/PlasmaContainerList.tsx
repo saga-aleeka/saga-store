@@ -412,23 +412,39 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
         // Map samples to their containers by fetching per-container from the DB to avoid pulling the full table
         const mapped: Array<{ sample: PlasmaSample; container: PlasmaContainer }> = [];
         await Promise.all(containers.map(async (container) => {
-          try {
-            const containerSamples = await fetchSamples(container.id);
-            console.log('[loadAllSamples] container', container.id, 'samples fetched', Array.isArray(containerSamples) ? containerSamples.length : 0);
-            for (const s of containerSamples) {
-              mapped.push({
-                sample: {
-                  position: normalisePosition(s.position || s.pos || '' , container.containerType),
-                  sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
-                  storageDate: s.storage_date || s.storageDate || '',
-                  lastAccessed: s.last_accessed || s.lastAccessed || '',
-                  history: s.history || []
-                },
-                container
-              });
+          // Try once, then one retry with small backoff to avoid transient network noise
+          const tryFetch = async () => {
+            try {
+              const containerSamples = await fetchSamples(container.id);
+              console.debug('[loadAllSamples] container', container.id, 'samples fetched', Array.isArray(containerSamples) ? containerSamples.length : 0);
+              for (const s of containerSamples) {
+                mapped.push({
+                  sample: {
+                    position: normalisePosition(s.position || s.pos || '' , container.containerType),
+                    sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
+                    storageDate: s.storage_date || s.storageDate || '',
+                    lastAccessed: s.last_accessed || s.lastAccessed || '',
+                    history: s.history || []
+                  },
+                  container
+                });
+              }
+              return true;
+            } catch (err) {
+              // Return the error for potential retry
+              return err;
             }
-          } catch (err) {
-            console.warn('[loadAllSamples] failed to fetch samples for container', container.id, err);
+          };
+
+          const first = await tryFetch();
+          if (first !== true) {
+            // Wait a short backoff then retry once
+            await new Promise(res => setTimeout(res, 250));
+            const second = await tryFetch();
+            if (second !== true) {
+              // Only warn once per container if both attempts fail; keep message compact to avoid UI noise
+              console.warn('[loadAllSamples] persistent failure fetching samples for container', container.id, first || second);
+            }
           }
         }));
         setAllSamples(mapped);
