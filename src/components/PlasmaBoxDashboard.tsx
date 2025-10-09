@@ -1379,6 +1379,19 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
             <div className="space-y-4 mb-6">
               <div className="flex items-center justify-between">
                 <h3>Sample Details</h3>
+                {selectedSample && (
+                  <div className="flex items-center gap-2">
+                    {!selectedSample.isArchived ? (
+                      <Button variant="ghost" size="sm" onClick={() => toggleArchiveForSelected(true)}>
+                        Archive
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={() => toggleArchiveForSelected(false)}>
+                        Unarchive
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               
               <div className="space-y-3">
