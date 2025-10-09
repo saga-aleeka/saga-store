@@ -50,7 +50,7 @@ export const AdminDashboard = ({ containers = [], onContainersChange, onExitAdmi
           ...entry.container,
           samples: entry.samples || [],
         })));
-        setLastBackupTime(backup.created_at || null);
+        setLastBackupTime((backup as any)?.created_at || null);
       } else {
         setSnapshotContainers([]);
         setLastBackupTime(null);
