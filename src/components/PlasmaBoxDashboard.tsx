@@ -43,6 +43,8 @@ interface PlasmaSample {
   lastAccessed?: string;
   status?: 'in_container' | 'checked_out' | string;
   history: SampleHistoryEntry[];
+  // Whether this authoritative sample row is archived in the DB
+  isArchived?: boolean;
 }
 
 interface PlasmaBoxDashboardProps {
@@ -93,15 +95,17 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         const allSamples = await fetchSamples(container.id);
         console.log('[PlasmaBoxDashboard] fetched samples for container', container.id, Array.isArray(allSamples) ? allSamples.length : 0);
         // Map to PlasmaSample shape if needed
-        const mapped = (allSamples || []).map((s: any) => ({
+        const mapSample = (s: any): PlasmaSample => ({
           // Normalize position to canonical form (handles 14A vs A14 etc)
           position: normalisePosition(s.position || s.pos || '' , container.containerType),
           // Normalize sample id to a trimmed string
           sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
           storageDate: s.storage_date || s.storageDate || '',
           lastAccessed: s.last_accessed || s.lastAccessed || '',
-          history: s.history || []
-        }));
+          history: s.history || [],
+          isArchived: Boolean((s.data && s.data.is_archived) || s.is_archived || false)
+        });
+        const mapped = (allSamples || []).map(mapSample);
         if (isMounted) setSamples(mapped);
       } catch (error) {
         console.error('Error loading samples from Supabase:', error);
@@ -124,16 +128,18 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           table: 'samples',
           filter: `container_id=eq.${container.id}`
         },
-        (payload: any) => {
+            (payload: any) => {
           // On any insert/update/delete, reload samples
             fetchSamples(container.id).then(allSamples => {
-            const mapped = (allSamples || []).map((s: any) => ({
+            const mapSample = (s: any): PlasmaSample => ({
               position: normalisePosition(s.position || s.pos || '' , container.containerType),
               sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
               storageDate: s.storage_date || s.storageDate || '',
               lastAccessed: s.last_accessed || s.lastAccessed || '',
-              history: s.history || []
-            }));
+              history: s.history || [],
+              isArchived: Boolean((s.data && s.data.is_archived) || s.is_archived || false)
+            });
+            const mapped = (allSamples || []).map(mapSample);
             setSamples(mapped);
           });
         }
@@ -291,9 +297,13 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
         storageDate: s.storage_date || s.storageDate || '',
         lastAccessed: s.last_accessed || s.lastAccessed || '',
-        history: s.history || []
+        history: s.history || [],
+        isArchived: Boolean((s.data && s.data.is_archived) || s.is_archived || false)
       }));
       setSamples(mapped);
+      // Update selectedSample reference so UI shows updated archived state
+      const refreshed = mapped.find((m: PlasmaSample) => m.sampleId === selectedSample.sampleId);
+      if (refreshed) setSelectedSample(refreshed as PlasmaSample);
     } catch (e) {
       console.error('Archive toggle failed', e);
       toast.error('Failed to update archive state');
@@ -602,6 +612,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         user: userInitials.trim(),
         notes: `Initial storage in position ${position}`
       }]
+      ,
+      isArchived: false
     };
     
     // Remove existing sample at position and add new one
@@ -707,6 +719,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           notes: `Sample moved from position ${fromPosition} to ${toPosition}`
         }
       ]
+      ,
+      isArchived: existingSample.isArchived ?? false
     };
     
     // Remove sample from old position and any sample at new position, then add moved sample
@@ -813,6 +827,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           notes: `Sample moved from ${sourceLocation.container.name} (${sourceLocation.position}) to ${container.name} (${toPosition})`
         }
       ]
+      ,
+      isArchived: existingSample.isArchived ?? false
     };
     
     // Remove sample from source container
@@ -1309,6 +1325,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                     const isDisabled = gridItem?.isDisabled;
                     const isSelected = selectedPosition === position;
                     const isHighlighted = Boolean(sample && highlightSampleIds.includes(sample.sampleId));
+                    const isArchivedCell = Boolean(sample && (sample.isArchived || (sample as any).is_archived));
 
                     return (
                       <div
@@ -1319,7 +1336,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                             : sample
                               ? isHighlighted
                                 ? 'bg-yellow-500 text-black border-yellow-600 cursor-pointer hover:scale-105'
-                                : 'bg-blue-500 text-white cursor-pointer hover:scale-105'
+                                : (isArchivedCell ? 'bg-blue-500/30 text-white/70 cursor-pointer hover:scale-105 filter grayscale opacity-70' : 'bg-blue-500 text-white cursor-pointer hover:scale-105')
                               : 'bg-gray-100 border-gray-300 hover:bg-gray-200 cursor-pointer hover:scale-105'
                         } ${isSelected ? 'ring-2 ring-primary' : ''} ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}`}
                         onClick={() => !isDisabled && handlePositionClick(position, sample)}
@@ -1330,14 +1347,17 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                               ? `${sample.sampleId}${isHighlighted ? ' (From Worklist)' : ''}`
                               : `Empty position ${position}`
                         }
-                      >
+                        >
                         {isDisabled ? (
                           <div className={`${fontSize} font-medium leading-tight text-center px-1 text-gray-400`}>
                             ✕
                           </div>
                         ) : sample ? (
-                          <div className={`${fontSize} font-medium leading-tight text-center px-1 whitespace-nowrap`}>
+                          <div className={`${fontSize} font-medium leading-tight text-center px-1 whitespace-nowrap relative`}>
                             {sample.sampleId}
+                            {isArchivedCell && (
+                              <span className="absolute -top-2 -right-2 bg-muted text-xs px-1 rounded border">arch</span>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -1375,16 +1395,24 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                     <label className="text-muted-foreground">Storage Date</label>
                     <p className="font-medium">{selectedSample.storageDate}</p>
                   </div>
+                  <div>
+                    <label className="text-muted-foreground">Archived</label>
+                    <p className="font-medium">{selectedSample.isArchived ? 'Yes' : 'No'}</p>
+                  </div>
                   {selectedSample.lastAccessed && (
                     <div>
                       <label className="text-muted-foreground">Last Accessed</label>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(true)}>
-                    Archive
-                  </Button>
-                  <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(false)}>
-                    Unarchive
-                  </Button>
+                  {/* Show only the action button that makes sense for current state */}
+                  {!selectedSample.isArchived ? (
+                    <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(true)}>
+                      Archive
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(false)}>
+                      Unarchive
+                    </Button>
+                  )}
                 </div>
                       <p className="font-medium">{selectedSample.lastAccessed}</p>
                     </div>
@@ -1396,7 +1424,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
             <Separator />
 
             <div className="flex-1 mt-6">
-              <h4 className="mb-4">Sample History ({sampleHistory.length} entries)</h4>
+              <h4 className="mb-4">Sample History ({sampleHistory.length} entries) {selectedSample.isArchived ? '(Archived)' : ''}</h4>
               <ScrollArea className="h-full">
                 <div className="space-y-4">
                   {sampleHistory.map((entry, index) => (
@@ -1417,6 +1445,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                           </div>
                           {entry.user && (
                             <p className="text-sm text-muted-foreground">{entry.user}</p>
+                          )}
+                          {/* If this history entry recorded an archive/unarchive, surface it */}
+                          {entry.notes && /archive/i.test(entry.notes) && (
+                            <p className="text-sm text-muted-foreground">{entry.notes}</p>
                           )}
                           {entry.fromPosition && entry.toPosition && (
                             <p className="text-sm text-muted-foreground">

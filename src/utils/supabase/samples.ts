@@ -18,6 +18,8 @@ function normaliseSample(sample: any) {
     status: metadata.status ?? sample.status,
     storage_date: metadata.storageDate ?? sample.storage_date ?? sample.created_at,
     last_accessed: metadata.lastAccessed ?? sample.last_accessed ?? sample.updated_at,
+    // expose archived flag for frontend
+    is_archived: Boolean(metadata.is_archived ?? sample.is_archived ?? false),
   };
 }
 
@@ -92,6 +94,10 @@ function buildSamplePayload(sample: any) {
   delete normalised.lastAccessed;
 
   const rawData = mergeMetadata(sample);
+  // If caller provided top-level is_archived, prefer that; otherwise rawData may contain it
+  if (sample.is_archived !== undefined && rawData.is_archived === undefined) {
+    rawData.is_archived = sample.is_archived;
+  }
 
   const payload: Record<string, any> = {};
   const metadata: Record<string, any> = { ...rawData };

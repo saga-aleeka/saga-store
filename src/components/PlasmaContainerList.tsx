@@ -461,12 +461,12 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     if (sampleSearchMode === 'worklist') {
       if (!Array.isArray(worklistSampleIds) || worklistSampleIds.length === 0) return [];
       return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
-        (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId)
+        (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId) && !(sample.is_archived || (sample.data && sample.data.is_archived))
       );
     } else if (sampleSearchMode === 'bulk') {
       if (!Array.isArray(bulkSearchSampleIds) || bulkSearchSampleIds.length === 0) return [];
       return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
-        (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId)
+        (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId) && !(sample.is_archived || (sample.data && sample.data.is_archived))
       );
     } else {
   if (!safeTrim(sampleSearchQuery)) {
