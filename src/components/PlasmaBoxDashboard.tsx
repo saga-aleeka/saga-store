@@ -573,6 +573,32 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== position),
       newSample
     ]);
+
+    // Persist audit log / movement for this check-in
+    try {
+      let userId = userInitials.trim();
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+      } catch {}
+      createAuditLog(
+        'sample-check-in',
+        'sample',
+        newSample.sampleId,
+        {
+          description: `Checked in sample ${newSample.sampleId} to ${container.name} (${container.id}) position ${position}`,
+          metadata: {
+            sampleId: newSample.sampleId,
+            toContainerId: container.id,
+            toContainerName: container.name,
+            toPosition: position
+          }
+        },
+        userId
+      );
+    } catch (err) {
+      console.debug('Non-blocking: failed to create audit log for check-in', err);
+    }
     
     // Reset form and prepare for next scan
     setScannedBarcode('');
@@ -652,6 +678,35 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== fromPosition && s.position !== toPosition),
       movedSample
     ]);
+
+    // Persist audit log / movement for this move
+    try {
+      let userId = userInitials.trim();
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+      } catch {}
+      createAuditLog(
+        'sample-move',
+        'sample',
+        movedSample.sampleId,
+        {
+          description: `Moved sample ${movedSample.sampleId} from ${fromPosition} to ${toPosition} in ${container.name} (${container.id})`,
+          metadata: {
+            sampleId: movedSample.sampleId,
+            fromContainerId: container.id,
+            fromContainerName: container.name,
+            fromPosition,
+            toContainerId: container.id,
+            toContainerName: container.name,
+            toPosition
+          }
+        },
+        userId
+      );
+    } catch (err) {
+      console.debug('Non-blocking: failed to create audit log for move', err);
+    }
     
     // Reset form and prepare for next scan
     setScannedBarcode('');
@@ -756,6 +811,35 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       ...prev.filter(s => s.position !== toPosition),
       movedSample
     ]);
+
+    // Persist audit log / movement for cross-container move
+    try {
+      let userId = userInitials.trim();
+      try {
+        const userInfo = JSON.parse(localStorage.getItem('saga-user-info') || 'null');
+        if (userInfo && userInfo.id) userId = userInfo.id;
+      } catch {}
+      createAuditLog(
+        'sample-move',
+        'sample',
+        movedSample.sampleId,
+        {
+          description: `Moved sample ${movedSample.sampleId} from ${sourceLocation.container.name} (${sourceLocation.container.id}) ${sourceLocation.position} to ${container.name} (${container.id}) ${toPosition}`,
+          metadata: {
+            sampleId: movedSample.sampleId,
+            fromContainerId: sourceLocation.container.id,
+            fromContainerName: sourceLocation.container.name,
+            fromPosition: sourceLocation.position,
+            toContainerId: container.id,
+            toContainerName: container.name,
+            toPosition
+          }
+        },
+        userId
+      );
+    } catch (err) {
+      console.debug('Non-blocking: failed to create audit log for cross-container move', err);
+    }
     
     // Show move notification
     setMoveNotification({
