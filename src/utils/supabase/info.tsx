@@ -2,3 +2,7 @@
 
 export const projectId = "epsaukgvgadnaeplsgcr"
 export const publicAnonKey = "sb_publishable_9MoTDYr319FY717-f3aldA_G7-b8WhR"
+
+// Derived exports for client usage
+export const supabaseUrl = `https://${projectId}.supabase.co`
+export const supabaseAnonKey = publicAnonKey
