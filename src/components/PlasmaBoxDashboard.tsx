@@ -1399,24 +1399,24 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                     <label className="text-muted-foreground">Archived</label>
                     <p className="font-medium">{selectedSample.isArchived ? 'Yes' : 'No'}</p>
                   </div>
-                  {selectedSample.lastAccessed && (
-                    <div>
-                      <label className="text-muted-foreground">Last Accessed</label>
-                <div className="flex gap-2">
-                  {/* Show only the action button that makes sense for current state */}
-                  {!selectedSample.isArchived ? (
-                    <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(true)}>
-                      Archive
-                    </Button>
-                  ) : (
-                    <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(false)}>
-                      Unarchive
-                    </Button>
-                  )}
-                </div>
-                      <p className="font-medium">{selectedSample.lastAccessed}</p>
+                  <div>
+                    <label className="text-muted-foreground">Last Accessed</label>
+                    <div className="flex gap-2">
+                      {/* Show only the action button that makes sense for current state */}
+                      {!selectedSample.isArchived ? (
+                        <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(true)}>
+                          Archive
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(false)}>
+                          Unarchive
+                        </Button>
+                      )}
                     </div>
-                  )}
+                    {selectedSample.lastAccessed && (
+                      <p className="font-medium">{selectedSample.lastAccessed}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

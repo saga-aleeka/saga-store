@@ -460,14 +460,22 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   const filteredSamples = useMemo(() => {
     if (sampleSearchMode === 'worklist') {
       if (!Array.isArray(worklistSampleIds) || worklistSampleIds.length === 0) return [];
-      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
-        (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId) && !(sample.is_archived || (sample.data && sample.data.is_archived))
-      );
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) => {
+        const sampleIdMatches = (Array.isArray(worklistSampleIds) ? worklistSampleIds : []).includes(sample.sampleId);
+        // defensive runtime check for various possible archival flags without relying on non-existent types
+        const s = sample as any;
+        const isArchived = Boolean(s.is_archived ?? s.isArchived ?? s.data?.is_archived ?? s.data?.isArchived);
+        return sampleIdMatches && !isArchived;
+      });
     } else if (sampleSearchMode === 'bulk') {
       if (!Array.isArray(bulkSearchSampleIds) || bulkSearchSampleIds.length === 0) return [];
-      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) =>
-        (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId) && !(sample.is_archived || (sample.data && sample.data.is_archived))
-      );
+      return (Array.isArray(allSamples) ? allSamples : []).filter(({ sample }) => {
+        const matches = (Array.isArray(bulkSearchSampleIds) ? bulkSearchSampleIds : []).includes(sample.sampleId);
+        // Defensive runtime check for archival flags without relying on a non-existent property
+        const s = sample as any;
+        const isArchived = Boolean(s.is_archived ?? s.isArchived ?? s.data?.is_archived ?? s.data?.isArchived);
+        return matches && !isArchived;
+      });
     } else {
   if (!safeTrim(sampleSearchQuery)) {
         setManualSearchSampleIds([]);
