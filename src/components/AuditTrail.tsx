@@ -25,7 +25,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PlasmaContainer } from './PlasmaContainerList';
-import { recordMovement, fetchMovements } from '../utils/supabase/database';
 
 export interface AuditLogEntry {
   id: string;
@@ -121,33 +120,6 @@ export function createAuditLog(
       };
       const updatedLogs = [newLog, ...existingLogs].slice(0, 1000); // Keep last 1000 entries
       localStorage.setItem('saga-audit-logs', JSON.stringify(updatedLogs));
-      // If this log is a sample movement or check, also try to persist the movement server-side
-      try {
-        const isSampleAction = actionType && (actionType.includes('sample') || actionType.includes('scan') || actionType.includes('move') || actionType.includes('check'));
-        if (isSampleAction) {
-          const metadata = options.metadata || {};
-          const sampleId = metadata.sampleId || newLog.entityId;
-          if (sampleId) {
-            // Non-blocking: fire-and-forget
-            recordMovement({
-              timestamp: newLog.timestamp,
-              userId: newLog.userId,
-              userName: newLog.userName,
-              sampleId,
-              actionType: actionType,
-              fromContainerId: metadata.fromContainerId || metadata.containerId || metadata.fromContainer || undefined,
-              fromPosition: metadata.fromPosition || metadata.position || undefined,
-              toContainerId: metadata.toContainerId || metadata.toContainer || undefined,
-              toPosition: metadata.toPosition || metadata.toPosition || metadata.position || undefined,
-              notes: typeof details === 'string' ? details : details?.description || undefined,
-              success: options.success !== false
-            }).catch(err => console.debug('recordMovement non-blocking error:', err));
-          }
-        }
-      } catch (err) {
-        // Don't let movement recording break the local log flow
-        console.debug('Movement persistence skipped due to error:', err);
-      }
       resolve();
     } catch (error) {
       console.error('Failed to store audit log locally:', error);
@@ -191,38 +163,6 @@ export function AuditTrail({ currentUser }: AuditTrailProps) {
     };
 
     loadLogs();
-
-    // Also fetch server-backed movements and store them in local state as part of the logs
-    (async () => {
-      try {
-        const serverMovements = await fetchMovements(500);
-        if (Array.isArray(serverMovements) && serverMovements.length > 0) {
-          // Convert server movements into AuditLogEntry-like objects and prepend to local logs
-          const mapped = serverMovements.map((m: any) => ({
-            id: `srv-${m.id || m.idempotency_key || JSON.stringify(m).slice(0,8)}`,
-            timestamp: m.timestamp || m.created_at || new Date().toISOString(),
-            userId: m.user_id || m.userId || 'server',
-            userName: m.user_name || m.userName || 'server',
-            userRole: 'System',
-            action: 'sample-move',
-            entityType: 'sample',
-            entityId: m.sample_id,
-            details: { description: m.notes, metadata: { fromContainerId: m.from_container_id, toContainerId: m.to_container_id, fromPosition: m.from_position, toPosition: m.to_position } },
-            success: m.success !== false
-          }));
-          setLogs(prev => {
-            const combined = [...mapped, ...prev];
-            // Deduplicate by id
-            const seen = new Set();
-            return combined.filter(l => {
-              if (seen.has(l.id)) return false; seen.add(l.id); return true;
-            }).slice(0, 1000);
-          });
-        }
-      } catch (err) {
-        // ignore fetch errors - we'll keep using local logs
-      }
-    })();
 
     const interval = setInterval(loadLogs, 5000);
     return () => clearInterval(interval);

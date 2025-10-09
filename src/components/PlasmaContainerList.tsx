@@ -128,7 +128,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       toast.success('Manual backup completed to Supabase.');
       setSnapshotRefreshKey(k => k + 1); // Only trigger snapshot UI refresh after manual backup
     } catch (error) {
-      alert('Failed to save backup to Supabase.');
+  toast.error('Failed to save backup to Supabase.');
       console.error(error);
     }
   };
@@ -139,7 +139,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     const backupKey = `nightly-backup-${today}`;
     const backupDataRaw = localStorage.getItem(backupKey);
     if (!backupDataRaw) {
-      alert('No snapshot found for today.');
+  toast.error('No snapshot found for today.');
       return;
     }
     const blob = new Blob([backupDataRaw], { type: 'application/json' });
@@ -285,13 +285,13 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     try {
       const backup = await getLatestBackup();
       if (!backup || !Array.isArray(backup.data)) {
-        alert('No backup found in Supabase.');
+  toast.error('No backup found in Supabase.');
         setRevertDialogOpen(false);
         return;
       }
       const containerBackup = backup.data.find((b: any) => b.id === containerIdToRevert || b.container?.id === containerIdToRevert);
       if (!containerBackup) {
-        alert('No backup found for this container.');
+  toast.error('No backup found for this container.');
         setRevertDialogOpen(false);
         return;
       }
@@ -302,7 +302,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
   setRevertDialogOpen(false);
   toast.success('Container reverted to last backup from Supabase.');
     } catch (error) {
-      alert('Failed to restore from Supabase backup.');
+  toast.error('Failed to restore from Supabase backup.');
       setRevertDialogOpen(false);
       console.error(error);
     }
@@ -511,7 +511,7 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
     // Check for duplicate name before creating
     const allContainers = await fetchContainers();
     if (allContainers.some(c => c.name.trim().toLowerCase() === newContainer.name.trim().toLowerCase())) {
-      alert('A container with this name already exists. Please choose a unique name.');
+  toast.error('A container with this name already exists. Please choose a unique name.');
       return;
     }
     // Generate a valid UUID for the id field
@@ -559,9 +559,9 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       const code = error && typeof error === 'object' ? (error as any).code : undefined;
       const message = error && typeof error === 'object' ? (error as any).message : undefined;
       if (code === '23505' || (typeof message === 'string' && message.includes('unique'))) {
-        alert('A container with this name already exists. Please choose a unique name.');
+  toast.error('A container with this name already exists. Please choose a unique name.');
       } else {
-        alert('Error creating container in Supabase.');
+  toast.error('Error creating container in Supabase.');
       }
       console.error('Error creating container in Supabase:', error);
     }
@@ -596,9 +596,9 @@ export function PlasmaContainerList(props: PlasmaContainerListProps) {
       const code = error && typeof error === 'object' ? (error as any).code : undefined;
       const message = error && typeof error === 'object' ? (error as any).message : undefined;
       if (code === '23505' || (typeof message === 'string' && message.includes('unique'))) {
-        alert('A container with this name already exists. Please choose a unique name.');
+  toast.error('A container with this name already exists. Please choose a unique name.');
       } else {
-        alert('Error updating container in Supabase.');
+  toast.error('Error updating container in Supabase.');
       }
       console.error('Error updating container in Supabase:', error);
     }

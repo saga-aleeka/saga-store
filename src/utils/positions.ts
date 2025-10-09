@@ -1,7 +1,7 @@
 // Helpers to normalise sample positions and IDs for UI matching
 export function normaliseSampleId(raw: any): string {
   try {
-    return String(raw || '').trim();
+    return String(raw || '').trim().toUpperCase();
   } catch {
     return '';
   }

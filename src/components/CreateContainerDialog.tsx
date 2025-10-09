@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card } from './ui/card';
 import { Switch } from './ui/switch';
 import { GraduationCap, Archive } from 'lucide-react';
+import { toast } from 'sonner';
 import { ContainerType, SampleType, getGridDimensions, getContainerTypeLabel } from './PlasmaContainerList';
 
 interface CreateContainerDialogProps {
@@ -70,7 +71,7 @@ export function CreateContainerDialog({ open, onOpenChange, onCreateContainer }:
     e.preventDefault();
     
     if (!formData.name.trim() || !formData.location.trim()) {
-      alert('Please fill in all required fields (Name and Location)');
+  toast.error('Please fill in all required fields (Name and Location)');
       return;
     }
 

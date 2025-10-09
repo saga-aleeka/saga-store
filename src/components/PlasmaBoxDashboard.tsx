@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase/client';
-import { fetchSamples, upsertSample } from '../utils/supabase/samples';
+import { fetchSamples, upsertSample, fetchSampleById } from '../utils/supabase/samples';
+import { toast } from 'sonner';
 import { safeReplace, safeTrim } from '../utils/safeString';
 import { normalisePosition, normaliseSampleId } from '../utils/positions';
 import { Card } from './ui/card';
@@ -264,6 +265,41 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const grid = generateGrid();
   const sampleHistory = selectedSample?.history || [];
 
+  // Archive toggle handler: mark the authoritative backend sample row with is_archived flag
+  const toggleArchiveForSelected = async (archived: boolean) => {
+    if (!selectedSample) return;
+    try {
+      const serverSample = await fetchSampleById(selectedSample.sampleId);
+      if (!serverSample) {
+        toast.error('Unable to find authoritative sample record on server to archive.');
+        return;
+      }
+      const payload: any = {
+        id: serverSample.id,
+        sample_id: serverSample.sample_id,
+        container_id: serverSample.container_id,
+        position: serverSample.position,
+        data: serverSample.data || {}
+      };
+      payload.data = { ...(payload.data || {}), is_archived: archived };
+      await upsertSample(payload);
+      toast.success(archived ? 'Sample archived' : 'Sample unarchived');
+      // refresh local samples
+      const all = await fetchSamples(container.id);
+      const mapped = (all || []).map((s: any) => ({
+        position: normalisePosition(s.position || s.pos || '' , container.containerType),
+        sampleId: normaliseSampleId(s.sample_id || s.sampleId || s.id || ''),
+        storageDate: s.storage_date || s.storageDate || '',
+        lastAccessed: s.last_accessed || s.lastAccessed || '',
+        history: s.history || []
+      }));
+      setSamples(mapped);
+    } catch (e) {
+      console.error('Archive toggle failed', e);
+      toast.error('Failed to update archive state');
+    }
+  };
+
   const getCellSize = () => {
     // Make cells wider to accommodate full sample IDs like "C01039DPP1B" (11 characters)
     // Updated with more generous spacing for better sample ID visibility
@@ -381,7 +417,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const handleBarcodeSubmit = () => {
     if (!scannedBarcode.trim()) return;
     if (!userInitials.trim()) {
-      alert('Please enter your initials before performing sample operations.');
+      toast.error('Please enter your initials before performing sample operations.');
       return;
     }
     
@@ -951,7 +987,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const handleCheckoutSample = () => {
     if (selectedPosition && selectedSample) {
       if (!userInitials.trim()) {
-        alert('Please enter your initials before checking out samples.');
+        toast.error('Please enter your initials before checking out samples.');
         return;
       }
       const now = new Date().toISOString();
@@ -1018,7 +1054,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const handleClearPosition = () => {
     if (selectedPosition && selectedSample) {
       if (!userInitials.trim()) {
-        alert('Please enter your initials before clearing this position.');
+        toast.error('Please enter your initials before clearing this position.');
         return;
       }
       if (confirm(`Are you sure you want to permanently delete sample ${selectedSample.sampleId}? This will remove the sample and all its history permanently.`)) {
@@ -1183,7 +1219,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                       size="sm" 
                       onClick={() => {
                         if (!userInitials.trim()) {
-                          alert('Please enter your initials before checking out samples.');
+                          toast.error('Please enter your initials before checking out samples.');
                           return;
                         }
                         handleCheckoutSample();
@@ -1342,6 +1378,14 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                   {selectedSample.lastAccessed && (
                     <div>
                       <label className="text-muted-foreground">Last Accessed</label>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(true)}>
+                    Archive
+                  </Button>
+                  <Button variant="ghost" size="sm" className="w-1/2" onClick={() => toggleArchiveForSelected(false)}>
+                    Unarchive
+                  </Button>
+                </div>
                       <p className="font-medium">{selectedSample.lastAccessed}</p>
                     </div>
                   )}
@@ -1406,7 +1450,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
                 className="w-full"
                 onClick={() => {
               if (!safeTrim(userInitials)) {
-                    alert('Please enter your initials in scan mode to clear this position.');
+                    toast.error('Please enter your initials in scan mode to clear this position.');
                     return;
                   }
                   handleClearPosition();

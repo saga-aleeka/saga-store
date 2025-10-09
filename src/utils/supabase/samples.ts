@@ -59,7 +59,11 @@ function buildSamplePayload(sample: any) {
     normalised.sample_id = normalised.sampleId;
   }
   if (normalised.sample_id !== undefined && normalised.sample_id !== null) {
-    normalised.sample_id = String(normalised.sample_id).trim();
+    try {
+      normalised.sample_id = String(normalised.sample_id).trim().toUpperCase();
+    } catch {
+      normalised.sample_id = String(normalised.sample_id).trim();
+    }
   }
 
   // Remove fields that should never be persisted directly
@@ -164,22 +168,38 @@ export async function upsertSample(sample: any) {
     if (message.includes('row-level security') || message.includes('permission') || message.includes('policy')) {
       console.warn('[upsertSample] Direct upsert blocked by RLS - falling back to server function', message);
       try {
-        const resp = await fetch(`${API_BASE_URL}/samples`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({ sample: sampleToSave }),
-        });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => 'no body');
-          throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`);
+        // Try once, then retry a single time on network-level failures
+        const doPost = async () => {
+          const r = await fetch(`${API_BASE_URL}/samples`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({ sample: sampleToSave }),
+          });
+          if (!r.ok) {
+            const text = await r.text().catch(() => 'no body');
+            throw new Error(`Server samples upsert failed: ${r.status} ${r.statusText} ${text}`);
+          }
+          return await r.json();
+        };
+
+        try {
+          const result = await doPost();
+          return result.data;
+        } catch (firstErr) {
+          // If the first attempt fails due to network (fetch failure), retry once after a short backoff
+          console.warn('[upsertSample] server fallback first attempt failed, retrying...', firstErr);
+          await new Promise(res => setTimeout(res, 250));
+          const secondResult = await doPost();
+          return secondResult.data;
         }
-        const result = await resp.json();
-        return result.data;
       } catch (serverErr) {
-        throw serverErr;
+        // Augment the error for clearer diagnostics in the client
+        const err = serverErr instanceof Error ? serverErr : new Error(String(serverErr));
+        err.message = `[upsertSample][server-fallback] ${err.message} -- payload-sample_id=${sampleToSave.sample_id} container_id=${sampleToSave.container_id} api=${API_BASE_URL}/samples`;
+        throw err;
       }
     }
 
@@ -193,4 +213,17 @@ export async function upsertSample(sample: any) {
 export async function deleteSample(id: string) {
   const { error } = await supabase.from('samples').delete().eq('id', id);
   if (error) throw error;
+}
+
+// Authoritative server-backed lookup by sample_id (uses lower/upper normalization)
+export async function fetchSampleById(sampleId: string) {
+  if (!sampleId) return null;
+  try {
+    const id = String(sampleId).trim().toUpperCase();
+    const { data, error } = await supabase.from('samples').select('*').eq('sample_id', id).limit(1).single();
+    if (error) return null;
+    return normaliseSample(data);
+  } catch (err) {
+    return null;
+  }
 }
