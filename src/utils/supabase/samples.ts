@@ -223,12 +223,16 @@ export async function deleteSample(id: string) {
 }
 
 // Authoritative server-backed lookup by sample_id (uses lower/upper normalization)
-export async function fetchSampleById(sampleId: string) {
+export async function fetchSampleById(sampleId: string, containerId?: string) {
   if (!sampleId) return null;
   try {
     const id = String(sampleId).trim().toUpperCase();
-    const { data, error } = await supabase.from('samples').select('*').eq('sample_id', id).limit(1).single();
-    if (error) return null;
+     let query = supabase.from('samples').select('*').eq('sample_id', id);
+    if (containerId) {
+      query = query.eq('container_id', containerId);
+    }
+    const { data, error } = await query.limit(1).maybeSingle();
+    if (error || !data) return null;
     return normaliseSample(data);
   } catch (err) {
     return null;

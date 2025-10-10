@@ -275,7 +275,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   const toggleArchiveForSelected = async (archived: boolean) => {
     if (!selectedSample) return;
     try {
-      const serverSample = await fetchSampleById(selectedSample.sampleId);
+      const serverSample = await fetchSampleById(selectedSample.sampleId, container.id);
       if (!serverSample) {
         toast.error('Unable to find authoritative sample record on server to archive.');
         return;
