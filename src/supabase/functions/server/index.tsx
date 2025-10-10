@@ -122,7 +122,7 @@ interface HealthResponse {
   service: string;
 }
 
-app.get('/make-server-aaac77aa/health', (c: any) => {
+app.get('/health', (c: any) => {
   const response: HealthResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -134,7 +134,7 @@ app.get('/make-server-aaac77aa/health', (c: any) => {
 // Container management routes
 // ...existing code for GET, POST, PUT, DELETE routes...
 
-app.put('/make-server-aaac77aa/containers/:id', async (c: any) => {
+app.put('/containers/:id', async (c: any) => {  
   try {
     const id = c.req.param('id');
     const body = await c.req.json();
@@ -176,7 +176,7 @@ app.put('/make-server-aaac77aa/containers/:id', async (c: any) => {
   }
 })
 
-app.delete('/make-server-aaac77aa/containers/:id', async (c: any) => {
+app.delete('/containers/:id', async (c: any) => {
   try {
     const id = c.req.param('id');
     const userId = c.req.query('userId');
@@ -206,7 +206,7 @@ app.delete('/make-server-aaac77aa/containers/:id', async (c: any) => {
 })
 
 // Container locking routes
-app.post('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
+app.post('/containers/:id/lock', async (c: any) => {  
   try {
     const id = c.req.param('id')
     const body = await c.req.json()
@@ -251,7 +251,7 @@ app.post('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
   }
 })
 
-app.delete('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
+app.delete('/containers/:id/lock', async (c: any) => {
   try {
     const id = c.req.param('id')
     const userId = c.req.query('userId')
@@ -291,7 +291,7 @@ app.delete('/make-server-aaac77aa/containers/:id/lock', async (c: any) => {
 })
 
 // User session management
-app.post('/make-server-aaac77aa/sessions', async (c: any) => {
+app.post('/sessions', async (c: any) => {
   try {
     const body = await c.req.json()
     const { userId, userName, activityType, containerId, metadata } = body
@@ -328,7 +328,7 @@ app.post('/make-server-aaac77aa/sessions', async (c: any) => {
   }
 })
 
-app.get('/make-server-aaac77aa/sessions', async (c: any) => {
+app.get('/sessions', async (c: any) => {
   try {
     const sessions = await kv.get('saga-user-sessions') || {}
     const sessionArray = Object.values(sessions)
@@ -342,7 +342,7 @@ app.get('/make-server-aaac77aa/sessions', async (c: any) => {
 })
 
 // Audit log routes
-app.post('/make-server-aaac77aa/audit-logs', async (c: any) => {
+app.post('/audit-logs', async (c: any) => {
   try {
     const body = await c.req.json()
     const { actionType, resourceType, resourceId, userId, userName, details, oldValues, newValues, metadata, severity, success } = body
@@ -382,7 +382,7 @@ app.post('/make-server-aaac77aa/audit-logs', async (c: any) => {
   }
 })
 
-app.get('/make-server-aaac77aa/audit-logs', async (c: any) => {
+app.get('/audit-logs', async (c: any) => {
   try {
     const limit = parseInt(c.req.query('limit') || '100')
     const offset = parseInt(c.req.query('offset') || '0')
@@ -422,7 +422,7 @@ app.get('/make-server-aaac77aa/audit-logs', async (c: any) => {
 })
 
 // Backups: allow privileged insertion of backups (service-role) and retention cleanup
-app.post('/make-server-aaac77aa/backups', async (c: any) => {
+app.post('/backups', async (c: any) => {
   try {
     const body = await c.req.json();
     const { data: backupPayload, createdBy } = body;
@@ -447,8 +447,8 @@ app.post('/make-server-aaac77aa/backups', async (c: any) => {
 })
 
 // Samples: privileged upsert endpoint to satisfy RLS-protected writes
-app.post('/make-server-aaac77aa/samples', async (c: any) => {
-  try {
+app.post('/samples', async (c: any) => {
+    try {
     const body = await c.req.json();
     const sampleRaw = body?.sample ?? body;
 
