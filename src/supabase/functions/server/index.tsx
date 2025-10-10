@@ -109,6 +109,17 @@ const app = new Hono();
 app.use('*', cors({ origin: '*', allowHeaders: ['*'], allowMethods: ['*'] }));
 app.use('*', logger(console.log));
 
+// Explicit OPTIONS preflight handler to ensure deployed hosts that don't forward
+// preflight requests receive an immediate OK with required CORS headers.
+app.options('*', (c) => {
+  const headers = new Headers()
+  headers.set('Access-Control-Allow-Origin', '*')
+  headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey')
+  headers.set('Access-Control-Max-Age', '600')
+  return new Response('', { status: 204, headers })
+})
+
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL ?? '',
