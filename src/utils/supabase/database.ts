@@ -16,13 +16,27 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
   
   try {
+    // Build default headers, but only include the 'apikey' header for requests to server functions
+    const baseHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    // Keep an Authorization header by default (anon key). Only attach apikey when calling our functions API.
+    if (supabaseAnonKey) {
+      baseHeaders['Authorization'] = `Bearer ${supabaseAnonKey}`
+    }
+
+    if (typeof API_BASE_URL === 'string' && url.startsWith(API_BASE_URL)) {
+      // server functions often expect apikey as well
+      if (supabaseAnonKey) baseHeaders['apikey'] = supabaseAnonKey
+    }
+
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Content-Type': 'application/json',
-        ...options.headers
+        ...baseHeaders,
+        ...(options.headers as Record<string, string> | undefined),
       }
     })
     clearTimeout(timeoutId)
