@@ -7,6 +7,33 @@ import { AuditLogEntry } from '../../components/AuditTrail'
 // API base URL for server functions
 export const API_BASE_URL = `${supabaseUrl}/functions/v1/make-server-aaac77aa`
 
+// A list of server function base URLs we may try (primary then fallback).
+export const SERVER_FUNCTION_BASE_URLS = [API_BASE_URL]
+
+/**
+ * Helper to call a server function endpoint. Tries the configured SERVER_FUNCTION_BASE_URLS in order
+ * and returns the first successful Response. Caller is responsible for response.ok handling.
+ */
+export async function fetchServerEndpoint(path: string, options: RequestInit = {}): Promise<Response> {
+  const errors: any[] = []
+  for (const base of SERVER_FUNCTION_BASE_URLS) {
+    try {
+      const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
+      // Use fetchWithTimeout so headers and timeouts are consistent
+      const resp = await fetchWithTimeout(url, options)
+      // Return response regardless of status (caller reads .ok)
+      return resp
+    } catch (err) {
+      errors.push({ base, err })
+      // try next
+    }
+  }
+  // If all attempts failed, throw an aggregated error
+  const err = new Error('All server function endpoints failed')
+  ;(err as any).details = errors
+  throw err
+}
+
 // Connection timeout (5 seconds)
 const FETCH_TIMEOUT = 5000
 

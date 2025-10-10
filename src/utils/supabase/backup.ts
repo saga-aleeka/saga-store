@@ -1,6 +1,6 @@
 import { supabase } from './client';
 import { supabaseUrl, supabaseAnonKey } from './info';
-import { API_BASE_URL } from './database';
+import { SERVER_FUNCTION_BASE_URLS, fetchServerEndpoint } from './database';
 
 // Save a backup (all containers and samples) to Supabase
 export async function saveBackup(data: any, createdBy: string) {
@@ -18,11 +18,12 @@ export async function saveBackup(data: any, createdBy: string) {
 
   // Fallback: call server functions endpoint which uses the service-role key
   try {
-    const resp = await fetch(`${API_BASE_URL}/backups`, {
+    const resp = await fetchServerEndpoint('/backups', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
       },
       body: JSON.stringify({ data, createdBy })
     });
@@ -32,7 +33,8 @@ export async function saveBackup(data: any, createdBy: string) {
     }
     return;
   } catch (err) {
-    console.error('[saveBackup] Server backup failed:', err);
+    const attemptedApis = SERVER_FUNCTION_BASE_URLS.map((base) => `${base}/backups`).join(' | ');
+    console.error(`[saveBackup] Server backup failed (attempted ${attemptedApis}):`, err);
     throw err;
   }
 }
