@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Calendar, User, TestTube, Clock, Scan, AlertTriangle, Trash2, Edit3, Info } from 'lucide-react';
 import { PlasmaContainer, getGridDimensions } from './PlasmaContainerList';
 import { createAuditLog } from './AuditTrail';
+import ServerFunctionDiagnostics from './ServerFunctionDiagnostics';
 
 // Utility to infer storage temperature from sample/container type
 function inferStorageTemperature(type: string) {
@@ -398,6 +399,18 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     if (dimensions.rows <= 7 && dimensions.cols <= 7) return 'w-28 h-12';
     return 'w-24 h-10';
   };
+
+  // Expose diagnostic tools for debugging server function connectivity
+  const showDiagnostics = () => {
+    // no-op - component mounted below provides interactive buttons
+  }
+
+  // Render diagnostics panel inside the main dashboard for easy access while debugging
+  const diagnosticsPanel = (
+    <div className="mb-2">
+      <ServerFunctionDiagnostics />
+    </div>
+  )
 
   const cellSize = getCellSize();
   const headerCellSize = getHeaderCellSize();
@@ -1338,7 +1351,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           </div>
         </Card>
 
-        {/* Storage Grid */}
+  {/* Diagnostics Panel (for debugging server functions) */}
+  {diagnosticsPanel}
+
+  {/* Storage Grid */}
         <Card className="p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
