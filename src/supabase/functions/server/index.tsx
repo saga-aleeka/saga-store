@@ -120,6 +120,17 @@ app.options('*', (c) => {
   return new Response('', { status: 204, headers })
 })
 
+// Ensure all responses include CORS headers too (some platforms don't forward middleware-added headers)
+app.use('*', async (c, next) => {
+  // Let downstream handlers run
+  await next()
+  // Add safe CORS headers to the response
+  c.header('Access-Control-Allow-Origin', '*')
+  c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey')
+  c.header('Access-Control-Allow-Credentials', 'true')
+})
+
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL ?? '',
