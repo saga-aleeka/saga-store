@@ -62,6 +62,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
   // (If not already imported at the top)
   // import { supabase } from '../utils/supabase/client';
   const hasMounted = React.useRef(false);
+  // Track whether the user has made an interaction that should trigger an autosave.
+  const userHasInteracted = React.useRef(false);
   const prevSamplesRef = React.useRef<PlasmaSample[] | null>(null);
   const [samples, setSamples] = useState<PlasmaSample[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -163,6 +165,11 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       return;
     }
     prevSamplesRef.current = samples;
+    // Don't auto-save changes that originated from an initial server load or realtime sync.
+    // Only proceed when the user has interacted with the UI (added/moved/cleared a sample).
+    if (!userHasInteracted.current) {
+      return;
+    }
     if (samples.length >= 0) {
       const timeoutId = setTimeout(() => {
         async function saveSamples() {
@@ -187,11 +194,14 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
               return upsertSample(samplePayload);
             }));
             setSaveStatus('saved');
+            // Reset interaction flag after a successful user-initiated save
+            userHasInteracted.current = false;
             setTimeout(() => setSaveStatus('idle'), 1200);
           } catch (error: any) {
             setSaveStatus('error');
             setSaveError(error?.message || 'Failed to save samples to Supabase.');
             console.error('Error saving samples to Supabase:', error);
+            showDetailedErrorToast(error, 'Failed to save samples to Supabase.');
           } finally {
             setIsSaving(false);
           }
@@ -304,11 +314,33 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       // Update selectedSample reference so UI shows updated archived state
       const refreshed = mapped.find((m: PlasmaSample) => m.sampleId === selectedSample.sampleId);
       if (refreshed) setSelectedSample(refreshed as PlasmaSample);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Archive toggle failed', e);
-      toast.error('Failed to update archive state');
+      showDetailedErrorToast(e, 'Failed to update archive state');
     }
   };
+
+  function showDetailedErrorToast(err: any, fallbackMessage?: string) {
+    // Prefer structured messages provided by helpers; fall back to generic message
+    const message = err?.message || fallbackMessage || 'An error occurred';
+    const hint = (err as any)?.hint;
+    const details = (err as any)?.details;
+
+    // Compose a short toast body
+    const parts: string[] = [];
+    parts.push(message);
+    if (hint) parts.push(String(hint));
+    if (details) {
+      try {
+        const short = typeof details === 'string' ? details : JSON.stringify(details).slice(0, 200);
+        parts.push(short + (String(details).length > 200 ? '…' : ''));
+      } catch {
+        // ignore
+      }
+    }
+
+    toast.error(parts.join(' — '));
+  }
 
   const getCellSize = () => {
     // Make cells wider to accommodate full sample IDs like "C01039DPP1B" (11 characters)
@@ -617,6 +649,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     };
     
     // Remove existing sample at position and add new one
+    // Mark that this change was user-initiated so autosave is allowed
+    userHasInteracted.current = true;
     setSamples(prev => [
       ...prev.filter(s => s.position !== position),
       newSample
@@ -723,6 +757,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
       isArchived: existingSample.isArchived ?? false
     };
     
+    // Remove sample from old position and any sample at new position, then add moved sample
+    userHasInteracted.current = true;
     // Remove sample from old position and any sample at new position, then add moved sample
     setSamples(prev => [
       ...prev.filter(s => s.position !== fromPosition && s.position !== toPosition),
@@ -859,6 +895,7 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
     }
     
     // Add sample to current container (remove any existing sample at target position)
+    userHasInteracted.current = true;
     setSamples(prev => [
       ...prev.filter(s => s.position !== toPosition),
       movedSample
@@ -1060,9 +1097,10 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         userId
       );
       // Remove from current container
-      setSamples(prev => prev.map(s =>
-        s.sampleId === updatedSample.sampleId ? updatedSample : s
-      ));
+        userHasInteracted.current = true;
+        setSamples(prev => prev.map(s =>
+          s.sampleId === updatedSample.sampleId ? updatedSample : s
+        ));
       setSelectedSample(null);
     }
   };
@@ -1098,7 +1136,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           userId
         );
         // Completely remove the sample without preserving history
-        setSamples(prev => prev.filter(s => s.position !== selectedPosition));
+  userHasInteracted.current = true;
+  setSamples(prev => prev.filter(s => s.position !== selectedPosition));
         setSelectedSample(null);
         setSelectedPosition(null);
       }
@@ -1128,7 +1167,8 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
         },
         userId
       );
-      setSamples([]);
+  userHasInteracted.current = true;
+  setSamples([]);
       setSelectedSample(null);
       setSelectedPosition(null);
     }

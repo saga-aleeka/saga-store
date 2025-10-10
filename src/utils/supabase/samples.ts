@@ -2,7 +2,7 @@
 
 import { supabase } from './client';
 import { fetchContainers } from './containers';
-import { API_BASE_URL } from './database';
+import { API_BASE_URL, fetchServerEndpoint, SERVER_FUNCTION_BASE_URLS } from './database';
 import { supabaseAnonKey } from './info';
 
 function mergeMetadata(sample: any) {
@@ -174,9 +174,9 @@ export async function upsertSample(sample: any) {
     if (message.includes('row-level security') || message.includes('permission') || message.includes('policy')) {
       console.warn('[upsertSample] Direct upsert blocked by RLS - falling back to server function', message);
       try {
-        // Try once, then retry a single time on network-level failures
+        // Try using centralized helper which will attempt configured function bases
         const doPost = async () => {
-          const r = await fetch(`${API_BASE_URL}/samples`, {
+          const resp = await fetchServerEndpoint('/samples', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -185,18 +185,17 @@ export async function upsertSample(sample: any) {
             },
             body: JSON.stringify({ sample: sampleToSave }),
           });
-          if (!r.ok) {
-            const text = await r.text().catch(() => 'no body');
-            throw new Error(`Server samples upsert failed: ${r.status} ${r.statusText} ${text}`);
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => 'no body');
+            throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`);
           }
-          return await r.json();
+          return await resp.json();
         };
 
         try {
           const result = await doPost();
           return result.data;
         } catch (firstErr) {
-          // If the first attempt fails due to network (fetch failure), retry once after a short backoff
           console.warn('[upsertSample] server fallback first attempt failed, retrying...', firstErr);
           await new Promise(res => setTimeout(res, 250));
           const secondResult = await doPost();
@@ -205,7 +204,8 @@ export async function upsertSample(sample: any) {
       } catch (serverErr) {
         // Augment the error for clearer diagnostics in the client
         const err = serverErr instanceof Error ? serverErr : new Error(String(serverErr));
-        err.message = `[upsertSample][server-fallback] ${err.message} -- payload-sample_id=${sampleToSave.sample_id} container_id=${sampleToSave.container_id} api=${API_BASE_URL}/samples`;
+        err.message = `[upsertSample][server-fallback] ${err.message} -- payload-sample_id=${sampleToSave.sample_id} container_id=${sampleToSave.container_id} api=${SERVER_FUNCTION_BASE_URLS.join('|')}/samples`;
+    (err as any).hint = 'Check that server functions are deployed and accessible, and that CORS/options are allowed for your origin';
         throw err;
       }
     }
