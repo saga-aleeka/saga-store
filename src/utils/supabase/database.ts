@@ -24,12 +24,15 @@ export async function fetchServerEndpoint(path: string, options: RequestInit = {
       // Return response regardless of status (caller reads .ok)
       return resp
     } catch (err) {
-      errors.push({ base, err })
+      // Capture a concise error summary for each base
+      const summary = err instanceof Error ? err.message : String(err)
+      errors.push({ base, err, message: summary })
       // try next
     }
   }
-  // If all attempts failed, throw an aggregated error
-  const err = new Error('All server function endpoints failed')
+  // If all attempts failed, throw an aggregated error including per-base messages to aid debugging.
+  const summaryMessages = errors.map(e => `${e.base} -> ${e.message}`).join(' | ')
+  const err = new Error(`All server function endpoints failed: ${summaryMessages}`)
   ;(err as any).details = errors
   throw err
 }
@@ -70,10 +73,18 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     return response
   } catch (error) {
     clearTimeout(timeoutId)
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timeout - server functions may not be deployed')
+    // Provide a clearer, consistent error message for common browser fetch failures
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - server functions may not be deployed or are responding slowly')
+      }
+      // Typical network/CORS failures surface as a TypeError in browsers
+      if (error.name === 'TypeError') {
+        throw new Error(`Network or CORS error when calling ${url}: ${error.message}`)
+      }
+      throw error
     }
-    throw error
+    throw new Error(String(error))
   }
 }
 
