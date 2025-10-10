@@ -176,35 +176,56 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
           setIsSaving(true);
           setSaveStatus('saving');
           setSaveError(null);
-          try {
-            await Promise.all(samples.map(sample => {
-              const samplePayload: any = {
-                container_id: container.id,
-                position: sample.position,
-                sample_id: sample.sampleId,
-                created_at: sample.storageDate ? new Date(sample.storageDate).toISOString() : undefined,
-                updated_at: sample.lastAccessed ? new Date(sample.lastAccessed).toISOString() : undefined
-              };
-              if ('history' in sample) {
-                samplePayload.history = sample.history;
+            try {
+              // Run all upserts and handle partial failures gracefully. We only surface an error
+              // if every upsert failed. This prevents transient or per-row fallback errors from
+              // showing to the user when most or all data saved successfully.
+              const results = await Promise.allSettled(samples.map(sample => {
+                const samplePayload: any = {
+                  container_id: container.id,
+                  position: sample.position,
+                  sample_id: sample.sampleId,
+                  created_at: sample.storageDate ? new Date(sample.storageDate).toISOString() : undefined,
+                  updated_at: sample.lastAccessed ? new Date(sample.lastAccessed).toISOString() : undefined
+                };
+                if ('history' in sample) {
+                  samplePayload.history = sample.history;
+                }
+                if ('status' in sample) {
+                  samplePayload.status = sample.status;
+                }
+                return upsertSample(samplePayload);
+              }));
+
+              const fulfilled = results.filter(r => r.status === 'fulfilled');
+              const rejected = results.filter(r => r.status === 'rejected');
+
+              if (fulfilled.length > 0) {
+                // At least one save succeeded — treat as saved for the user. Log any rejections for debugging.
+                if (rejected.length > 0) {
+                  console.debug('[autosave] Partial failures during samples upsert:', rejected);
+                }
+                setSaveStatus('saved');
+                // Reset interaction flag after a successful user-initiated save
+                userHasInteracted.current = false;
+                setTimeout(() => setSaveStatus('idle'), 1200);
+              } else {
+                // All failed — surface an error to the user
+                const firstErr = (rejected[0] as any)?.reason;
+                setSaveStatus('error');
+                setSaveError(firstErr?.message || 'Failed to save samples to Supabase.');
+                console.error('Error saving samples to Supabase (all failed):', rejected);
+                showDetailedErrorToast(firstErr, 'Failed to save samples to Supabase.');
               }
-              if ('status' in sample) {
-                samplePayload.status = sample.status;
-              }
-              return upsertSample(samplePayload);
-            }));
-            setSaveStatus('saved');
-            // Reset interaction flag after a successful user-initiated save
-            userHasInteracted.current = false;
-            setTimeout(() => setSaveStatus('idle'), 1200);
-          } catch (error: any) {
-            setSaveStatus('error');
-            setSaveError(error?.message || 'Failed to save samples to Supabase.');
-            console.error('Error saving samples to Supabase:', error);
-            showDetailedErrorToast(error, 'Failed to save samples to Supabase.');
-          } finally {
-            setIsSaving(false);
-          }
+            } catch (error: any) {
+              // If something unexpected happens running the upserts themselves
+              setSaveStatus('error');
+              setSaveError(error?.message || 'Failed to save samples to Supabase.');
+              console.error('Unexpected error during autosave:', error);
+              showDetailedErrorToast(error, 'Failed to save samples to Supabase.');
+            } finally {
+              setIsSaving(false);
+            }
         }
         saveSamples();
 
@@ -322,24 +343,39 @@ export function PlasmaBoxDashboard({ container, onContainerUpdate, initialSelect
 
   function showDetailedErrorToast(err: any, fallbackMessage?: string) {
     // Prefer structured messages provided by helpers; fall back to generic message
-    const message = err?.message || fallbackMessage || 'An error occurred';
+    const message = (err && (err.message || String(err))) || fallbackMessage || 'An error occurred';
     const hint = (err as any)?.hint;
-    const details = (err as any)?.details;
+    const details = (err as any)?.details || (err as any)?.stack || null;
 
-    // Compose a short toast body
-    const parts: string[] = [];
-    parts.push(message);
-    if (hint) parts.push(String(hint));
-    if (details) {
-      try {
-        const short = typeof details === 'string' ? details : JSON.stringify(details).slice(0, 200);
-        parts.push(short + (String(details).length > 200 ? '…' : ''));
-      } catch {
-        // ignore
-      }
+    // Map common technical messages to friendly user-facing messages
+    let friendly = fallbackMessage || 'Something went wrong.';
+    let friendlyHint = '';
+    const m = String(message).toLowerCase();
+    if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('request timeout') || m.includes('fetcherror')) {
+      friendly = 'Network or server unavailable. Please check your connection or try again.';
+      friendlyHint = 'If the problem persists, the backend may be down or unreachable.';
+    } else if (m.includes('404') || m.includes('not found')) {
+      friendly = 'Server endpoint not found. The backend route may be missing or misconfigured.';
+      friendlyHint = 'Try refreshing; if it continues, contact your administrator.';
+    } else if (m.includes('row-level security') || m.includes('permission') || m.includes('policy') || m.includes('forbidden') || m.includes('403')) {
+      friendly = 'Permission error. You do not have permission to perform this action.';
+      friendlyHint = 'Contact your administrator to request access.';
+    } else if (m.includes('server') && m.includes('failed')) {
+      friendly = 'Server error while saving. Please try again.';
+      friendlyHint = 'If this repeats, check server logs or contact support.';
+    } else {
+      friendly = fallbackMessage || 'An unexpected error occurred.';
+      if (hint) friendlyHint = String(hint);
     }
 
-    toast.error(parts.join(' — '));
+    // Log full technical details to console for debugging
+    console.debug('Detailed error (user toast):', { message, hint, details, err });
+
+    // Compose toast body (short and friendly)
+    const toastParts = [friendly];
+    if (friendlyHint) toastParts.push(friendlyHint);
+    // Keep toast short — technical details are in console
+    toast.error(toastParts.join(' — '));
   }
 
   const getCellSize = () => {
