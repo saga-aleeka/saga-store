@@ -4,8 +4,8 @@ import { supabaseUrl, supabaseAnonKey } from './info'
 import { PlasmaContainer } from '../../components/PlasmaContainerList'
 import { AuditLogEntry } from '../../components/AuditTrail'
 
-// API base URL for server functions
-export const API_BASE_URL = `${supabaseUrl}/functions/v1/make-server-aaac77aa`
+// API base URL for server functions (use your deployed function name)
+export const API_BASE_URL = `${supabaseUrl}/functions/v1/sample-movement`
 
 // A list of server function base URLs we may try (primary then fallback).
 export const SERVER_FUNCTION_BASE_URLS = [API_BASE_URL]
