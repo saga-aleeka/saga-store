@@ -113,18 +113,15 @@ serve(async (req: Request) => {
       }
       const containers = containersData || []
 
-      // We'll collect per-sample results
       const results: any[] = []
-      // We'll collect samples still needing insertion/upsert after move handling
       const toUpsert: any[] = []
 
-      // Process each sample: enforce "move if not archived" semantics
       for (const sample of samples) {
         const targetContainerId = sample.container_id
         const thisContainer = containers.find((c: any) => String(c.id) === String(targetContainerId))
         const targetIsArchive = thisContainer?.is_archived || thisContainer?.status === 'archived' || thisContainer?.isArchived
 
-        // Fetch existing samples with this sample_id
+        // Fetch all existing rows for this sample_id, including archived flag
         const { data: existingSamples, error: fetchErr } = await supabase
           .from('samples')
           .select('id,container_id,is_archived')
@@ -136,64 +133,72 @@ serve(async (req: Request) => {
           continue
         }
 
-        // If target is NOT archive, move any non-archived existing rows to the target container
-        let moved = false
+        // Separate archived vs non-archived rows
+        const existing = existingSamples || []
+        const nonArchived = existing.filter((r: any) => !(r.is_archived === true)) // treat null/undefined as non-archived
+        const archived = existing.filter((r: any) => r.is_archived === true)
+
+        // If target is NOT archived, we must ensure only one non-archived row exists and that it ends up in the target container
         if (!targetIsArchive) {
-          for (const es of (existingSamples || [])) {
-            // Skip rows already in target container
-            if (String(es.container_id) === String(targetContainerId)) continue
-
-            // Determine whether the other container is archived
-            const otherContainer = containers.find((c: any) => String(c.id) === String(es.container_id))
-            const otherIsArchive = otherContainer?.is_archived || otherContainer?.status === 'archived' || otherContainer?.isArchived
-
-            if (!otherIsArchive) {
-              // Move: update that existing row to the new container_id
-              try {
-                const updatePayload: any = {
-                  container_id: targetContainerId,
-                  last_updated: new Date().toISOString()
-                }
-                const { data: updData, error: updErr } = await supabase
-                  .from('samples')
-                  .update(updatePayload)
-                  .eq('id', es.id)
-                  .select('*')
-
-                if (updErr) {
-                  console.warn('Failed to move existing sample row id=', es.id, 'err=', updErr)
-                  // if move failed, record error but don't stop processing other samples
-                  results.push({ sample_id: sample.sample_id, success: false, error: updErr })
-                } else {
-                  // moved successfully; mark as moved and skip insertion for this sample
-                  results.push({ sample_id: sample.sample_id, success: true, action: 'moved', from_container_id: es.container_id, to_container_id: targetContainerId, data: updData })
-                  moved = true
-                }
-              } catch (e) {
-                console.error('Exception moving sample id=', es.id, e)
-                results.push({ sample_id: sample.sample_id, success: false, error: String(e) })
-              }
+          if (nonArchived.length > 0) {
+            // If any non-archived row already lives in target container, update that row with any new fields (defer to upsert)
+            const inTarget = nonArchived.find((r: any) => String(r.container_id) === String(targetContainerId))
+            if (inTarget) {
+              // Update will be done via upsert (set id so we update)
+              sample.id = inTarget.id
+              toUpsert.push(sample)
+              continue
             }
-          }
-        }
 
-        // If there is already an existing row in the target container, prefer updating it:
-        const existingInThisContainer = (existingSamples || []).find((s: any) => String(s.container_id) === String(targetContainerId))
-        if (!moved) {
-          if (existingInThisContainer && existingInThisContainer.id) {
-            // We want to upsert into that existing row (so include id to update)
-            sample.id = existingInThisContainer.id
+            // Otherwise, pick one non-archived row to move (the first). Delete any other non-archived duplicates.
+            const toMove = nonArchived[0]
+            try {
+              const now = new Date().toISOString()
+              const { data: movedData, error: moveErr } = await supabase
+                .from('samples')
+                .update({ container_id: targetContainerId, last_updated: now })
+                .eq('id', toMove.id)
+                .select('*')
+
+              if (moveErr) {
+                console.warn('Failed to move sample row id=', toMove.id, moveErr)
+                results.push({ sample_id: sample.sample_id, success: false, error: moveErr })
+                continue
+              }
+
+              // Delete any remaining non-archived duplicates (beyond the moved row)
+              const others = nonArchived.slice(1)
+              for (const o of others) {
+                try {
+                  await supabase.from('samples').delete().eq('id', o.id)
+                } catch (e) {
+                  console.warn('Failed to delete extra non-archived duplicate id=', o.id, e)
+                }
+              }
+
+              // We've moved an authoritative non-archived row to the target container; record result
+              results.push({ sample_id: sample.sample_id, success: true, action: 'moved', to_container_id: targetContainerId, data: movedData })
+              // No upsert required for this sample
+              continue
+            } catch (e) {
+              console.error('Exception while moving sample', sample.sample_id, e)
+              results.push({ sample_id: sample.sample_id, success: false, error: String(e) })
+              continue
+            }
+          } else {
+            // No non-archived rows exist; we'll insert/upsert into target (allowed)
+            toUpsert.push(sample)
+            continue
           }
-          // Defer final upsert/insert of this sample to the batched stage
-          toUpsert.push(sample)
         } else {
-          // If moved we don't also upsert — already updated row above. continue
+          // target is archived -> duplicates allowed; just insert/upsert
+          toUpsert.push(sample)
+          continue
         }
-      } // end per-sample processing
+      }
 
-      // Now perform efficient bulk upsert for remaining samples (if any)
+      // Bulk upsert remaining samples
       if (toUpsert.length > 0) {
-        // Try preferred bulk upsert with ON CONFLICT
         try {
           const upsertRes = await supabase.from('samples').upsert(toUpsert, { onConflict: ['sample_id'] }).select()
           if (upsertRes.error) {
@@ -201,15 +206,12 @@ serve(async (req: Request) => {
             const message = String(err?.message || '')
             if (err?.code === '42P10' || message.includes('ON CONFLICT')) {
               console.warn('Bulk upsert ON CONFLICT failed, falling back to per-sample update/insert', err)
-              // Fall through to fallback
             } else {
               console.error('Bulk upsert failed:', err)
-              // mark all as failed
               for (const s of toUpsert) results.push({ sample_id: s.sample_id, success: false, error: err })
               return json({ success: false, results }, 500)
             }
           } else {
-            // Success: push results for these upserted rows
             const dataArray = Array.isArray(upsertRes.data) ? upsertRes.data : [upsertRes.data]
             for (const row of dataArray) {
               results.push({ sample_id: row.sample_id, success: true, kind: 'upsert', data: row })
@@ -220,8 +222,7 @@ serve(async (req: Request) => {
         }
       }
 
-      // If any items still not covered (i.e., bulk upsert didn't succeed), do per-sample fallback update->insert
-      // Find which sample_ids are missing in results
+      // Fallback per-sample update->insert for any pending
       const handledIds = new Set(results.map(r => r.sample_id))
       const pending = toUpsert.filter(s => !handledIds.has(s.sample_id))
 
@@ -230,7 +231,6 @@ serve(async (req: Request) => {
           const updateRes = await supabase.from('samples').update(s).eq('sample_id', s.sample_id).select('*')
           if (updateRes.error) {
             console.warn('Fallback update error for', s.sample_id, updateRes.error)
-            // try insert
             const insertRes = await supabase.from('samples').insert(s).select('*')
             if (insertRes.error) {
               results.push({ sample_id: s.sample_id, success: false, error: insertRes.error })
@@ -257,7 +257,7 @@ serve(async (req: Request) => {
       }
 
       return json({ success: true, results }, 200)
-    } // end POST /samples
+    }
 
     // Not found
     return json({ error: 'Not found' }, 404)
