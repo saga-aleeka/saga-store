@@ -122,16 +122,30 @@ serve(async (req: Request) => {
         const targetIsArchive = thisContainer?.is_archived || thisContainer?.status === 'archived' || thisContainer?.isArchived
 
         // Fetch all existing rows for this sample_id, including archived flag
-        const { data: existingSamples, error: fetchErr } = await supabase
+        let { data: existingSamples, error: fetchErr } = await supabase
           .from('samples')
           .select('id,container_id,is_archived')
           .eq('sample_id', sample.sample_id)
+
+        // If equality returned nothing, try a case-insensitive match as a fallback
+        if ((!existingSamples || existingSamples.length === 0) && !fetchErr) {
+          try {
+            const ci = await supabase.from('samples').select('id,container_id,is_archived').ilike('sample_id', sample.sample_id)
+            if (!ci.error && ci.data && ci.data.length > 0) {
+              existingSamples = ci.data
+            }
+          } catch (e) {
+            console.warn('Case-insensitive fallback query failed for', sample.sample_id, e)
+          }
+        }
 
         if (fetchErr) {
           console.error('Error fetching existing samples for', sample.sample_id, fetchErr)
           results.push({ sample_id: sample.sample_id, success: false, error: fetchErr })
           continue
         }
+
+        console.log('existingSamples for', sample.sample_id, existingSamples)
 
         // Separate archived vs non-archived rows
         const existing = existingSamples || []
@@ -197,7 +211,10 @@ serve(async (req: Request) => {
         }
       }
 
-      // Bulk upsert remaining samples
+  // Debug: log pending upserts
+  console.log('toUpsert pending bulk upsert:', toUpsert)
+
+  // Bulk upsert remaining samples
       if (toUpsert.length > 0) {
         try {
           const upsertRes = await supabase.from('samples').upsert(toUpsert, { onConflict: ['sample_id'] }).select()
@@ -228,7 +245,14 @@ serve(async (req: Request) => {
 
       for (const s of pending) {
         try {
-          const updateRes = await supabase.from('samples').update(s).eq('sample_id', s.sample_id).select('*')
+          // Prefer updating by explicit id when we have it (safer when no unique constraint)
+          let updateQuery: any
+          if (s.id) {
+            updateQuery = supabase.from('samples').update(s).eq('id', s.id).select('*')
+          } else {
+            updateQuery = supabase.from('samples').update(s).eq('sample_id', s.sample_id).select('*')
+          }
+          const updateRes = await updateQuery
           if (updateRes.error) {
             console.warn('Fallback update error for', s.sample_id, updateRes.error)
             const insertRes = await supabase.from('samples').insert(s).select('*')
