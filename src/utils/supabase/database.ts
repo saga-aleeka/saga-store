@@ -19,8 +19,8 @@ export async function fetchServerEndpoint(path: string, options: RequestInit = {
   for (const base of SERVER_FUNCTION_BASE_URLS) {
     try {
       const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
-      // Use fetchWithTimeout so headers and timeouts are consistent
-      const resp = await fetchWithTimeout(url, options)
+  // Use fetchWithRetry so headers, timeouts and retries/backoff are applied
+  const resp = await fetchWithRetry(url, options)
       // Return response regardless of status (caller reads .ok)
       return resp
     } catch (err) {
@@ -144,7 +144,7 @@ export async function checkDatabaseHealth(): Promise<{
     let serverMessage = ''
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE_URL}/health`)
+  const response = await fetchWithRetry(`${API_BASE_URL}/health`)
       serverFunctionsAvailable = response.ok
       if (response.ok) {
         const result = await response.json()
@@ -190,7 +190,7 @@ export async function checkDatabaseHealth(): Promise<{
 // Container operations with fallback to localStorage
 export async function fetchContainers(): Promise<PlasmaContainer[]> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers`)
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers`)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -223,7 +223,7 @@ export async function storeContainers(containers: PlasmaContainer[], userInitial
 
   // Try to store to server
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers`, {
       method: 'POST',
       body: JSON.stringify({
         containers,
@@ -246,7 +246,7 @@ export async function storeContainers(containers: PlasmaContainer[], userInitial
 
 export async function createContainer(container: Omit<PlasmaContainer, 'id'>, userId: string): Promise<PlasmaContainer> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers`, {
       method: 'POST',
       body: JSON.stringify({ container, userId })
     })
@@ -272,7 +272,7 @@ export async function createContainer(container: Omit<PlasmaContainer, 'id'>, us
 
 export async function updateContainer(id: string, container: Partial<PlasmaContainer>, userId: string): Promise<PlasmaContainer> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers/${id}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ container, userId })
     })
@@ -314,7 +314,7 @@ export async function deleteContainer(id: string, userId: string): Promise<void>
 // Container locking operations (graceful degradation)
 export async function lockContainer(id: string, userId: string, userName: string): Promise<PlasmaContainer | null> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers/${id}/lock`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers/${id}/lock`, {
       method: 'POST',
       body: JSON.stringify({ userId, userName })
     })
@@ -334,7 +334,7 @@ export async function lockContainer(id: string, userId: string, userName: string
 
 export async function unlockContainer(id: string, userId: string): Promise<PlasmaContainer | null> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/containers/${id}/lock?userId=${userId}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/containers/${id}/lock?userId=${userId}`, {
       method: 'DELETE'
     })
 
@@ -354,7 +354,7 @@ export async function unlockContainer(id: string, userId: string): Promise<Plasm
 // User session management (non-critical, fail silently)
 export async function updateUserSession(userId: string, userName: string, activityType: string, containerId?: string, metadata?: any): Promise<void> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/user-session`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/user-session`, {
       method: 'POST',
       body: JSON.stringify({ 
         userId, 
@@ -378,7 +378,7 @@ export async function updateUserSession(userId: string, userName: string, activi
 
 export async function fetchActiveSessions(): Promise<any[]> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/active-users`)
+  const response = await fetchWithRetry(`${API_BASE_URL}/active-users`)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -410,7 +410,7 @@ export async function createAuditLog(
   if (!userInitials) return
 
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/audit-logs`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/audit-logs`, {
       method: 'POST',
       body: JSON.stringify({
         actionType,
@@ -477,7 +477,7 @@ export async function fetchAuditLogs(filters: {
     if (filters.userId) params.set('userId', filters.userId)
     if (filters.severity) params.set('severity', filters.severity)
 
-    const response = await fetchWithTimeout(`${API_BASE_URL}/audit-logs?${params}`)
+  const response = await fetchWithRetry(`${API_BASE_URL}/audit-logs?${params}`)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
