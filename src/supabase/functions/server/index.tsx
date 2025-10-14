@@ -470,65 +470,43 @@ app.post('/backups', async (c: any) => {
 
 // Samples: privileged upsert endpoint to satisfy RLS-protected writes
 app.post('/samples', async (c: any) => {
-    try {
+  try {
     const body = await c.req.json();
-    const sampleRaw = body?.sample ?? body;
-
-    if (!sampleRaw) {
-      return c.json({ error: 'Sample payload required' }, 400);
+    // Accept { sample: {...} } | { samples: [...] } | raw object | raw array
+    let samples: any[] = []
+    if (body == null) {
+      return c.json({ error: 'Sample payload required' }, 400)
     }
+    if (body.sample) samples = Array.isArray(body.sample) ? body.sample : [body.sample]
+    else if (body.samples) samples = Array.isArray(body.samples) ? body.samples : [body.samples]
+    else if (Array.isArray(body)) samples = body
+    else if (typeof body === 'object') samples = [body]
 
-    // Basic normalization: position -> uppercase trimmed, sample_id trimmed
-    const sample: any = { ...sampleRaw };
-    if (sample.position !== undefined && sample.position !== null) {
-      try { sample.position = String(sample.position).trim().toUpperCase(); } catch {};
-    }
-    if (sample.sampleId && !sample.sample_id) sample.sample_id = sample.sampleId;
-    if (sample.sample_id !== undefined && sample.sample_id !== null) {
-      try { sample.sample_id = String(sample.sample_id).trim().toUpperCase(); } catch {};
-    }
-    if (sample.containerId && !sample.container_id) sample.container_id = sample.containerId;
+    if (!samples.length) return c.json({ error: 'Sample payload required' }, 400)
 
-    // Load containers to reason about archive state
-    const { data: containersData, error: contErr } = await supabase.from('containers').select('*');
-    if (contErr) throw contErr;
-
-    const containers = containersData || [];
-    const thisContainer = containers.find((cn: any) => String(cn.id) === String(sample.container_id));
-    const isArchive = thisContainer?.is_archived || thisContainer?.status === 'archived' || thisContainer?.isArchived;
-
-    // If not archived, enforce uniqueness of sample_id across non-archived containers
-    if (!isArchive) {
-      const targetSampleId = sample.sample_id;
-      if (targetSampleId) {
-        const { data: existingSamples, error: fetchError } = await supabase
-          .from('samples')
-          .select('id, container_id')
-          .eq('sample_id', targetSampleId);
-        if (fetchError) throw fetchError;
-
-        for (const s of existingSamples || []) {
-          if (String(s.container_id) !== String(sample.container_id)) {
-            const otherContainer = containers.find((c2: any) => String(c2.id) === String(s.container_id));
-            const otherIsArchive = otherContainer?.is_archived || otherContainer?.status === 'archived' || otherContainer?.isArchived;
-            if (!otherIsArchive) {
-              await supabase.from('samples').delete().eq('id', s.id);
-            }
-          }
-        }
-
-        const existingInThisContainer = (existingSamples || []).find((s: any) => String(s.container_id) === String(sample.container_id));
-        if (existingInThisContainer && existingInThisContainer.id) {
-          sample.id = existingInThisContainer.id;
-        }
+    // Normalize each sample minimally
+    samples = samples.map((sRaw: any) => {
+      const s: any = { ...sRaw }
+      if (s.position !== undefined && s.position !== null) {
+        try { s.position = String(s.position).trim().toUpperCase() } catch {}
       }
-    }
+      if (s.sampleId && !s.sample_id) s.sample_id = s.sampleId
+      if (s.sample_id !== undefined && s.sample_id !== null) {
+        try { s.sample_id = String(s.sample_id).trim().toUpperCase() } catch {}
+      }
+      if (s.containerId && !s.container_id) s.container_id = s.containerId
+      return s
+    })
 
-    const { data, error } = await supabase.from('samples').upsert(sample).select();
-    if (error) throw error;
-    return c.json({ data });
+    // Call RPC in bulk: pass array as sample_json
+    const { data, error } = await supabase.rpc('samples_upsert_v1', { sample_json: samples })
+    if (error) {
+      console.error('RPC samples_upsert_v1 error (bulk):', error)
+      throw error
+    }
+    return c.json({ data })
   } catch (error) {
-    console.error('Server error upserting sample:', error);
+    console.error('Server error upserting sample via RPC:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ error: 'Internal server error', details: errorMessage }, 500);
   }

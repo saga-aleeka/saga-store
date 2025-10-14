@@ -141,11 +141,38 @@ export async function upsertSample(sample: any) {
     const targetSampleId = sampleToSave.sample_id;
     if (targetSampleId) {
       // Find all samples with this sample_id
-      const { data: existingSamples, error: fetchError } = await supabase
-        .from('samples')
-        .select('id, container_id')
-        .eq('sample_id', targetSampleId);
-      if (fetchError) throw fetchError;
+      let existingSamples: any[] | null = null
+      try {
+        const res = await supabase
+          .from('samples')
+          .select('id, container_id')
+          .eq('sample_id', targetSampleId)
+        if (res.error) throw res.error
+        existingSamples = res.data || []
+      } catch (fetchError: any) {
+        // If the read failed due to auth/RLS, immediately fall back to the server function
+        const msg = String(fetchError?.message || fetchError || '').toLowerCase()
+        const isAuthErr = fetchError?.status === 401 || fetchError?.status === 403 || msg.includes('row-level security') || msg.includes('permission') || msg.includes('policy') || msg.includes('unauthorized') || msg.includes('forbidden')
+        if (isAuthErr) {
+          console.warn('[upsertSample] read of existing samples blocked by auth/RLS - falling back to server function', msg)
+          const resp = await fetchServerEndpoint('/samples', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'apikey': supabaseAnonKey,
+            },
+            body: JSON.stringify({ sample: sampleToSave }),
+          })
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => 'no body')
+            throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`)
+          }
+          const result = await resp.json()
+          return result.data
+        }
+        throw fetchError
+      }
 
       // Find if any are in a non-archive container (other than this one)
       for (const s of existingSamples || []) {
@@ -169,38 +196,31 @@ export async function upsertSample(sample: any) {
     const { data, error } = await supabase.from('samples').upsert(sampleToSave).select();
     if (!error) return data;
 
-    // If error appears to be an RLS/permission error, fall back to calling server function
+    // If error appears to be an RLS/permission/auth error, fall back to calling server function
     const message = String(error?.message || error || '').toLowerCase();
-    if (message.includes('row-level security') || message.includes('permission') || message.includes('policy')) {
-      console.warn('[upsertSample] Direct upsert blocked by RLS - falling back to server function', message);
+  const code = (error as any)?.code
+  const isAuthErr = code === '401' || code === '403' || String(code) === '401' || String(code) === '403' || message.includes('row-level security') || message.includes('permission') || message.includes('policy') || message.includes('unauthorized') || message.includes('forbidden') || message.includes('401') || message.includes('403')
+    if (isAuthErr) {
+      console.warn('[upsertSample] Direct upsert blocked by RLS/auth - falling back to server function', message);
       try {
         // Try using centralized helper which will attempt configured function bases
-        const doPost = async () => {
-          const resp = await fetchServerEndpoint('/samples', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseAnonKey}`,
-              'apikey': supabaseAnonKey,
-            },
-            body: JSON.stringify({ sample: sampleToSave }),
-          });
-          if (!resp.ok) {
-            const text = await resp.text().catch(() => 'no body');
-            throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`);
-          }
-          return await resp.json();
-        };
+        // Delegate to fetchServerEndpoint which already implements retries/backoff
+        const resp = await fetchServerEndpoint('/samples', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({ sample: sampleToSave }),
+        })
 
-        try {
-          const result = await doPost();
-          return result.data;
-        } catch (firstErr) {
-          console.warn('[upsertSample] server fallback first attempt failed, retrying...', firstErr);
-          await new Promise(res => setTimeout(res, 250));
-          const secondResult = await doPost();
-          return secondResult.data;
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => 'no body')
+          throw new Error(`Server samples upsert failed: ${resp.status} ${resp.statusText} ${text}`)
         }
+        const result = await resp.json()
+        return result.data
       } catch (serverErr) {
         // Augment the error for clearer diagnostics in the client
         const err = serverErr instanceof Error ? serverErr : new Error(String(serverErr));
