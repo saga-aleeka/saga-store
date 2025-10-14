@@ -1,7 +1,7 @@
 // index.ts - Supabase Edge Function (Deno) with move-on-scan logic
 // Paste this entire file into your Supabase Edge Function `sample-movement` -> Code -> Save & Deploy
 
-import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
+import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.34.0";
 
 // Environment secrets (set these in the Supabase Function Secrets UI)
