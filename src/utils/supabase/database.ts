@@ -37,14 +37,17 @@ export async function fetchServerEndpoint(path: string, options: RequestInit = {
   throw err
 }
 
-// Connection timeout (5 seconds)
-const FETCH_TIMEOUT = 5000
+// Connection timeout (default 15 seconds) - configurable via Vite env VITE_FUNCTIONS_FETCH_TIMEOUT_MS
+const _env = (import.meta as any).env || {}
+const FETCH_TIMEOUT = Number(_env.VITE_FUNCTIONS_FETCH_TIMEOUT_MS ?? _env.FUNCTIONS_FETCH_TIMEOUT_MS) || 15000
+const DEFAULT_RETRIES = Number(_env.VITE_FUNCTIONS_FETCH_RETRIES ?? _env.FUNCTIONS_FETCH_RETRIES) || 2
+const DEFAULT_BACKOFF_MS = Number(_env.VITE_FUNCTIONS_FETCH_BACKOFF_MS ?? _env.FUNCTIONS_FETCH_BACKOFF_MS) || 300
 
-// Create a fetch wrapper with timeout and better error handling
+// Create a fetch wrapper with timeout and better error handling (single attempt)
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
-  
+
   try {
     // Build default headers, but only include the 'apikey' header for requests to server functions
     const baseHeaders: Record<string, string> = {
@@ -86,6 +89,37 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     }
     throw new Error(String(error))
   }
+}
+
+// Retry wrapper with exponential backoff. Retries on network errors, timeouts, and 5xx server responses.
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = DEFAULT_RETRIES, backoffMs = DEFAULT_BACKOFF_MS): Promise<Response> {
+  let attempt = 0
+  let lastErr: any = null
+
+  while (attempt <= retries) {
+    try {
+      const resp = await fetchWithTimeout(url, options)
+      // Retry on 5xx
+      if (resp.status >= 500 && attempt < retries) {
+        lastErr = new Error(`Server error ${resp.status}`)
+        // fallthrough to retry
+      } else {
+        return resp
+      }
+    } catch (err) {
+      lastErr = err
+      // If it's the last attempt, rethrow below
+    }
+
+    // Backoff before next attempt
+    attempt += 1
+    const delay = backoffMs * Math.pow(2, attempt - 1)
+    await new Promise((res) => setTimeout(res, delay))
+  }
+
+  // No successful response after retries
+  if (lastErr instanceof Error) throw lastErr
+  throw new Error('Failed to fetch after retries')
 }
 
 // Database health check with timeout and fallback
