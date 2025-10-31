@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 
+// Minimal Vite config without react-refresh plugin. For larger projects
+// consider adding `@vitejs/plugin-react` once dependency versions are aligned.
 export default defineConfig({
-  plugins: [react()],
   server: {
     port: 5173
   }
