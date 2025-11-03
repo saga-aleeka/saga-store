@@ -8,6 +8,10 @@
 	--shadow: 0 6px 18px rgba(15,23,42,0.08);
 }
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html,body,#root{height:100%;margin:0}
 body{
 	background: linear-gradient(180deg,var(--bg-1),var(--bg-2));
@@ -20,8 +24,8 @@ body{
 
 .app {
 	max-width: 920px;
-	margin: 48px auto;
-	padding: 24px;
+	margin: 18px auto; /* moved closer to top */
+	padding: 18px;
 }
 
 .header {
@@ -56,4 +60,59 @@ body{
 @media (max-width:640px){
 	.app{margin:20px;padding:16px}
 	.header{gap:12px}
+}
+
+/* header and nav */
+.topbar{background:transparent;padding:8px 0}
+.top-row {align-items:center}
+
+.hamburger {width:42px;height:36px;border-radius:8px;border:1px solid rgba(15,23,42,0.04);background:#fff;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:6px;cursor:pointer}
+.hamburger span{display:block;height:2px;background:var(--muted);border-radius:2px}
+.hamburger:focus{outline:none;box-shadow:0 6px 18px rgba(99,102,241,0.12)}
+
+.dropdown{position:absolute;right:0;top:44px;background:var(--card);box-shadow:var(--shadow);border-radius:10px;padding:6px;min-width:160px;border:1px solid rgba(15,23,42,0.04)}
+.dropdown-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;cursor:pointer;border-radius:8px}
+.dropdown-item:hover{background:rgba(99,102,241,0.04)}
+
+.card-menu{width:36px;height:36px;border-radius:8px;border:1px solid rgba(15,23,42,0.04);background:transparent;cursor:pointer;font-size:18px}
+.card-menu:focus{outline:none}
+
+.card-action{background:rgba(2,6,23,0.02);border-radius:8px;padding:6px 8px;border:1px solid rgba(15,23,42,0.03);cursor:pointer}
+.card-action:hover{background:rgba(15,23,42,0.03)}
+
+/* drawer */
+.drawer-overlay{position:fixed;inset:0;background:rgba(2,6,23,0.4);display:flex;justify-content:flex-end;z-index:60}
+.drawer{width:420px;background:var(--card);padding:18px;border-left:1px solid rgba(15,23,42,0.04);box-shadow:var(--shadow);height:100%;overflow:auto}
+.drawer input, .drawer select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(15,23,42,0.06);margin-top:6px}
+
+.brand{display:flex;align-items:center;gap:14px}
+.brand h1{margin:0;font-size:18px}
+.brand .tagline{color:var(--muted);font-size:13px;margin-top:2px}
+
+.tabs{display:flex;gap:8px;background:transparent;margin-top:18px}
+.tab{padding:10px 16px;border-radius:999px;background:rgba(15,23,42,0.03);font-weight:600;color:var(--muted);cursor:pointer}
+.tab.active{background:#fff;color:var(--accent);box-shadow:0 4px 12px rgba(15,23,42,0.04)}
+
+.search-row{display:flex;align-items:center;gap:16px;margin-top:18px}
+.search{flex:1;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:999px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid rgba(15,23,42,0.04)}
+.search input{border:0;outline:0;background:transparent;width:100%;font-size:14px}
+
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{padding:8px 12px;border-radius:999px;background:rgba(99,102,241,0.08);color:var(--accent);font-weight:600;border:1px solid rgba(99,102,241,0.06);cursor:pointer}
+.chip.alt{background:#e8f8f5;color:#059669;border:1px solid rgba(5,150,105,0.06)}
+
+.container-list{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.container-card{background:var(--card);border-radius:14px;padding:18px;box-shadow:var(--shadow);border:1px solid rgba(15,23,42,0.03)}
+.container-card{cursor:pointer}
+.container-card .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.container-title{font-weight:700}
+.badge{display:inline-block;padding:6px 8px;border-radius:10px;background:rgba(15,23,42,0.04);font-size:12px}
+.occupancy{margin-top:12px}
+.occupancy .bar{height:10px;background:rgba(15,23,42,0.06);border-radius:999px;overflow:hidden}
+.occupancy .fill{height:100%;background:linear-gradient(90deg,var(--accent),#8b5cf6);width:30%}
+.meta-small{color:var(--muted);font-size:13px;margin-top:10px}
+
+/* small screens */
+@media (max-width:520px){
+	.container-list{grid-template-columns:1fr}
 }
