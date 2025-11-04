@@ -1,4 +1,5 @@
-import { rest } from 'msw'
+import * as msw from 'msw'
+const rest = (msw as any).rest;
 
 // seed data
 const containers = [
