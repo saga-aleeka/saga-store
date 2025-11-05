@@ -231,6 +231,13 @@ export default function AdminDashboard(){
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  // auto-clear notices after a short delay
+  React.useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 4000)
+    return () => clearTimeout(t)
+  }, [notice])
 
   // import UI state
   const [pasteText, setPasteText] = useState('')
@@ -564,21 +571,31 @@ export default function AdminDashboard(){
               <div style={{fontSize:13,color:'#666'}}>Users: {authUsers.data ? authUsers.data.length : '—'}</div>
             </div>
 
-            {showAdd && (
-              <div style={{border:'1px solid #eee',padding:8,borderRadius:6,marginBottom:12}}>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <input placeholder="Initials" value={newInitials} onChange={(e)=> setNewInitials(e.target.value)} />
-                  <input placeholder="Name (optional)" value={newName} onChange={(e)=> setNewName(e.target.value)} />
-                  <button className="btn" onClick={async ()=>{
-                    try{
-                      await apiFetch('/api/admin_users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials: newInitials, name: newName }) })
-                      setNewInitials(''); setNewName(''); setShowAdd(false)
-                      window.dispatchEvent(new Event('authorized_users_updated'))
-                    }catch(e){ console.warn('create user failed', e); alert('Create failed') }
-                  }}>Save</button>
+              {notice && (
+                <div style={{padding:10,marginBottom:12,borderRadius:6,background: notice.type === 'success' ? '#e6ffed' : '#ffecec', border: notice.type === 'success' ? '1px solid #b7f2c9' : '1px solid #f5c6c6', color: notice.type === 'success' ? '#0b6b2b' : '#8a1b1b'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>{notice.text}</div>
+                    <button className="btn ghost" onClick={() => setNotice(null)}>Dismiss</button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {showAdd && (
+                <div style={{border:'1px solid #eee',padding:8,borderRadius:6,marginBottom:12}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <input placeholder="Initials" value={newInitials} onChange={(e)=> setNewInitials(e.target.value)} />
+                    <input placeholder="Name (optional)" value={newName} onChange={(e)=> setNewName(e.target.value)} />
+                    <button className="btn" onClick={async ()=>{
+                      try{
+                        await apiFetch('/api/admin_users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials: newInitials, name: newName }) })
+                        setNewInitials(''); setNewName(''); setShowAdd(false)
+                        setNotice({ type: 'success', text: 'User created' })
+                        window.dispatchEvent(new Event('authorized_users_updated'))
+                      }catch(e){ console.warn('create user failed', e); setNotice({ type: 'error', text: 'Create failed' }) }
+                    }}>Save</button>
+                  </div>
+                </div>
+              )}
 
             <div style={{overflowX:'auto'}}>
               <table style={{width:'100%',borderCollapse:'collapse'}}>
@@ -612,8 +629,9 @@ export default function AdminDashboard(){
                                   try{
                                     await apiFetch('/api/admin_users', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id, updates: { name: editingName } }) })
                                     setEditingId(null); setEditingName('')
+                                    setNotice({ type: 'success', text: 'User updated' })
                                     window.dispatchEvent(new Event('authorized_users_updated'))
-                                  }catch(e){ console.warn('update failed', e); alert('Update failed') }
+                                  }catch(e){ console.warn('update failed', e); setNotice({ type: 'error', text: 'Update failed' }) }
                                 }}>Save</button>
                                 <button className="btn ghost" onClick={()=> { setEditingId(null); setEditingName('') }}>Cancel</button>
                                 <button className="btn" onClick={async ()=>{
@@ -621,8 +639,9 @@ export default function AdminDashboard(){
                                   try{
                                     await apiFetch('/api/admin_users', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id }) })
                                     setEditingId(null); setEditingName('')
+                                    setNotice({ type: 'success', text: 'User deleted' })
                                     window.dispatchEvent(new Event('authorized_users_updated'))
-                                  }catch(e){ console.warn('delete failed', e); alert('Delete failed') }
+                                  }catch(e){ console.warn('delete failed', e); setNotice({ type: 'error', text: 'Delete failed' }) }
                                 }}>Delete</button>
                                 {u.token && <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(String(u.token || '')) }}>Copy token</button>}
                               </div>
