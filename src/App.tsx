@@ -8,12 +8,20 @@ import LoginModal from './components/LoginModal'
 import { getApiUrl } from './lib/api'
 import { getUser } from './lib/auth'
 
+// Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
+const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
+const _mode = (import.meta as any).env?.MODE ?? (import.meta as any).MODE ?? 'development'
+const explicitDisable = (_rawDisable === '1' || String(_rawDisable || '').toLowerCase() === 'true')
+// Default to disabling auth in local development for convenience
+const DISABLE_AUTH = explicitDisable || String(_mode) === 'development'
+
 export default function App() {
   const [route, setRoute] = useState<string>(window.location.hash || '#/containers')
-  const [user, setUser] = useState<any | null>(getUser())
+  const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer' } : null)
+  const [user, setUser] = useState<any | null>(initialUser)
 
   useEffect(() => {
-    setUser(getUser())
+    if (!DISABLE_AUTH) setUser(getUser())
   }, [])
 
   function signOut(){
@@ -135,7 +143,7 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />

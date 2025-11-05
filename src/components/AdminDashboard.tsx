@@ -206,7 +206,10 @@ function useFetch<T>(url: string){
 
 export default function AdminDashboard(){
 
-  const [tab, setTab] = useState<'import'|'audit'|'backups'>('import')
+  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'>('import')
+
+  // fetch authorized users (server-side endpoint will use service role key in production)
+  const authUsers = useFetch<any[]>('/api/admin_users')
 
   // import UI state
   const [pasteText, setPasteText] = useState('')
@@ -245,6 +248,7 @@ export default function AdminDashboard(){
         <button className={tab==='import'? 'btn':'btn ghost'} onClick={() => setTab('import')}>Mass Import</button>
         <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
         <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
+        <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
       </div>
 
       {tab === 'import' && (
@@ -523,6 +527,55 @@ export default function AdminDashboard(){
           </div>
         </div>
       )}
+
+      {tab === 'users' && (
+        <div>
+          <p className="muted">Authorized users (from Supabase)</p>
+          <div style={{marginTop:12}}>
+            {authUsers.loading && <div className="muted">Loading...</div>}
+            {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No authorized users found</div>}
+            {!authUsers.loading && authUsers.data && authUsers.data.map((u:any) => (
+              <div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginTop:8}}>
+                <div>
+                  <div style={{fontWeight:700}}>{u.initials}{u.name ? (' • ' + u.name) : ''}</div>
+                  <div className="muted">Created: {u.created_at ?? u.createdAt ?? ''}</div>
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  {u.token && <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(String(u.token || '')) }}>Copy token</button>}
+                </div>
+              </div>
+            ))}
+
+            <div style={{marginTop:12,display:'flex',gap:8}}>
+              {/* Link to Supabase table editor for authorized_users if VITE_SUPABASE_URL is configured */}
+              <AuthorizedUsersLink />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function AuthorizedUsersLink(){
+  const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? (import.meta as any).VITE_SUPABASE_URL ?? ''
+  let consoleUrl = ''
+  if (SUPABASE_URL){
+    try{
+      const u = new URL(String(SUPABASE_URL))
+      const projectRef = u.hostname.split('.')[0]
+      consoleUrl = `https://app.supabase.com/project/${projectRef}/table/public/authorized_users`
+    }catch(e){ console.warn('failed to build supabase console url', e) }
+  }
+
+  if (!consoleUrl) return (
+    <div style={{fontSize:13,color:'#666'}}>Set <code>VITE_SUPABASE_URL</code> to enable opening the Supabase table editor.</div>
+  )
+
+  return (
+    <>
+      <a className="btn" href={consoleUrl} target="_blank" rel="noreferrer">Add new user (Open Supabase)</a>
+      <div style={{fontSize:13,color:'#666',alignSelf:'center'}}>Opens Supabase table editor for <code>authorized_users</code></div>
+    </>
   )
 }

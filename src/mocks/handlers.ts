@@ -1,5 +1,4 @@
-import * as msw from 'msw'
-const rest = (msw as any).rest;
+import { rest } from 'msw';
 
 // seed data
 const containers = [
@@ -27,10 +26,24 @@ const audits = [
 
 export const handlers = [
   // containers list
-  rest.get('/api/containers', (req, res, ctx) => {
-    const archived = req.url.searchParams.get('archived') === 'true'
-    const list = containers.filter(c => !!c.archived === archived)
-    return res(ctx.status(200), ctx.json({ data: list }))
+  rest.get('/api/containers', (req: msw.RestRequest, res: msw.ResponseResolver, ctx: msw.ResponseComposition) => {
+    interface Container {
+      id: number | string;
+      name: string;
+      location: string;
+      type: string;
+      temperature: string;
+      layout: string;
+      used: number;
+      total: number;
+      archived: boolean;
+      training: boolean;
+      updated_at: string;
+    }
+
+    const archived = req.url.searchParams.get('archived') === 'true';
+    const list = containers.filter((c: Container) => !!c.archived === archived);
+    return res(ctx.status(200), ctx.json({ data: list }));
   }),
 
   rest.get('/api/containers/:id', (req, res, ctx) => {
@@ -104,6 +117,31 @@ export const handlers = [
       console.warn('authorized_users proxy error', err)
       return res(ctx.status(500), ctx.json({ error: 'proxy_error' }))
     }
+  }),
+
+  // admin users endpoint for dev to mirror server-side admin API
+  rest.get('/api/admin_users', async (req, res, ctx) => {
+    const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || ''
+    const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || ''
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set; returning empty admin_users')
+      return res(ctx.status(200), ctx.json({ data: [] }))
+    }
+
+    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/authorized_users?select=id,initials,name,created_at&order=initials.asc`
+    const headers: Record<string,string> = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: 'application/json'
+    }
+
+    try{
+      const r = await fetch(url, { method: 'GET', headers })
+      if (!r.ok){ const txt = await r.text(); return res(ctx.status(502), ctx.json({ error: 'supabase_fetch_failed', status: r.status, body: txt })) }
+      const json = await r.json()
+      return res(ctx.status(200), ctx.json({ data: json }))
+    }catch(err){ console.warn('admin_users proxy error', err); return res(ctx.status(500), ctx.json({ error: 'proxy_error' })) }
   }),
 
   rest.post('/api/backups/restore', async (req, res, ctx) => {

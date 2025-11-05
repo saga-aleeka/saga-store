@@ -29,6 +29,7 @@ export default function Header({route = window.location.hash || '#/containers', 
   return (
     <header className="topbar" ref={root}>
       <div className="top-row" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+      </div>
         <div className="brand" style={{display:'flex',alignItems:'center',gap:14}}>
           <div className="logo">SAGA</div>
           <div>
