@@ -197,9 +197,25 @@ function useFetch<T>(url: string){
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let mounted = true
+    let aborted = false
     setLoading(true)
-    fetch(getApiUrl(url)).then(r => r.json()).then(j => { if (mounted) { setData(j.data ?? j); setLoading(false) }}).catch(()=>{ if (mounted) setLoading(false) })
-    return () => { mounted = false }
+
+    async function fetchData(){
+      setLoading(true)
+      try{
+        const r = await fetch(getApiUrl(url))
+        const j = await r.json()
+        if (mounted && !aborted){ setData(j.data ?? j); setLoading(false) }
+      }catch(err){ if (mounted && !aborted) setLoading(false) }
+    }
+
+    fetchData()
+
+    // allow external triggers to refresh (e.g., after create/update/delete)
+    const handler = () => { fetchData() }
+    window.addEventListener('authorized_users_updated', handler)
+
+    return () => { mounted = false; aborted = true; window.removeEventListener('authorized_users_updated', handler) }
   }, [url])
   return { data, loading }
 }
@@ -210,6 +226,11 @@ export default function AdminDashboard(){
 
   // fetch authorized users (server-side endpoint will use service role key in production)
   const authUsers = useFetch<any[]>('/api/admin_users')
+  const [showAdd, setShowAdd] = useState(false)
+  const [newInitials, setNewInitials] = useState('')
+  const [newName, setNewName] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
 
   // import UI state
   const [pasteText, setPasteText] = useState('')
@@ -534,21 +555,85 @@ export default function AdminDashboard(){
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}
             {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No authorized users found</div>}
-            {!authUsers.loading && authUsers.data && authUsers.data.map((u:any) => (
-              <div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginTop:8}}>
-                <div>
-                  <div style={{fontWeight:700}}>{u.initials}{u.name ? (' • ' + u.name) : ''}</div>
-                  <div className="muted">Created: {u.created_at ?? u.createdAt ?? ''}</div>
-                </div>
-                <div style={{display:'flex',gap:8}}>
-                  {u.token && <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(String(u.token || '')) }}>Copy token</button>}
+
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:8}}>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn" onClick={() => setShowAdd(v => !v)}>{showAdd ? 'Cancel' : 'Add user'}</button>
+                <AuthorizedUsersLink />
+              </div>
+              <div style={{fontSize:13,color:'#666'}}>Users: {authUsers.data ? authUsers.data.length : '—'}</div>
+            </div>
+
+            {showAdd && (
+              <div style={{border:'1px solid #eee',padding:8,borderRadius:6,marginBottom:12}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input placeholder="Initials" value={newInitials} onChange={(e)=> setNewInitials(e.target.value)} />
+                  <input placeholder="Name (optional)" value={newName} onChange={(e)=> setNewName(e.target.value)} />
+                  <button className="btn" onClick={async ()=>{
+                    try{
+                      await apiFetch('/api/admin_users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials: newInitials, name: newName }) })
+                      setNewInitials(''); setNewName(''); setShowAdd(false)
+                      window.dispatchEvent(new Event('authorized_users_updated'))
+                    }catch(e){ console.warn('create user failed', e); alert('Create failed') }
+                  }}>Save</button>
                 </div>
               </div>
-            ))}
+            )}
 
-            <div style={{marginTop:12,display:'flex',gap:8}}>
-              {/* Link to Supabase table editor for authorized_users if VITE_SUPABASE_URL is configured */}
-              <AuthorizedUsersLink />
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{textAlign:'left',borderBottom:'1px solid #eee'}}>
+                    <th style={{padding:8}}>Initials</th>
+                    <th style={{padding:8}}>Name</th>
+                    <th style={{padding:8}}>Created</th>
+                    <th style={{padding:8,width:60}}> </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!authUsers.loading && authUsers.data && authUsers.data.map((u:any) => (
+                    <tr key={u.id} style={{borderBottom:'1px solid #fafafa'}}>
+                      <td style={{padding:8,verticalAlign:'middle',fontWeight:700}}>{u.initials}</td>
+                      <td style={{padding:8}}>{editingId === u.id ? (
+                        <input value={editingName} onChange={(e)=> setEditingName(e.target.value)} />
+                      ) : (u.name || '')}</td>
+                      <td style={{padding:8}} className="muted">{u.created_at ?? u.createdAt ?? ''}</td>
+                      <td style={{padding:8,verticalAlign:'middle'}}>
+                        <div style={{position:'relative'}}>
+                          <button className="btn ghost" onClick={(e)=>{
+                            // toggle edit mode
+                            if (editingId === u.id){ setEditingId(null); setEditingName('') }
+                            else { setEditingId(u.id); setEditingName(u.name || '') }
+                          }}>⋯</button>
+                          {editingId === u.id && (
+                            <div style={{position:'absolute',right:0,top:28,background:'#fff',border:'1px solid #eee',borderRadius:6,padding:8,zIndex:20,boxShadow:'0 4px 12px rgba(0,0,0,0.06)'}}>
+                              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                                <button className="btn" onClick={async ()=>{
+                                  try{
+                                    await apiFetch('/api/admin_users', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id, updates: { name: editingName } }) })
+                                    setEditingId(null); setEditingName('')
+                                    window.dispatchEvent(new Event('authorized_users_updated'))
+                                  }catch(e){ console.warn('update failed', e); alert('Update failed') }
+                                }}>Save</button>
+                                <button className="btn ghost" onClick={()=> { setEditingId(null); setEditingName('') }}>Cancel</button>
+                                <button className="btn" onClick={async ()=>{
+                                  if (!confirm(`Delete user ${u.initials}? This cannot be undone.`)) return
+                                  try{
+                                    await apiFetch('/api/admin_users', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id }) })
+                                    setEditingId(null); setEditingName('')
+                                    window.dispatchEvent(new Event('authorized_users_updated'))
+                                  }catch(e){ console.warn('delete failed', e); alert('Delete failed') }
+                                }}>Delete</button>
+                                {u.token && <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(String(u.token || '')) }}>Copy token</button>}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
