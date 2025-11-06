@@ -239,6 +239,9 @@ export default function AdminDashboard(){
     return () => clearTimeout(t)
   }, [notice])
 
+  const [testLoading, setTestLoading] = useState(false)
+  const [testResult, setTestResult] = useState<any | null>(null)
+
   // import UI state
   const [pasteText, setPasteText] = useState('')
   const [parsed, setParsed] = useState<any | null>(null)
@@ -569,6 +572,33 @@ export default function AdminDashboard(){
                 <AuthorizedUsersLink />
               </div>
               <div style={{fontSize:13,color:'#666'}}>Users: {authUsers.data ? authUsers.data.length : '—'}</div>
+            </div>
+
+            <div style={{marginBottom:12,display:'flex',gap:8,alignItems:'center'}}>
+              <button className="btn ghost" onClick={async ()=>{
+                setTestLoading(true)
+                setTestResult(null)
+                try{
+                  const r = await apiFetch('/api/admin_users')
+                  const status = r.status
+                  const hdrs: Record<string,string> = {}
+                  r.headers.forEach((v,k) => { hdrs[k] = v })
+                  const text = await r.text()
+                  let parsed: any = text
+                  try{ parsed = JSON.parse(text) }catch(e){}
+                  setTestResult({ status, headers: hdrs, body: parsed })
+                }catch(e){ setTestResult({ error: String(e) }) }
+                setTestLoading(false)
+              }}>{testLoading ? 'Testing…' : 'Test connection'}</button>
+              {testResult && (
+                <div style={{flex:1}}>
+                  <div style={{marginTop:6,fontSize:13,fontWeight:700}}>Test result</div>
+                  <pre style={{background:'#f7f7fb',padding:8,borderRadius:6,whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{typeof testResult === 'string' ? testResult : JSON.stringify(testResult,null,2)}</pre>
+                  <div style={{marginTop:6}}>
+                    <button className="btn ghost" onClick={()=> navigator.clipboard?.writeText(typeof testResult === 'string' ? testResult : JSON.stringify(testResult,null,2))}>Copy JSON</button>
+                  </div>
+                </div>
+              )}
             </div>
 
               {notice && (

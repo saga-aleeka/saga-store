@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import Header from './components/HeaderBar'
+import ContainerFilters from './components/ContainerFilters'
 import ContainerCard from './components/ContainerCard'
 import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
@@ -35,6 +36,10 @@ export default function App() {
   const [loadingArchived, setLoadingArchived] = useState(false)
   const [samples, setSamples] = useState<any[] | null>(null)
   const [loadingSamples, setLoadingSamples] = useState(false)
+  // filters
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [availableOnly, setAvailableOnly] = useState(false)
+  const [trainingOnly, setTrainingOnly] = useState(false)
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
@@ -61,6 +66,28 @@ export default function App() {
     if (route === '#/containers') load()
     return () => { mounted = false }
   }, [route])
+
+  // apply filters client-side to containers list
+  const filteredContainers = React.useMemo(() => {
+    if (!containers) return []
+    return containers.filter((c:any) => {
+      // sample type filter (if any selected)
+      if (selectedTypes && selectedTypes.length){
+        if (!selectedTypes.includes(c.type)) return false
+      }
+      // available only
+      if (availableOnly){
+        const used = Number(c.used || 0)
+        const total = Number(c.total || 0)
+        if ((total - used) <= 0) return false
+      }
+      // training only
+      if (trainingOnly){
+        if (!c.training) return false
+      }
+      return true
+    })
+  }, [containers, selectedTypes, availableOnly, trainingOnly])
 
   useEffect(() => {
     function onUpdated(e: any){
@@ -152,12 +179,16 @@ export default function App() {
       <div style={{marginTop:18}}>
         {route === '#/containers' && (
           <>
-            <div className="muted">Showing {containers ? containers.length : '...'} active containers</div>
+            <div className="muted">Showing {filteredContainers ? filteredContainers.length : '...'} active containers</div>
+            {/* Filters */}
+            <div style={{marginTop:8}}>
+              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+            </div>
             <div className="container-list">
               {loadingContainers && <div className="muted">Loading containers...</div>}
-              {!loadingContainers && containers && containers.length === 0 && <div className="muted">No active containers</div>}
-              {!loadingContainers && containers && containers.map(c => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} />
+              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
+              {!loadingContainers && filteredContainers && filteredContainers.map(c => (
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
               ))}
             </div>
           </>

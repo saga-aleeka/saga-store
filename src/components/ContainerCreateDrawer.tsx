@@ -1,6 +1,6 @@
 import React, {useState, useRef} from 'react'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
-import { getApiUrl } from '../lib/api'
+import { getApiUrl, apiFetch } from '../lib/api'
 
 export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }){
   const defaultForm = {
@@ -33,12 +33,14 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
       return
     }
 
-  const res = await fetch(getApiUrl('/api/containers'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    const j = await res.json()
-    window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
+  const res = await apiFetch('/api/containers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
+    const j = await res.json().catch(() => ({}))
+    // normalize returned created row (Supabase returns an array when return=representation)
+    const created = Array.isArray(j.data) ? j.data[0] : j.data
+    window.dispatchEvent(new CustomEvent('container-updated', { detail: created }))
     // navigate to the new container's detail view
-    if (j && j.data && j.data.id) {
-      window.location.hash = `#/containers/${j.data.id}`
+    if (created && created.id) {
+      window.location.hash = `#/containers/${created.id}`
     } else {
       onClose()
     }

@@ -51,12 +51,12 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
   }
 
   return (
-    <div style={{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.06)'}}>
-      <div style={{background:'#fff',padding:28,borderRadius:10,width:420,maxWidth:'90%',boxShadow:'0 6px 18px rgba(15,23,42,0.08)',textAlign:'center'}}>
-        <div style={{height:48,width:48,margin:'0 auto 12px',borderRadius:24,background:'#f5f5f7',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>👤</div>
-        <h2 style={{margin:'0 0 14px',fontSize:18,fontWeight:700}}>SAGA Sample Storage</h2>
+    <div className="fixed inset-0 flex items-center justify-center bg-[rgba(0,0,0,0.06)]">
+      <div className="bg-white p-7 rounded-lg w-[420px] max-w-[90%] shadow-md text-center">
+        <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center text-lg">👤</div>
+        <h2 className="m-0 mb-3 text-lg font-bold">SAGA Sample Storage</h2>
 
-        <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:10,alignItems:'stretch'}}>
+        <div className="mt-2 flex flex-col gap-2 items-stretch">
           <input
             aria-label="Enter your initials"
             placeholder="Enter your initials"
@@ -64,15 +64,14 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
             onChange={(e)=> setInitials(e.target.value)}
             onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
             autoFocus
-            style={{padding:10,borderRadius:6,border:'1px solid #e6e6e9',fontSize:14}}
+            className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
           />
-          {error && <div style={{color:'#cc1f1a',fontSize:13,marginTop:6}}>{error}</div>}
+          {error && <div className="text-red-600 text-sm mt-1">{error}</div>}
 
           <button
-            className="btn"
+            className="px-4 py-2 rounded bg-gray-700 text-white font-semibold disabled:opacity-60"
             onClick={doSignIn}
             disabled={loading || initials.trim() === ''}
-            style={{padding:'10px 12px',borderRadius:6,background:'#6b6f76',color:'#fff',border:'none',fontWeight:700}}
           >
             {loading ? 'Signing in…' : 'Start Using SAGA'}
           </button>
