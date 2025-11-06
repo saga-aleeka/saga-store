@@ -22,11 +22,17 @@ export default async function handler(req: any, res: any){
       'Accept': 'application/json'
     }
 
-    const url = `${supUrlBase}/rest/v1/authorized_users?select=*&initials=eq.${encodeURIComponent(initials)}`
-    const r = await fetch(url, { method: 'GET', headers })
+  // Use case-insensitive match so users can enter lowercase/uppercase initials.
+  // Limit the returned fields to the token and basic info and limit to 1 row.
+  const url = `${supUrlBase}/rest/v1/authorized_users?select=token,initials,name&initials=ilike.${encodeURIComponent(initials)}&limit=1`
+  const r = await fetch(url, { method: 'GET', headers })
     if (!r.ok) return res.status(502).json({ error: 'supabase_lookup_failed', status: r.status, body: await r.text() })
     const json = await r.json()
-    if (!Array.isArray(json) || json.length === 0) return res.status(401).json({ error: 'initials_not_found' })
+    if (!Array.isArray(json) || json.length === 0) {
+      // helpful debug log for server logs
+      console.warn('signin: initials not found', { initials })
+      return res.status(401).json({ error: 'initials_not_found' })
+    }
     // pick first match
     const row = json[0]
     // return token and basic info for client-side auth
