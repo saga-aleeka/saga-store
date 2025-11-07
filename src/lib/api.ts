@@ -9,6 +9,8 @@ export function getApiUrl(path: string){
   if (!path) return path
   // If path is absolute (starts with http), return as-is
   if (/^https?:\/\//i.test(path)) return path
+  // Force same-origin for internal API routes to avoid VITE_API_BASE redirecting /api/* to external hosts
+  if (path.startsWith('/api/')) return path
   // If path already contains the base, return as-is
   const base = getApiBase()
   if (base && path.startsWith(base)) return path
