@@ -14,7 +14,8 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
       setError(null)
       // First try to fetch authorized users directly (MSW will proxy to Supabase when configured)
       try{
-        const listRes = await fetch(getApiUrl('/api/authorized_users'))
+        // Force same-origin internal API to avoid VITE_API_BASE pointing at Supabase
+        const listRes = await fetch('/api/authorized_users')
         if (listRes.ok){
           const jl = await listRes.json().catch(() => ({}))
           const list = jl.data ?? jl ?? []
@@ -36,7 +37,7 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
       }
 
       // Fallback to server-side signin endpoint (if present)
-      const res = await fetch(getApiUrl('/api/auth/signin'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials }) })
+  const res = await fetch('/api/auth/signin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials }) })
       const j = await res.json().catch(() => ({}))
       if (!res.ok){
         setError(j.error || 'Initials not recognized')
