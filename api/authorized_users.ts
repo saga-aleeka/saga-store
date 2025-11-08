@@ -1,6 +1,6 @@
 // Lightweight proxy to list authorized users (no tokens returned).
 // Used by the client as the first lookup (MSW provides this in dev).
-export default async function handler(req:any, res:any){
+module.exports = async function handler(req:any, res:any){
   try{
     if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' })
     const SUPABASE_URL = process.env.SUPABASE_URL

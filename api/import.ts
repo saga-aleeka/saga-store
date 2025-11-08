@@ -3,7 +3,7 @@
 // service role key, then calls the `samples_upsert_v1` RPC with the provided items.
 // This file is intended to run on Vercel/Netlify/Supabase Edge Functions or similar.
 
-export default async function handler(req: any, res: any){
+module.exports = async function handler(req: any, res: any){
   try{
     if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
