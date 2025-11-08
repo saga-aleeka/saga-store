@@ -29,24 +29,24 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
             setLoading(false)
             return
           }
+          // No match found — inform the user. We intentionally do NOT call the signin fallback.
+          setError('Initials not recognized')
+          setLoading(false)
+          return
+        }else{
+          // If listing failed, show a generic error
+          setError('Unable to reach authentication service')
+          setLoading(false)
+          return
         }
       }catch(e){
-        // ignore proxy errors and fall back to signin endpoint
+        // Network or unexpected error during lookup
         // eslint-disable-next-line no-console
-        console.warn('authorized_users lookup failed, falling back to signin', e)
-      }
-
-      // Fallback to server-side signin endpoint (if present)
-  const res = await fetch('/api/auth/signin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials }) })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok){
-        setError(j.error || 'Initials not recognized')
+        console.warn('authorized_users lookup failed', e)
+        setError('Unable to reach authentication service')
+        setLoading(false)
         return
       }
-      setToken(j.token)
-      setUser({ initials: j.initials, name: j.name })
-      onSuccess({ initials: j.initials, name: j.name })
-      setInitials('')
     }catch(e){ console.warn(e); setError('Sign-in failed') }
     setLoading(false)
   }
