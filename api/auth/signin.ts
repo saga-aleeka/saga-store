@@ -2,7 +2,7 @@
 // Accepts POST { initials } and returns { token, initials, name } for the matched authorized_users row.
 // This endpoint uses the SUPABASE_SERVICE_ROLE_KEY to query the table server-side.
 
-module.exports = async function handler(req: any, res: any){
+export default async function handler(req: any, res: any){
   try{
     if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
