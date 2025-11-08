@@ -3,7 +3,7 @@
 // This endpoint is intended for short-lived debugging only and should be removed
 // after use. It uses the SUPABASE_SERVICE_ROLE_KEY server key to read the table.
 
-module.exports = async function handler(req:any, res:any){
+export default async function handler(req:any, res:any){
   try{
     if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' })
 
