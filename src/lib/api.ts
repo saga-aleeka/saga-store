@@ -2,7 +2,7 @@ export function getApiBase(){
   // Vite exposes env vars as import.meta.env.VITE_*
   // If VITE_API_BASE is set, use it (no trailing slash), otherwise default to '' (same origin)
   const base = ((import.meta as any).env?.VITE_API_BASE as string) || ''
-  return base.replace(/\/$/, '')
+  return base.replace(/\/$/, '') // remove trailing slash
 }
 
 export function getApiUrl(path: string){
