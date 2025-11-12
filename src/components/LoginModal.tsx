@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { getApiUrl, supabase } from '../lib/api'
 import { setToken, setUser } from '../lib/auth'
 
 export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => void }){
@@ -12,45 +11,42 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
     setLoading(true)
     try{
       setError(null)
-      // First try to fetch authorized users directly (MSW will proxy to Supabase when configured)
-      try{
-        // Use supabase-js client in the browser (anon key). Ensure VITE_SUPABASE_* envs are set.
-        const { data: list, error } = await supabase
-          .from('authorized_users')
-          .select('id,initials,name,token')
-          .order('initials', { ascending: true })
-
-        if (error) {
-          console.warn('supabase authorized_users error', error)
-          setError('Unable to reach authentication service')
-          setLoading(false)
-          return
-        }
-
-        const match = (list || []).find((u: any) => String(u.initials).toLowerCase() === initials.trim().toLowerCase())
-        if (match){
-          // NOTE: returning tokens from the DB to the browser is potentially sensitive.
-          // This follows the existing project's initials-token approach, but consider
-          // moving token issuance to a server endpoint if you want tokens kept secret.
-          setToken(String((match as any).token))
-          setUser({ initials: match.initials, name: match.name })
-          onSuccess({ initials: match.initials, name: match.name })
-          setInitials('')
-          setLoading(false)
-          return
-        }
-
-        setError('Initials not recognized')
-        setLoading(false)
-        return
-      }catch(e){
-        // Network or unexpected error during lookup
-        // eslint-disable-next-line no-console
-        console.warn('authorized_users lookup failed', e)
+      // Fetch authorized users from server endpoint (does NOT include tokens)
+      const listRes = await fetch('/api/authorized_users')
+      if (!listRes.ok) {
         setError('Unable to reach authentication service')
         setLoading(false)
         return
       }
+
+      const { data: list } = await listRes.json()
+      const match = (list || []).find((u: any) => String(u.initials).toLowerCase() === initials.trim().toLowerCase())
+      
+      if (!match) {
+        setError('Initials not recognized')
+        setLoading(false)
+        return
+      }
+
+      // Now authenticate with the server to get the token
+      const signinRes = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initials: initials.trim() })
+      })
+
+      if (!signinRes.ok) {
+        setError('Authentication failed')
+        setLoading(false)
+        return
+      }
+
+      const { token } = await signinRes.json()
+      setToken(token)
+      setUser({ initials: match.initials, name: match.name })
+      onSuccess({ initials: match.initials, name: match.name })
+      setInitials('')
+      setLoading(false)
     }catch(e){ console.warn(e); setError('Sign-in failed') }
     setLoading(false)
   }
