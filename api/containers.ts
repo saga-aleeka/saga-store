@@ -81,7 +81,8 @@ module.exports = async function handler(req: any, res: any){
         used: body?.used ?? 0,
         archived: body?.archived ?? body?.is_archived ?? false,
         temperature: body?.temperature ?? null,
-        type: body?.type ?? null
+        type: body?.type ?? null,
+        training: body?.training ?? false
       }
       const { data, error } = await supabaseAdmin
         .from('containers')
@@ -114,6 +115,7 @@ module.exports = async function handler(req: any, res: any){
     return res.status(405).json({ error: 'method_not_allowed' })
   }catch(err:any){
     console.error('containers handler error', err)
+    console.error('Error details:', { message: err?.message, stack: err?.stack, name: err?.name })
     return res.status(500).json({ error: 'internal_server_error', message: String(err?.message || err) })
   }
 }
