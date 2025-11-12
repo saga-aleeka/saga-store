@@ -25,7 +25,10 @@ module.exports = async function handler(req: any, res: any){
     if (ADMIN_SECRET && providedSecret && String(providedSecret) === String(ADMIN_SECRET)) isAdmin = true
     const m = String(authHeader || '').match(/^Bearer\s+(.+)$/i)
     const clientToken = m ? m[1] : null
-    if (!isAdmin && clientToken){
+    
+    console.log('Auth check:', { hasSecret: !!providedSecret, hasToken: !!clientToken, tokenLength: clientToken?.length })
+    
+    if (!isAdmin && clientToken && clientToken.length > 0 && clientToken !== 'null' && clientToken !== 'undefined'){
       try {
         const { data: found, error: chkError } = await supabaseAdmin
           .from('authorized_users')
@@ -33,7 +36,12 @@ module.exports = async function handler(req: any, res: any){
           .eq('token', clientToken)
           .limit(1)
 
-        if (!chkError && found && found.length > 0) isAdmin = true
+        if (chkError) {
+          console.error('Token check Supabase error:', chkError.message)
+        } else if (found && found.length > 0) {
+          isAdmin = true
+          console.log('Token validated successfully')
+        }
       } catch (tokenCheckError: any) {
         console.error('Token validation error:', tokenCheckError)
         // Continue without admin access
