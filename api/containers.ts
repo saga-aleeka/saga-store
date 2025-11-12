@@ -4,6 +4,7 @@
 // - GET /api/containers/:id -> get container with samples embedded
 // - POST /api/containers -> create container (requires admin secret or valid bearer token)
 // - PUT/PATCH /api/containers/:id -> update container (requires admin secret or valid bearer token)
+import { createClient } from '@supabase/supabase-js'
 
 export default async function handler(req: any, res: any){
   try{
@@ -13,13 +14,7 @@ export default async function handler(req: any, res: any){
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'server_misconfigured', message: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' })
 
-    const supUrlBase = SUPABASE_URL.replace(/\/$/, '')
-    const supHeaders = {
-      'apikey': SUPABASE_SERVICE_ROLE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    }
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     // Helper to validate admin credentials: either ADMIN_SECRET or a Bearer token that exists in authorized_users
     const providedSecret = req.headers['x-admin-secret'] || req.headers['x_admin_secret']
@@ -29,37 +24,45 @@ export default async function handler(req: any, res: any){
     const m = String(authHeader || '').match(/^Bearer\s+(.+)$/i)
     const clientToken = m ? m[1] : null
     if (!isAdmin && clientToken){
-      const chk = await fetch(`${supUrlBase}/rest/v1/authorized_users?select=*&token=eq.${encodeURIComponent(clientToken)}`, { method: 'GET', headers: supHeaders })
-      if (chk.ok){
-        const found = await chk.json()
-        if (Array.isArray(found) && found.length > 0) isAdmin = true
-      }
+      const { data: found, error: chkError } = await supabaseAdmin
+        .from('authorized_users')
+        .select('*')
+        .eq('token', clientToken)
+        .limit(1)
+
+      if (!chkError && found && found.length > 0) isAdmin = true
     }
 
     // GET list
     if (req.method === 'GET' && !req.url.match(/\/api\/containers\/[A-Za-z0-9_-]+$/)){
       const archived = req.query?.archived || (req.url && new URL(req.url, 'http://localhost').searchParams.get('archived'))
-  // Map archived=true -> archived=eq.true, otherwise archived=eq.false
-      let url = `${supUrlBase}/rest/v1/containers?select=*`
-  if (archived === 'true' || archived === true) url += `&archived=eq.true`
-  else url += `&archived=eq.false`
-      url += `&order=updated_at.desc`
-      const r = await fetch(url, { method: 'GET', headers: supHeaders })
-      if (!r.ok) return res.status(502).json({ error: 'supabase_list_failed', status: r.status, body: await r.text() })
-      const json = await r.json()
-      return res.status(200).json({ data: json })
+      
+      let query = supabaseAdmin.from('containers').select('*')
+      if (archived === 'true' || archived === true) {
+        query = query.eq('archived', true)
+      } else {
+        query = query.eq('archived', false)
+      }
+      query = query.order('updated_at', { ascending: false })
+
+      const { data, error } = await query
+      if (error) return res.status(502).json({ error: 'supabase_list_failed', message: error.message })
+      return res.status(200).json({ data: data ?? [] })
     }
 
     // GET single container with samples
     if (req.method === 'GET' && req.url && req.url.match(/\/api\/containers\/[A-Za-z0-9_-]+$/)){
       const parts = req.url.split('/')
       const id = parts[parts.length - 1]
-      const url = `${supUrlBase}/rest/v1/containers?select=*,samples(*)&id=eq.${encodeURIComponent(id)}`
-      const r = await fetch(url, { method: 'GET', headers: supHeaders })
-      if (!r.ok) return res.status(502).json({ error: 'supabase_container_fetch_failed', status: r.status, body: await r.text() })
-      const json = await r.json()
-      if (!Array.isArray(json) || json.length === 0) return res.status(404).json({ error: 'not_found' })
-      return res.status(200).json({ data: json[0] })
+      const { data, error } = await supabaseAdmin
+        .from('containers')
+        .select('*,samples(*)')
+        .eq('id', id)
+        .limit(1)
+
+      if (error) return res.status(502).json({ error: 'supabase_container_fetch_failed', message: error.message })
+      if (!data || data.length === 0) return res.status(404).json({ error: 'not_found' })
+      return res.status(200).json({ data: data[0] })
     }
 
     // For modifications require admin credentials
@@ -76,16 +79,17 @@ export default async function handler(req: any, res: any){
         layout: body?.layout ?? null,
         total: body?.total ?? null,
         used: body?.used ?? 0,
-    archived: body?.archived ?? body?.is_archived ?? false,
+        archived: body?.archived ?? body?.is_archived ?? false,
         temperature: body?.temperature ?? null,
         type: body?.type ?? null
       }
-      const r = await fetch(`${supUrlBase}/rest/v1/containers`, { method: 'POST', headers: { ...supHeaders, Prefer: 'return=representation' }, body: JSON.stringify(insert) })
-      const text = await r.text()
-      let json: any = null
-      try{ json = JSON.parse(text) }catch(e){ json = text }
-      if (!r.ok) return res.status(502).json({ error: 'supabase_insert_failed', status: r.status, body: json })
-      return res.status(201).json({ data: json })
+      const { data, error } = await supabaseAdmin
+        .from('containers')
+        .insert([insert])
+        .select()
+
+      if (error) return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
+      return res.status(201).json({ data })
     }
 
     // Update container
@@ -96,13 +100,15 @@ export default async function handler(req: any, res: any){
       const parts = req.url.split('/')
       const id = parts[parts.length - 1]
       if (!id) return res.status(400).json({ error: 'missing_id' })
-      // Leave `archived` property as-is (Supabase column is `archived`)
-      const r = await fetch(`${supUrlBase}/rest/v1/containers?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...supHeaders, Prefer: 'return=representation' }, body: JSON.stringify(body) })
-      const text = await r.text()
-      let json: any = null
-      try{ json = JSON.parse(text) }catch(e){ json = text }
-      if (!r.ok) return res.status(502).json({ error: 'supabase_update_failed', status: r.status, body: json })
-      return res.status(200).json({ data: json })
+      
+      const { data, error } = await supabaseAdmin
+        .from('containers')
+        .update(body)
+        .eq('id', id)
+        .select()
+
+      if (error) return res.status(502).json({ error: 'supabase_update_failed', message: error.message })
+      return res.status(200).json({ data })
     }
 
     return res.status(405).json({ error: 'method_not_allowed' })

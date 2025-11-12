@@ -20,6 +20,10 @@ export function getApiUrl(path: string){
   return base ? `${base}/${path}` : path
 }
 
+// Expose the supabase client for parts of the app that prefer it.
+import { supabase } from './supabaseClient'
+export { supabase }
+
 import { getToken } from './auth'
 
 export async function apiFetch(input: string, init?: RequestInit){

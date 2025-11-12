@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { getApiUrl } from '../lib/api'
+import { getApiUrl, supabase } from '../lib/api'
 import { setToken, setUser } from '../lib/auth'
 
 export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => void }){
@@ -14,31 +14,35 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
       setError(null)
       // First try to fetch authorized users directly (MSW will proxy to Supabase when configured)
       try{
-        // Force same-origin internal API to avoid VITE_API_BASE pointing at Supabase
-        const listRes = await fetch('/api/authorized_users')
-        if (listRes.ok){
-          const jl = await listRes.json().catch(() => ({}))
-          const list = jl.data ?? jl ?? []
-          const match = (list || []).find((u: any) => String(u.initials).toLowerCase() === initials.trim().toLowerCase())
-          if (match){
-            // use the token stored in the authorized_users table for client-side auth
-            setToken(String(match.token))
-            setUser({ initials: match.initials, name: match.name })
-            onSuccess({ initials: match.initials, name: match.name })
-            setInitials('')
-            setLoading(false)
-            return
-          }
-          // No match found — inform the user. We intentionally do NOT call the signin fallback.
-          setError('Initials not recognized')
-          setLoading(false)
-          return
-        }else{
-          // If listing failed, show a generic error
+        // Use supabase-js client in the browser (anon key). Ensure VITE_SUPABASE_* envs are set.
+        const { data: list, error } = await supabase
+          .from('authorized_users')
+          .select('id,initials,name,token')
+          .order('initials', { ascending: true })
+
+        if (error) {
+          console.warn('supabase authorized_users error', error)
           setError('Unable to reach authentication service')
           setLoading(false)
           return
         }
+
+        const match = (list || []).find((u: any) => String(u.initials).toLowerCase() === initials.trim().toLowerCase())
+        if (match){
+          // NOTE: returning tokens from the DB to the browser is potentially sensitive.
+          // This follows the existing project's initials-token approach, but consider
+          // moving token issuance to a server endpoint if you want tokens kept secret.
+          setToken(String((match as any).token))
+          setUser({ initials: match.initials, name: match.name })
+          onSuccess({ initials: match.initials, name: match.name })
+          setInitials('')
+          setLoading(false)
+          return
+        }
+
+        setError('Initials not recognized')
+        setLoading(false)
+        return
       }catch(e){
         // Network or unexpected error during lookup
         // eslint-disable-next-line no-console
