@@ -112,8 +112,14 @@ module.exports = async function handler(req: any, res: any){
 
       console.log('Insert result:', { hasData: !!data, error: error?.message })
 
-      if (error) return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
-      return res.status(201).json({ data })
+      if (error) {
+        console.error('Supabase insert error:', error)
+        return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
+      }
+      
+      console.log('Returning success response')
+      res.status(201).json({ data })
+      return
     }
 
     // Update container
