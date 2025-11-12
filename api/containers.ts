@@ -8,6 +8,8 @@ const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async function handler(req: any, res: any){
   try{
+    console.log('containers handler called:', req.method, req.url)
+    
     const SUPABASE_URL = process.env.SUPABASE_URL
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
     const ADMIN_SECRET = process.env.ADMIN_SECRET
@@ -24,13 +26,18 @@ module.exports = async function handler(req: any, res: any){
     const m = String(authHeader || '').match(/^Bearer\s+(.+)$/i)
     const clientToken = m ? m[1] : null
     if (!isAdmin && clientToken){
-      const { data: found, error: chkError } = await supabaseAdmin
-        .from('authorized_users')
-        .select('*')
-        .eq('token', clientToken)
-        .limit(1)
+      try {
+        const { data: found, error: chkError } = await supabaseAdmin
+          .from('authorized_users')
+          .select('*')
+          .eq('token', clientToken)
+          .limit(1)
 
-      if (!chkError && found && found.length > 0) isAdmin = true
+        if (!chkError && found && found.length > 0) isAdmin = true
+      } catch (tokenCheckError: any) {
+        console.error('Token validation error:', tokenCheckError)
+        // Continue without admin access
+      }
     }
 
     // GET list
