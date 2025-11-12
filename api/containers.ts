@@ -4,9 +4,9 @@
 // - GET /api/containers/:id -> get container with samples embedded
 // - POST /api/containers -> create container (requires admin secret or valid bearer token)
 // - PUT/PATCH /api/containers/:id -> update container (requires admin secret or valid bearer token)
-import { createClient } from '@supabase/supabase-js'
+const { createClient } = require('@supabase/supabase-js')
 
-export default async function handler(req: any, res: any){
+module.exports = async function handler(req: any, res: any){
   try{
     const SUPABASE_URL = process.env.SUPABASE_URL
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

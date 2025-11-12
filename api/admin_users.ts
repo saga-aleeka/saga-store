@@ -2,9 +2,9 @@
 // - GET /api/admin_users  -> list users (does NOT return tokens)
 // - POST /api/admin_users -> create a user (requires x-admin-secret header)
 // - DELETE /api/admin_users -> delete a user by id/initials/token (requires x-admin-secret header)
-import { createClient } from '@supabase/supabase-js'
+const { createClient } = require('@supabase/supabase-js')
 
-export default async function handler(req: any, res: any){
+module.exports = async function handler(req: any, res: any){
   try{
     const SUPABASE_URL = process.env.SUPABASE_URL
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
