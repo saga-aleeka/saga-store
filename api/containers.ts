@@ -87,6 +87,9 @@ module.exports = async function handler(req: any, res: any){
     if (req.method === 'POST'){
       let body: any = req.body
       try{ if (!body && req.json) body = await req.json() }catch(e){}
+      
+      console.log('Creating container with body:', JSON.stringify(body))
+      
       const insert = {
         id: body?.id ?? undefined,
         name: body?.name ?? null,
@@ -99,10 +102,15 @@ module.exports = async function handler(req: any, res: any){
         type: body?.type ?? null,
         training: body?.training ?? false
       }
+      
+      console.log('Insert object:', JSON.stringify(insert))
+      
       const { data, error } = await supabaseAdmin
         .from('containers')
         .insert([insert])
         .select()
+
+      console.log('Insert result:', { hasData: !!data, error: error?.message })
 
       if (error) return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
       return res.status(201).json({ data })
