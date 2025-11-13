@@ -244,7 +244,7 @@ export default function App() {
         const isArchiveRoute = route === '#/archive'
         const { data, error } = await supabase
           .from('samples')
-          .select('*, containers(name, location)')
+          .select('*, containers!samples_container_id_fkey(name, location)')
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
         
