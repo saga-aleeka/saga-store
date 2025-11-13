@@ -418,8 +418,8 @@ export default function App() {
                   <thead style={{background: '#f3f4f6'}}>
                     <tr>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Owner</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Collected</th>
@@ -444,8 +444,8 @@ export default function App() {
                           }}
                         >
                           <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
-                          <td style={{padding: 12}}>{containerName}</td>
                           <td style={{padding: 12}}>{containerLocation}</td>
+                          <td style={{padding: 12}}>{containerName}</td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '2px 8px',

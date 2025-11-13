@@ -565,8 +565,8 @@ export default function WorklistManager() {
                   </th>
                   <th style={{padding: 12, textAlign: 'left'}}>Sample ID</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Type</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Container</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Location</th>
+                  <th style={{padding: 12, textAlign: 'left'}}>Container</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Position</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Status</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Actions</th>
@@ -602,10 +602,10 @@ export default function WorklistManager() {
                       </span>
                     </td>
                     <td style={{padding: 12}}>
-                      {sample.container_name || <span className="muted">—</span>}
+                      {sample.container_location || <span className="muted">—</span>}
                     </td>
                     <td style={{padding: 12}}>
-                      {sample.container_location || <span className="muted">—</span>}
+                      {sample.container_name || <span className="muted">—</span>}
                     </td>
                     <td style={{padding: 12}}>
                       {sample.position || <span className="muted">—</span>}
