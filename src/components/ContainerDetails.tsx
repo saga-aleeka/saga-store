@@ -55,10 +55,9 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const findNextEmptyPosition = (): string | null => {
     if (!data) return null
     const samples = data.samples || []
+    // Include ALL samples (archived and active) as occupied positions
     const occupiedPositions = new Set(
-      samples
-        .filter((s: any) => !s.is_archived)
-        .map((s: any) => s.position?.toUpperCase())
+      samples.map((s: any) => s.position?.toUpperCase())
     )
     
     // Parse layout
