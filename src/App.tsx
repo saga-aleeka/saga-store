@@ -208,15 +208,16 @@ export default function App() {
   }, [route])
 
   useEffect(() => {
-    // load samples when on samples route
+    // load samples when on samples route or archive route
     let mounted = true
     async function loadSamples(){
       setLoadingSamples(true)
       try{
+        const isArchiveRoute = route === '#/archive'
         const { data, error } = await supabase
           .from('samples')
           .select('*, containers(name, location)')
-          .eq('is_archived', false)
+          .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
         
         if (!mounted) return
@@ -228,7 +229,7 @@ export default function App() {
       }finally{ if (mounted) setLoadingSamples(false) }
     }
 
-    if (route === '#/samples') loadSamples()
+    if (route === '#/samples' || route === '#/archive') loadSamples()
     return () => { mounted = false }
   }, [route])
 
@@ -291,8 +292,63 @@ export default function App() {
               {loadingArchived && <div className="muted">Loading archived containers...</div>}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
               {!loadingArchived && archivedContainers && archivedContainers.map((c:any) => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} />
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived={c.archived} />
               ))}
+            </div>
+            
+            <div style={{marginTop:32,paddingTop:24,borderTop:'1px solid #e5e7eb'}}>
+              <h3 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Archived Samples</h3>
+              <div className="muted" style={{marginBottom:12}}>Samples marked as archived</div>
+              {loadingSamples && <div className="muted">Loading archived samples...</div>}
+              {!loadingSamples && (
+                <div>
+                  {samples && samples.filter((s: any) => s.is_archived).length === 0 && (
+                    <div className="muted">No archived samples</div>
+                  )}
+                  {samples && samples.filter((s: any) => s.is_archived).map((s:any) => {
+                    const handleSampleClick = async () => {
+                      window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
+                    }
+                    
+                    const containerName = s.containers?.name || s.container_id
+                    const containerLocation = s.containers?.location || 'Location unknown'
+                    
+                    return (
+                      <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                        <div style={{display:'flex',gap:12,alignItems:'center',flex:1}}>
+                          <div style={{width:36,height:36,flex:'none',borderRadius:6,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12}}>{s.owner ? s.owner[0].toUpperCase() : (s.sample_id || s.id).slice(-2)}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:700,fontSize:14}}>{s.sample_id}</div>
+                            <div style={{marginTop:4}}>
+                              <button
+                                onClick={handleSampleClick}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 10px',
+                                  background: '#fef3c7',
+                                  border: '1px solid #fde68a',
+                                  borderRadius: 6,
+                                  fontSize: 13,
+                                  cursor: 'pointer',
+                                  color: '#92400e'
+                                }}
+                              >
+                                {containerName} • {s.position}
+                              </button>
+                            </div>
+                            {s.data?.collected_at && (
+                              <div className="muted" style={{marginTop:4}}>Collected: {formatDate(s.data.collected_at)}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="muted" style={{fontSize:13}}>Archived {formatDateTime(s.updated_at)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </>
         )}
