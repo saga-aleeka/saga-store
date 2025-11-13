@@ -39,23 +39,22 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
     <>
     <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}` }}>
       <div className="flex justify-between items-start gap-4">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-3">
-            <div className="text-lg font-semibold truncate">{name ?? id}</div>
-            <div className="text-sm text-gray-500">ID: {id}</div>
+            <div className="text-lg font-semibold truncate">{name ?? 'Unnamed Container'}</div>
           </div>
-          <div className="flex items-center gap-3 mt-1">
-            <div className="text-sm text-gray-600 truncate">{rest.location ?? ''}</div>
-            <div>
+          <div className="flex items-center gap-3 mt-1 min-w-0">
+            <div className="text-sm text-gray-600 truncate flex-shrink">{rest.location ?? ''}</div>
+            <div className="flex-shrink-0">
               <TypeBadge type={type} />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <div className="inline-flex items-center gap-2">
-            <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium">{temperature}</span>
-            <span className="px-2 py-1 text-xs bg-gray-100 rounded">{layout}</span>
+            <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium whitespace-nowrap">{temperature}</span>
+            <span className="px-2 py-1 text-xs bg-gray-100 rounded whitespace-nowrap">{layout}</span>
           </div>
           <div className="flex items-center gap-2" onClick={(e)=> e.stopPropagation()}>
             <button className="card-action" aria-label="archive" title="Archive" onClick={async () => {
@@ -70,11 +69,11 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       </div>
 
       <div className="mt-3">
-        <div className="flex items-center justify-between">
-    <div className="text-sm text-gray-500">Sample type: {type}</div>
-          <div className="text-sm">
-            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium">{occupancy.used}/{occupancy.total}</span>
-            <span className="ml-2 text-sm text-gray-500">{available} available</span>
+        <div className="flex items-center justify-between gap-2">
+    <div className="text-sm text-gray-500 truncate">Sample type: {type}</div>
+          <div className="text-sm flex-shrink-0">
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium whitespace-nowrap">{occupancy.used}/{occupancy.total}</span>
+            <span className="ml-2 text-sm text-gray-500 whitespace-nowrap">{available} available</span>
           </div>
         </div>
 

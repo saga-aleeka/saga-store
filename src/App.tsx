@@ -55,13 +55,20 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*')
+          .select('*, samples(id, is_archived)')
           .eq('archived', false)
           .order('updated_at', { ascending: false })
         
         if (!mounted) return
         if (error) throw error
-        setContainers(data ?? [])
+        
+        // Count active samples for each container
+        const containersWithCounts = (data ?? []).map((c: any) => ({
+          ...c,
+          used: (c.samples || []).filter((s: any) => !s.is_archived).length
+        }))
+        
+        setContainers(containersWithCounts)
       }catch(e){
         console.warn('failed to load containers', e)
         if (mounted) setContainers([])
@@ -116,13 +123,20 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*')
+          .select('*, samples(id, is_archived)')
           .eq('archived', true)
           .order('updated_at', { ascending: false })
         
         if (!mounted) return
         if (error) throw error
-        setArchivedContainers(data ?? [])
+        
+        // Count active samples for each container
+        const containersWithCounts = (data ?? []).map((c: any) => ({
+          ...c,
+          used: (c.samples || []).filter((s: any) => !s.is_archived).length
+        }))
+        
+        setArchivedContainers(containersWithCounts)
       }catch(e){
         console.warn('failed to load archived', e)
         if (mounted) setArchivedContainers([])
