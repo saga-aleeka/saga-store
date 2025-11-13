@@ -24,23 +24,42 @@ export default function WorklistManager() {
 
   const parseCSV = (text: string): string[] => {
     const lines = text.trim().split('\n')
-    const sampleIds: string[] = []
+    if (lines.length === 0) return []
     
-    // Try to detect header and find sample ID column
-    lines.forEach((line, index) => {
-      const trimmedLine = line.trim()
-      if (!trimmedLine) return
+    // Parse header to find SampleID column index
+    const headerLine = lines[0]
+    const headers = headerLine.split(/[,\t]/).map(h => h.trim())
+    
+    // Find sample ID column - try various common names
+    const sampleIdIndex = headers.findIndex(h => 
+      /^sample.*id$/i.test(h) || 
+      h.toLowerCase() === 'sampleid' ||
+      h.toLowerCase() === 'barcode' ||
+      h.toLowerCase() === 'specimen'
+    )
+    
+    if (sampleIdIndex === -1) {
+      console.warn('Could not find SampleID column, using first column')
+    }
+    
+    const columnIndex = sampleIdIndex !== -1 ? sampleIdIndex : 0
+    const sampleIds: string[] = []
+    const seen = new Set<string>()
+    
+    // Parse data rows
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line) continue
       
-      // Skip potential header lines
-      if (index === 0 && /sample.*id|barcode|specimen/i.test(trimmedLine)) return
+      const parts = line.split(/[,\t]/).map(p => p.trim())
+      const sampleId = parts[columnIndex]
       
-      // Split by comma or tab
-      const parts = trimmedLine.split(/[,\t]/).map(p => p.trim())
-      
-      // Take first non-empty value as sample ID
-      const sampleId = parts.find(p => p && p.length > 0)
-      if (sampleId) sampleIds.push(sampleId)
-    })
+      // Add unique sample IDs only
+      if (sampleId && !seen.has(sampleId)) {
+        sampleIds.push(sampleId)
+        seen.add(sampleId)
+      }
+    }
     
     return sampleIds
   }
