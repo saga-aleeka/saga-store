@@ -23,6 +23,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
   const nameRef = useRef<HTMLInputElement | null>(null)
   const locationRef = useRef<HTMLInputElement | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   if (!container) return null
 
@@ -40,11 +41,27 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
       return
     }
 
-  const res = await apiFetch(`/api/containers/${container.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    const j = await res.json()
-    // notify app that container updated
-    window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
-    onClose()
+    setSaving(true)
+    try {
+      const res = await apiFetch(`/api/containers/${container.id}`, { 
+        method: 'PUT', 
+        headers: {'Content-Type':'application/json'}, 
+        body: JSON.stringify(form) 
+      })
+      
+      if (!res.ok) {
+        throw new Error('Failed to update container')
+      }
+      
+      const j = await res.json()
+      // notify app that container updated
+      window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
+      onClose()
+    } catch(e) {
+      console.error('Save failed:', e)
+      alert('Failed to save changes. Please try again.')
+      setSaving(false)
+    }
   }
 
   async function deleteContainer(){
@@ -129,14 +146,16 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
             <button 
               className="btn" 
               onClick={deleteContainer} 
-              disabled={deleting}
+              disabled={deleting || saving}
               style={{background:'#ef4444',color:'white',borderColor:'#ef4444'}}
             >
               {deleting ? 'Deleting...' : 'Delete Container'}
             </button>
             <div style={{display:'flex',gap:8}}>
-              <button className="btn ghost" onClick={onClose}>Cancel</button>
-              <button className="btn" onClick={save} disabled={!form.name || !form.location || deleting}>Save changes</button>
+              <button className="btn ghost" onClick={onClose} disabled={saving || deleting}>Cancel</button>
+              <button className="btn" onClick={save} disabled={!form.name || !form.location || saving || deleting}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
             </div>
           </div>
         </div>
