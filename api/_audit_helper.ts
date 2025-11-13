@@ -23,12 +23,18 @@ export async function createAuditLog(supabaseAdmin: any, params: {
       description: params.description ?? null
     }
 
-    const { error } = await supabaseAdmin
+    console.log('Creating audit log:', insert)
+
+    const { data, error } = await supabaseAdmin
       .from('audit_logs')
       .insert([insert])
+      .select()
 
     if (error) {
       console.error('Failed to create audit log:', error)
+      console.error('Error details:', JSON.stringify(error, null, 2))
+    } else {
+      console.log('Audit log created successfully:', data)
     }
   } catch (err) {
     console.error('Audit log creation error:', err)

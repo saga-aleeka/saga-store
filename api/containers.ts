@@ -121,7 +121,9 @@ module.exports = async function handler(req: any, res: any){
       
       // Create audit log
       const user = getUserFromRequest(req)
+      console.log('User from request:', user)
       if (data && data[0]) {
+        console.log('Creating audit log for new container:', data[0].id)
         await createAuditLog(supabaseAdmin, {
           userInitials: user.initials,
           userName: user.name,
@@ -170,7 +172,9 @@ module.exports = async function handler(req: any, res: any){
       
       // Create audit log
       const user = getUserFromRequest(req)
+      console.log('User from update request:', user)
       if (data && data[0] && original) {
+        console.log('Creating audit log for container update:', data[0].id)
         const changes: any = {}
         const changedFields: string[] = []
         
@@ -271,7 +275,9 @@ module.exports = async function handler(req: any, res: any){
 
       // Create audit log
       const user = getUserFromRequest(req)
+      console.log('User from delete request:', user)
       if (containerData) {
+        console.log('Creating audit log for container deletion:', id)
         await createAuditLog(supabaseAdmin, {
           userInitials: user.initials,
           userName: user.name,
