@@ -50,16 +50,11 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
     <div className="drawer-overlay" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h3 style={{margin:0}}>Edit container {container.id}</h3>
+          <h3 style={{margin:0}}>Edit container</h3>
           <button className="btn ghost" onClick={onClose}>Close</button>
         </div>
 
         <div style={{marginTop:12,display:'grid',gap:10}}>
-          <label>
-            Container ID
-            <input value={form.id ?? ''} onChange={(e) => updateField('id', e.target.value)} />
-          </label>
-
           <label>
             Container name
             <input ref={nameRef} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'error-name' : undefined} value={form.name ?? ''} onChange={(e) => { updateField('name', e.target.value); setErrors((s)=> ({...s, name: undefined})) }} />

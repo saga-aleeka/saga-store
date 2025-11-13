@@ -209,10 +209,10 @@ export default function ContainerDetails({ id }: { id: string | number }){
     <div style={{ position: 'relative' }}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:20}}>
         <div>
-          <h2 style={{margin:0}}>{data.name || `Container ${data.id}`}</h2>
+          <h2 style={{margin:0}}>{data.name || 'Unnamed Container'}</h2>
           <div className="muted">Location: {data.location || 'Not specified'}</div>
           <div className="muted">
-            ID: {data.id} • {data.type} • {data.layout} • {data.temperature}
+            {data.type} • {data.layout} • {data.temperature}
           </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>

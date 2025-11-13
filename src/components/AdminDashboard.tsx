@@ -642,8 +642,8 @@ export default function AdminDashboard(){
             {!backups.loading && backups.data && backups.data.map((b:any) => (
               <div key={b.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginTop:8}}>
                 <div>
-                  <div style={{fontWeight:700}}>{b.id}</div>
-                  <div className="muted">{b.created_at} • {b.size}</div>
+                  <div style={{fontWeight:700}}>{b.created_at}</div>
+                  <div className="muted">{b.size}</div>
                 </div>
                 <div style={{display:'flex',gap:8}}>
                   <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(b.id)}>Copy</button>
