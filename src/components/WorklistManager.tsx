@@ -65,7 +65,11 @@ export default function WorklistManager() {
         .select('*, containers(id, name, location)')
         .in('sample_id', sampleIds)
       
-      if (error) throw error
+      if (error) {
+        console.error('Database error:', error)
+        alert(`Database error: ${error.message}\n\nPlease make sure the database migration has been run. See db/migrations/2025-11-13-add-checkout-fields.sql`)
+        return
+      }
 
       // Build worklist with container info
       const worklistData: WorklistSample[] = sampleIds.map(id => {
@@ -85,9 +89,9 @@ export default function WorklistManager() {
 
       setWorklist(worklistData)
       setSelectedSamples(new Set())
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error processing worklist:', err)
-      alert('Failed to process worklist file')
+      alert(`Failed to process worklist file: ${err?.message || 'Unknown error'}\n\nCheck console for details.`)
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -126,19 +130,27 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get current sample data to save previous positions
-      const { data: currentSamples } = await supabase
+      const { data: currentSamples, error: fetchError } = await supabase
         .from('samples')
-        .select('id, sample_id, container_id, position')
+        .select('id, sample_id, container_id, position, is_checked_out')
         .in('sample_id', sampleIds)
-        .eq('is_checked_out', false)
       
-      if (!currentSamples || currentSamples.length === 0) {
-        alert('No samples available to checkout')
+      if (fetchError) {
+        console.error('Error fetching samples:', fetchError)
+        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
+        return
+      }
+      
+      // Filter to only non-checked-out samples (do it client-side for compatibility)
+      const availableSamples = currentSamples?.filter((s: any) => !s.is_checked_out) || []
+      
+      if (!availableSamples || availableSamples.length === 0) {
+        alert('No samples available to checkout (they may already be checked out)')
         return
       }
 
       // Update samples to checked out status
-      const updates = currentSamples.map(s => ({
+      const updates = availableSamples.map((s: any) => ({
         id: s.id,
         is_checked_out: true,
         checked_out_at: new Date().toISOString(),
@@ -149,11 +161,15 @@ export default function WorklistManager() {
         position: null
       }))
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('samples')
         .upsert(updates)
 
-      if (error) throw error
+      if (updateError) {
+        console.error('Error updating samples:', updateError)
+        alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+        return
+      }
 
       // Refresh worklist
       const { data: refreshed } = await supabase
@@ -180,11 +196,11 @@ export default function WorklistManager() {
         return item
       }))
 
-      alert(`Checked out ${currentSamples.length} sample(s)`)
+      alert(`Checked out ${availableSamples.length} sample(s)`)
       setSelectedSamples(new Set())
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error checking out samples:', err)
-      alert('Failed to checkout samples')
+      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -196,21 +212,28 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get samples with previous position data
-      const { data: samples } = await supabase
+      const { data: samples, error: fetchError } = await supabase
         .from('samples')
-        .select('id, sample_id, previous_container_id, previous_position')
+        .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
         .in('sample_id', sampleIds)
-        .eq('is_checked_out', true)
       
-      if (!samples || samples.length === 0) {
+      if (fetchError) {
+        console.error('Error fetching samples:', fetchError)
+        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
+        return
+      }
+      
+      const checkedOutSamples = samples?.filter((s: any) => s.is_checked_out) || []
+      
+      if (!checkedOutSamples || checkedOutSamples.length === 0) {
         alert('No checked out samples to undo')
         return
       }
 
       // Restore samples to previous positions
-      const updates = samples
-        .filter(s => s.previous_container_id && s.previous_position)
-        .map(s => ({
+      const updates = checkedOutSamples
+        .filter((s: any) => s.previous_container_id && s.previous_position)
+        .map((s: any) => ({
           id: s.id,
           container_id: s.previous_container_id,
           position: s.previous_position,
@@ -226,11 +249,15 @@ export default function WorklistManager() {
         return
       }
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('samples')
         .upsert(updates)
 
-      if (error) throw error
+      if (updateError) {
+        console.error('Error restoring samples:', updateError)
+        alert(`Failed to undo checkout: ${updateError.message}`)
+        return
+      }
 
       // Refresh worklist
       const { data: refreshed } = await supabase
@@ -258,9 +285,9 @@ export default function WorklistManager() {
 
       alert(`Restored ${updates.length} sample(s) to original positions`)
       setSelectedSamples(new Set())
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error undoing checkout:', err)
-      alert('Failed to undo checkout')
+      alert(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
