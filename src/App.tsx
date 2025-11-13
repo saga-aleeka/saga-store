@@ -409,68 +409,75 @@ export default function App() {
 
         {route === '#/samples' && (
           <div>
-            <div className="muted">Showing {samples ? samples.length : '...'} samples</div>
-            <div style={{marginTop:12}}>
-              {loadingSamples && <div className="muted">Loading samples...</div>}
-              {!loadingSamples && samples && samples.length === 0 && <div className="muted">No samples</div>}
-              {!loadingSamples && samples && samples.map((s:any) => {
-                const handleSampleClick = async () => {
-                  // Navigate to container detail with highlighted sample
-                  window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
-                }
-                
-                const containerName = s.containers?.name || s.container_id
-                const containerLocation = s.containers?.location || 'Location unknown'
-                
-                return (
-                  <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                    <div style={{display:'flex',gap:12,alignItems:'center',flex:1}}>
-                      <div style={{width:36,height:36,flex:'none',borderRadius:6,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12}}>{s.owner ? s.owner[0].toUpperCase() : (s.sample_id || s.id).slice(-2)}</div>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:700,fontSize:14}}>{s.sample_id}</div>
-                        <div style={{marginTop:4}}>
-                          <button
-                            onClick={handleSampleClick}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              padding: '4px 10px',
-                              background: '#eff6ff',
-                              border: '1px solid #bfdbfe',
-                              borderRadius: 6,
-                              fontSize: 12,
-                              fontWeight: 600,
+            <div className="muted" style={{marginBottom: 16}}>Showing {samples ? samples.length : '...'} samples</div>
+            {loadingSamples && <div className="muted">Loading samples...</div>}
+            {!loadingSamples && samples && samples.length === 0 && <div className="muted">No samples</div>}
+            {!loadingSamples && samples && samples.length > 0 && (
+              <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
+                <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                  <thead style={{background: '#f3f4f6'}}>
+                    <tr>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Owner</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Collected</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {samples.map((s: any, index: number) => {
+                      const handleSampleClick = () => {
+                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
+                      }
+                      
+                      const containerName = s.containers?.name || s.container_id || '-'
+                      const containerLocation = s.containers?.location || '-'
+                      
+                      return (
+                        <tr 
+                          key={s.id}
+                          style={{
+                            borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
+                            background: 'white'
+                          }}
+                        >
+                          <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
+                          <td style={{padding: 12}}>{containerName}</td>
+                          <td style={{padding: 12}}>{containerLocation}</td>
+                          <td style={{padding: 12}}>
+                            <span style={{
+                              padding: '2px 8px',
+                              background: '#dbeafe',
                               color: '#1e40af',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.background = '#dbeafe'
-                              e.currentTarget.style.borderColor = '#93c5fd'
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.background = '#eff6ff'
-                              e.currentTarget.style.borderColor = '#bfdbfe'
-                            }}
-                            title="Click to view in container grid"
-                          >
-                            <span>📦</span>
-                            <span>{containerName}</span>
-                            <span style={{color:'#60a5fa'}}>•</span>
-                            <span>{s.position}</span>
-                            <span style={{color:'#60a5fa'}}>•</span>
-                            <span style={{fontSize:11,color:'#3b82f6'}}>{containerLocation}</span>
-                          </button>
-                        </div>
-                        <div className="muted" style={{marginTop:4,fontSize:12}}>Owner: {s.owner || 'N/A'} • Collected: {formatDate(s.collected_at)}</div>
-                      </div>
-                    </div>
-                    <div className="muted" style={{fontSize:12,whiteSpace:'nowrap'}}>{formatDateTime(s.updated_at)}</div>
-                  </div>
-                )
-              })}
-            </div>
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600
+                            }}>
+                              {s.position || '-'}
+                            </span>
+                          </td>
+                          <td style={{padding: 12}}>{s.owner || '-'}</td>
+                          <td style={{padding: 12}} className="muted">{formatDate(s.collected_at)}</td>
+                          <td style={{padding: 12}}>
+                            {s.container_id && (
+                              <button
+                                className="btn ghost"
+                                onClick={handleSampleClick}
+                                style={{fontSize: 12, padding: '4px 8px'}}
+                              >
+                                View in Container
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
