@@ -37,10 +37,10 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   }, [container?.layout])
 
   useEffect(() => {
-    // Build map of position -> sample
+    // Build map of position -> sample (include archived samples)
     const map = new Map<string, Sample>()
     samples.forEach(sample => {
-      if (sample.position && !sample.is_archived) {
+      if (sample.position) {
         map.set(sample.position.toUpperCase(), sample)
       }
     })
@@ -73,7 +73,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
 
   const getCellColor = (sample?: Sample) => {
     if (!sample) return '#f9fafb' // empty - gray-50
-    if (sample.is_archived) return '#fee2e2' // archived - red-100
+    if (sample.is_archived) return '#fef3c7' // archived - yellow-100
     const status = sample.data?.status || sample.status
     if (status === 'pending') return '#fef3c7' // yellow-100
     if (status === 'processing') return '#dbeafe' // blue-100
@@ -199,7 +199,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                         : 'none'
                   }}
                   className={isOccupied || editMode ? 'hover:shadow-md hover:scale-105' : ''}
-                  title={isOccupied ? `${sample.sample_id}\n${position}` : position}
+                  title={isOccupied ? `${sample.sample_id}${sample.is_archived ? ' (archived)' : ''}\n${position}` : position}
                 >
                   {isOccupied ? (
                     <>
@@ -209,11 +209,23 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                         textAlign: 'center',
                         wordBreak: 'break-all',
                         lineHeight: '1.2',
-                        width: '100%'
+                        width: '100%',
+                        opacity: sample.is_archived ? 0.6 : 1,
+                        textDecoration: sample.is_archived ? 'line-through' : 'none'
                       }}>
                         {sample.sample_id}
                       </div>
-                      {sample.owner && (
+                      {sample.is_archived && (
+                        <div style={{ 
+                          fontSize: '8px', 
+                          color: '#92400e',
+                          marginTop: '2px',
+                          fontWeight: 600
+                        }}>
+                          ARCHIVED
+                        </div>
+                      )}
+                      {!sample.is_archived && sample.owner && (
                         <div style={{ 
                           fontSize: '9px', 
                           color: '#6b7280',
