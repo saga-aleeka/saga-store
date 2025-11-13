@@ -533,6 +533,9 @@ export default function AdminDashboard(){
                       is_archived: false
                     }))
                     
+                    console.log('Importing samples:', samplesData.length, 'samples')
+                    console.log('Sample data preview:', samplesData.slice(0, 3))
+                    
                     let done = 0, failed = 0
                     // Process in batches of 50 for better performance
                     const batchSize = 50
@@ -541,9 +544,29 @@ export default function AdminDashboard(){
                       try {
                         // RPC expects jsonb array directly, not wrapped in object
                         const { data, error } = await supabase.rpc('samples_upsert_v1', { sample_json: batch })
-                        if (error) throw error
-                        done += batch.length
-                        setImportProgress(p => ({ ...p, done }))
+                        if (error) {
+                          console.error('RPC error:', error)
+                          throw error
+                        }
+                        
+                        // Check individual results
+                        console.log('RPC response:', data)
+                        if (data && Array.isArray(data)) {
+                          const successCount = data.filter((r: any) => r.success).length
+                          const failCount = data.filter((r: any) => !r.success).length
+                          done += successCount
+                          failed += failCount
+                          
+                          // Log failures
+                          const failures = data.filter((r: any) => !r.success)
+                          if (failures.length > 0) {
+                            console.error('Sample import failures:', failures)
+                          }
+                        } else {
+                          done += batch.length
+                        }
+                        
+                        setImportProgress(p => ({ ...p, done, failed }))
                       } catch(e) {
                         console.error('Batch import failed:', e)
                         failed += batch.length
