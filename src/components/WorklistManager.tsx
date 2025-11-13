@@ -16,11 +16,23 @@ interface WorklistSample {
   sample_type?: string
 }
 
-// Helper function to detect sample type from ID
-const detectSampleType = (sampleId: string): string => {
-  const id = sampleId.toUpperCase()
+// Helper function to detect sample type from container name or sample ID
+const detectSampleType = (sampleId: string, containerName?: string): string => {
+  // First try to detect from container name (more reliable)
+  if (containerName) {
+    const name = containerName.toUpperCase()
+    if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
+    if (name.includes('DTC')) return 'DTC'
+    if (name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
+    if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
+    if (name.includes('MNC')) return 'MNC'
+    if (name.includes('IDT')) return 'IDT'
+    if (name.includes('BC TUBE') || name.includes('BCTUBE')) return 'BC Tubes'
+    if (name.includes('PLASMA')) return 'Plasma'
+  }
   
-  // Check patterns from end of ID moving forward
+  // Fallback to sample ID pattern matching
+  const id = sampleId.toUpperCase()
   if (/CD\d+$/i.test(id)) return 'cfDNA'
   if (/TC\d+$/i.test(id)) return 'DTC'
   if (/PAP\d+$/i.test(id)) return 'PA Pools'
@@ -167,7 +179,7 @@ export default function WorklistManager() {
           checked_out_at: sample?.checked_out_at,
           previous_container_id: sample?.previous_container_id,
           previous_position: sample?.previous_position,
-          sample_type: detectSampleType(id)
+          sample_type: detectSampleType(id, sample?.containers?.name)
         }
       })
 
