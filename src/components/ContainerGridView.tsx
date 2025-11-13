@@ -50,8 +50,8 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   const handleCellClick = (position: string) => {
     const sample = sampleMap.get(position) || null
     
-    // In scanning mode, only handle empty cells
-    if (scanningPosition && !sample) {
+    // In scanning mode, allow clicking any cell to select position
+    if (scanningPosition) {
       onSampleClick?.(sample, position)
       return
     }

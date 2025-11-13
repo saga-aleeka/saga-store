@@ -42,14 +42,14 @@ export default function ContainerDetails({ id }: { id: string | number }){
     loadContainer()
   }, [id])
   
-  // Focus input when scanning mode starts or position changes
+  // Focus input only when scanning mode starts (not on every position change)
   useEffect(() => {
     if (scanningMode && scanInputRef.current) {
       scanInputRef.current.focus()
     }
-  }, [scanningMode, currentPosition])
+  }, [scanningMode])
   
-  // Helper to find next empty position
+  // Helper to find next empty position (column priority: A1, B1, C1... then A2, B2, C2...)
   const findNextEmptyPosition = (): string | null => {
     if (!data) return null
     const samples = data.samples || []
@@ -64,9 +64,9 @@ export default function ContainerDetails({ id }: { id: string | number }){
     const rows = parseInt(layoutParts[0]) || 9
     const cols = parseInt(layoutParts[1]) || 9
     
-    // Find first empty position (row by row)
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+    // Find first empty position (column by column, top to bottom, left to right)
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
         const position = `${String.fromCharCode(65 + r)}${c + 1}`
         if (!occupiedPositions.has(position)) {
           return position
@@ -78,12 +78,11 @@ export default function ContainerDetails({ id }: { id: string | number }){
 
   const handleSampleClick = (sample: any | null, position: string) => {
     if (scanningMode) {
-      // In scanning mode, clicking sets the current position
-      if (!sample) {
-        setCurrentPosition(position)
-        setScanInput('')
-        setLastScannedId(null)
-      }
+      // In scanning mode, clicking sets the current position (even if occupied)
+      setCurrentPosition(position)
+      setScanInput('')
+      setLastScannedId(null)
+      // Don't auto-focus - user manually selected, they need to click input
       return
     }
     
@@ -138,6 +137,23 @@ export default function ContainerDetails({ id }: { id: string | number }){
     e.preventDefault()
     if (!scanInput.trim() || !currentPosition || scanning) return
     
+    // Check if position is already occupied
+    const samples = data.samples || []
+    const existingSample = samples.find(
+      (s: any) => !s.is_archived && s.position?.toUpperCase() === currentPosition.toUpperCase()
+    )
+    
+    if (existingSample) {
+      const confirmOverwrite = window.confirm(
+        `Position ${currentPosition} already contains sample "${existingSample.sample_id}".\n\nDo you want to overwrite it?`
+      )
+      if (!confirmOverwrite) {
+        setScanInput('')
+        scanInputRef.current?.focus()
+        return
+      }
+    }
+    
     setScanning(true)
     setLastScannedId(null)
     
@@ -178,16 +194,18 @@ export default function ContainerDetails({ id }: { id: string | number }){
         if (nextPosition) {
           setCurrentPosition(nextPosition)
           setLastScannedId(null)
+          // Auto-focus input for next scan
+          scanInputRef.current?.focus()
         } else {
-          // No more empty positions
-          alert('Container is full!')
-          setScanningMode(false)
-          setCurrentPosition(null)
+          // Container is full - stay on current position
+          setLastScannedId(null)
+          scanInputRef.current?.focus()
         }
       }, 100)
     } catch (error) {
       console.error('Scan error:', error)
       alert('Failed to add sample')
+      scanInputRef.current?.focus()
     } finally {
       setScanning(false)
     }
