@@ -557,10 +557,18 @@ export default function AdminDashboard(){
                           done += successCount
                           failed += failCount
                           
-                          // Log failures
+                          // Log failures with details
                           const failures = data.filter((r: any) => !r.success)
                           if (failures.length > 0) {
                             console.error('Sample import failures:', failures)
+                            console.error('First failure detail:', JSON.stringify(failures[0], null, 2))
+                            // Group by error type
+                            const errorGroups = failures.reduce((acc: any, f: any) => {
+                              const err = f.error || 'unknown'
+                              acc[err] = (acc[err] || 0) + 1
+                              return acc
+                            }, {})
+                            console.error('Error summary:', errorGroups)
                           }
                         } else {
                           done += batch.length
