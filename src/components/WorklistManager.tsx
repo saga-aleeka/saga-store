@@ -13,6 +13,24 @@ interface WorklistSample {
   checked_out_at?: string
   previous_container_id?: string
   previous_position?: string
+  sample_type?: string
+}
+
+// Helper function to detect sample type from ID
+const detectSampleType = (sampleId: string): string => {
+  const id = sampleId.toUpperCase()
+  
+  // Check patterns from end of ID moving forward
+  if (/CD\d+$/i.test(id)) return 'cfDNA'
+  if (/TC\d+$/i.test(id)) return 'DTC'
+  if (/PAP\d+$/i.test(id)) return 'PA Pools'
+  if (/DPP\d+[A-D]$/i.test(id)) return 'DP Pools'
+  if (/NC\d+$/i.test(id)) return 'MNC'
+  if (/PP\d+$/i.test(id)) return 'IDT'
+  if (/BC\d+$/i.test(id)) return 'BC Tubes'
+  if (/PL\d+$/i.test(id)) return 'Plasma'
+  
+  return 'Unknown'
 }
 
 export default function WorklistManager() {
@@ -136,7 +154,7 @@ export default function WorklistManager() {
         return
       }
 
-      // Build worklist with container info
+      // Build worklist with container info and sample type
       const worklistData: WorklistSample[] = sampleIds.map(id => {
         const sample = data?.find(s => s.sample_id === id)
         return {
@@ -148,13 +166,24 @@ export default function WorklistManager() {
           is_checked_out: sample?.is_checked_out || false,
           checked_out_at: sample?.checked_out_at,
           previous_container_id: sample?.previous_container_id,
-          previous_position: sample?.previous_position
+          previous_position: sample?.previous_position,
+          sample_type: detectSampleType(id)
         }
       })
 
-      setWorklist(worklistData)
+      // Sort by sample type, maintaining order within each type
+      const typeOrder = ['cfDNA', 'DTC', 'PA Pools', 'DP Pools', 'MNC', 'IDT', 'BC Tubes', 'Plasma', 'Unknown']
+      const sortedWorklist = worklistData.sort((a, b) => {
+        const typeA = typeOrder.indexOf(a.sample_type || 'Unknown')
+        const typeB = typeOrder.indexOf(b.sample_type || 'Unknown')
+        if (typeA !== typeB) return typeA - typeB
+        // Maintain original order within same type
+        return sampleIds.indexOf(a.sample_id) - sampleIds.indexOf(b.sample_id)
+      })
+
+      setWorklist(sortedWorklist)
       setSelectedSamples(new Set())
-      localStorage.setItem('saga_worklist', JSON.stringify(worklistData))
+      localStorage.setItem('saga_worklist', JSON.stringify(sortedWorklist))
     } catch (err: any) {
       console.error('Error processing worklist:', err)
       alert(`Failed to process worklist file: ${err?.message || 'Unknown error'}\n\nCheck console for details.`)
@@ -428,8 +457,32 @@ export default function WorklistManager() {
 
       {loading && <div className="muted">Loading...</div>}
 
-      {worklist.length > 0 && (
+      {worklist.length > 0 && (() => {
+        // Get unique containers needed
+        const containersNeeded = Array.from(
+          new Map(
+            worklist
+              .filter(s => s.container_id && s.container_name)
+              .map(s => [s.container_id, { name: s.container_name!, location: s.container_location || 'Unknown' }])
+          ).values()
+        )
+        
+        return (
         <>
+          {containersNeeded.length > 0 && (
+            <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
+              <h3 style={{fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#1e40af'}}>Containers Needed ({containersNeeded.length})</h3>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+                {containersNeeded.map((container, i) => (
+                  <div key={i} style={{padding: '6px 12px', background: 'white', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 14}}>
+                    <strong>{container.name}</strong>
+                    <span className="muted" style={{marginLeft: 8}}>{container.location}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
             <button className="btn" onClick={selectAll} disabled={loading}>
               Select All ({worklist.length})
@@ -499,6 +552,7 @@ export default function WorklistManager() {
                     />
                   </th>
                   <th style={{padding: 12, textAlign: 'left'}}>Sample ID</th>
+                  <th style={{padding: 12, textAlign: 'left'}}>Type</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Container</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Location</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Position</th>
@@ -523,6 +577,18 @@ export default function WorklistManager() {
                       />
                     </td>
                     <td style={{padding: 12, fontWeight: 600}}>{sample.sample_id}</td>
+                    <td style={{padding: 12}}>
+                      <span style={{
+                        padding: '2px 8px',
+                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : '#dbeafe',
+                        color: sample.sample_type === 'Unknown' ? '#6b7280' : '#1e40af',
+                        borderRadius: 4,
+                        fontSize: 12,
+                        fontWeight: 500
+                      }}>
+                        {sample.sample_type}
+                      </span>
+                    </td>
                     <td style={{padding: 12}}>
                       {sample.container_name || <span className="muted">—</span>}
                     </td>
@@ -588,7 +654,8 @@ export default function WorklistManager() {
             </table>
           </div>
         </>
-      )}
+        )
+      })()}
     </div>
   )
 }
