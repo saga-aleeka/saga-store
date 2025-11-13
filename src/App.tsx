@@ -181,7 +181,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} />
+        <Header route={route} user={user} onSignOut={signOut} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
         </div>
@@ -192,7 +192,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} />
+        <Header route={route} user={user} onSignOut={signOut} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>

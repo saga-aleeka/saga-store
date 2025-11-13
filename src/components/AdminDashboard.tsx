@@ -618,17 +618,62 @@ export default function AdminDashboard(){
 
       {tab === 'audit' && (
         <div>
-          <p className="muted">Recent audit events</p>
+          <p className="muted">Comprehensive audit log of all container and sample changes</p>
           <div style={{marginTop:12}}>
             {audits.loading && <div className="muted">Loading...</div>}
             {!audits.loading && audits.data && audits.data.length === 0 && <div className="muted">No audit events</div>}
             {!audits.loading && audits.data && audits.data.map((a:any) => (
-              <div key={a.id} className="sample-row" style={{marginTop:8}}>
-                <div>
-                  <div style={{fontWeight:700}}>{a.type.toUpperCase()} — {a.target}</div>
-                  <div className="muted">{a.msg}</div>
+              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6}}>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                    <span style={{
+                      padding:'2px 8px',
+                      background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
+                      color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
+                      borderRadius:4,
+                      fontSize:11,
+                      fontWeight:600,
+                      textTransform:'uppercase'
+                    }}>
+                      {a.entity_type}
+                    </span>
+                    <span style={{
+                      padding:'2px 8px',
+                      background: a.action === 'deleted' ? '#fee2e2' : 
+                                 a.action === 'created' ? '#dcfce7' : 
+                                 a.action === 'archived' ? '#fed7aa' : '#e5e7eb',
+                      color: a.action === 'deleted' ? '#991b1b' : 
+                            a.action === 'created' ? '#166534' : 
+                            a.action === 'archived' ? '#9a3412' : '#374151',
+                      borderRadius:4,
+                      fontSize:11,
+                      fontWeight:600,
+                      textTransform:'uppercase'
+                    }}>
+                      {a.action}
+                    </span>
+                    {a.user_initials && (
+                      <span style={{fontSize:12,color:'#6b7280'}}>
+                        by <strong>{a.user_initials}</strong>{a.user_name ? ` (${a.user_name})` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.description || a.entity_name}</div>
+                  {a.entity_name && a.description && (
+                    <div className="muted" style={{fontSize:12}}>Entity: {a.entity_name}</div>
+                  )}
+                  {a.metadata && (
+                    <div className="muted" style={{fontSize:12,marginTop:4}}>
+                      {a.metadata.location && `Location: ${a.metadata.location} • `}
+                      {a.metadata.position && `Position: ${a.metadata.position} • `}
+                      {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
+                      {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted}`}
+                    </div>
+                  )}
                 </div>
-                <div className="muted">{formatDateTime(a.at)}</div>
+                <div className="muted" style={{fontSize:11,whiteSpace:'nowrap',alignSelf:'flex-start'}}>
+                  {formatDateTime(a.created_at)}
+                </div>
               </div>
             ))}
           </div>

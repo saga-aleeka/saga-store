@@ -4,7 +4,9 @@
 // - GET /api/containers/:id -> get container with samples embedded
 // - POST /api/containers -> create container (requires admin secret or valid bearer token)
 // - PUT/PATCH /api/containers/:id -> update container (requires admin secret or valid bearer token)
+// - DELETE /api/containers/:id -> delete container and its samples (requires admin secret or valid bearer token)
 const { createClient } = require('@supabase/supabase-js')
+const { createAuditLog, getUserFromRequest } = require('./_audit_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -117,6 +119,26 @@ module.exports = async function handler(req: any, res: any){
         return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
       }
       
+      // Create audit log
+      const user = getUserFromRequest(req)
+      if (data && data[0]) {
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user.initials,
+          userName: user.name,
+          entityType: 'container',
+          entityId: data[0].id,
+          action: 'created',
+          entityName: data[0].name,
+          metadata: {
+            location: data[0].location,
+            layout: data[0].layout,
+            temperature: data[0].temperature,
+            type: data[0].type
+          },
+          description: `Created container "${data[0].name}" at ${data[0].location}`
+        })
+      }
+      
       console.log('Returning success response')
       res.status(201).json({ data })
       return
@@ -131,6 +153,13 @@ module.exports = async function handler(req: any, res: any){
       const id = parts[parts.length - 1]
       if (!id) return res.status(400).json({ error: 'missing_id' })
       
+      // Get original data for audit log
+      const { data: original } = await supabaseAdmin
+        .from('containers')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
       const { data, error } = await supabaseAdmin
         .from('containers')
         .update(body)
@@ -138,6 +167,64 @@ module.exports = async function handler(req: any, res: any){
         .select()
 
       if (error) return res.status(502).json({ error: 'supabase_update_failed', message: error.message })
+      
+      // Create audit log
+      const user = getUserFromRequest(req)
+      if (data && data[0] && original) {
+        const changes: any = {}
+        const changedFields: string[] = []
+        
+        // Track what changed
+        if (original.name !== data[0].name) {
+          changes.name = { from: original.name, to: data[0].name }
+          changedFields.push('name')
+        }
+        if (original.location !== data[0].location) {
+          changes.location = { from: original.location, to: data[0].location }
+          changedFields.push('location')
+        }
+        if (original.archived !== data[0].archived) {
+          changes.archived = { from: original.archived, to: data[0].archived }
+          changedFields.push(data[0].archived ? 'archived' : 'unarchived')
+        }
+        if (original.layout !== data[0].layout) {
+          changes.layout = { from: original.layout, to: data[0].layout }
+          changedFields.push('layout')
+        }
+        if (original.temperature !== data[0].temperature) {
+          changes.temperature = { from: original.temperature, to: data[0].temperature }
+          changedFields.push('temperature')
+        }
+        if (original.type !== data[0].type) {
+          changes.type = { from: original.type, to: data[0].type }
+          changedFields.push('type')
+        }
+        if (original.training !== data[0].training) {
+          changes.training = { from: original.training, to: data[0].training }
+          changedFields.push('training')
+        }
+        
+        const action = data[0].archived && !original.archived ? 'archived' : 
+                      !data[0].archived && original.archived ? 'unarchived' : 'updated'
+        
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user.initials,
+          userName: user.name,
+          entityType: 'container',
+          entityId: data[0].id,
+          action,
+          entityName: data[0].name,
+          changes,
+          metadata: {
+            location: data[0].location,
+            layout: data[0].layout,
+            temperature: data[0].temperature,
+            type: data[0].type
+          },
+          description: `Updated container "${data[0].name}": ${changedFields.join(', ')}`
+        })
+      }
+      
       return res.status(200).json({ data })
     }
 
@@ -146,6 +233,19 @@ module.exports = async function handler(req: any, res: any){
       const parts = req.url.split('/')
       const id = parts[parts.length - 1]
       if (!id) return res.status(400).json({ error: 'missing_id' })
+
+      // Get container info before deletion for audit log
+      const { data: containerData } = await supabaseAdmin
+        .from('containers')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      // Get sample count before deletion
+      const { data: samples } = await supabaseAdmin
+        .from('samples')
+        .select('id, sample_id')
+        .eq('container_id', id)
 
       // First delete all samples in this container
       const { error: samplesError } = await supabaseAdmin
@@ -167,6 +267,27 @@ module.exports = async function handler(req: any, res: any){
       if (containerError) {
         console.error('Failed to delete container:', containerError)
         return res.status(502).json({ error: 'supabase_delete_container_failed', message: containerError.message })
+      }
+
+      // Create audit log
+      const user = getUserFromRequest(req)
+      if (containerData) {
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user.initials,
+          userName: user.name,
+          entityType: 'container',
+          entityId: id,
+          action: 'deleted',
+          entityName: containerData.name,
+          metadata: {
+            location: containerData.location,
+            layout: containerData.layout,
+            temperature: containerData.temperature,
+            type: containerData.type,
+            samples_deleted: samples?.length ?? 0
+          },
+          description: `Deleted container "${containerData.name}" from ${containerData.location} (${samples?.length ?? 0} samples removed)`
+        })
       }
 
       return res.status(200).json({ success: true })

@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useRef} from 'react'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
-import { getApiUrl } from '../lib/api'
+import { apiFetch } from '../lib/api'
 
 export default function ContainerEditDrawer({ container, onClose }: { container: any, onClose: ()=>void }){
   const defaultForm = {
@@ -40,7 +40,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
       return
     }
 
-  const res = await fetch(getApiUrl(`/api/containers/${container.id}`), { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
+  const res = await apiFetch(`/api/containers/${container.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
     const j = await res.json()
     // notify app that container updated
     window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
@@ -54,7 +54,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
     setDeleting(true)
     try {
-      const res = await fetch(getApiUrl(`/api/containers/${container.id}`), { 
+      const res = await apiFetch(`/api/containers/${container.id}`, { 
         method: 'DELETE', 
         headers: {'Content-Type':'application/json'} 
       })

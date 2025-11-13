@@ -24,12 +24,15 @@ export function getApiUrl(path: string){
 import { supabase } from './supabaseClient'
 export { supabase }
 
-import { getToken } from './auth'
+import { getToken, getUser } from './auth'
 
 export async function apiFetch(input: string, init?: RequestInit){
   const url = getApiUrl(input)
   const token = getToken()
+  const user = getUser()
   const headers = new Headers(init?.headers as HeadersInit)
   if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (user?.initials) headers.set('X-User-Initials', user.initials)
+  if (user?.name) headers.set('X-User-Name', user.name)
   return fetch(url, { ...init, headers })
 }
