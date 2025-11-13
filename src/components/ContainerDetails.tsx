@@ -19,8 +19,8 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [lastScannedId, setLastScannedId] = useState<string | null>(null)
   const scanInputRef = React.useRef<HTMLInputElement>(null)
 
-  const loadContainer = async () => {
-    setLoading(true)
+  const loadContainer = async (skipLoadingState = false) => {
+    if (!skipLoadingState) setLoading(true)
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
@@ -36,7 +36,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       setData(null)
       return null
     }finally{ 
-      setLoading(false) 
+      if (!skipLoadingState) setLoading(false) 
     }
   }
 
@@ -186,8 +186,8 @@ export default function ContainerDetails({ id }: { id: string | number }){
       // Clear input first
       setScanInput('')
       
-      // Reload container to get updated sample list
-      const updatedData = await loadContainer()
+      // Reload container to get updated sample list (skip loading state to avoid blip)
+      const updatedData = await loadContainer(true)
       
       // After reload, advance to next position using fresh data
       if (updatedData) {
@@ -237,7 +237,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const handleSidebarUpdate = async () => {
     setShowSidebar(false)
     setSelectedSample(null)
-    await loadContainer()
+    await loadContainer(true)
   }
 
   if (loading) return <div className="muted">Loading container...</div>
