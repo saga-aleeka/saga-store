@@ -42,10 +42,10 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-3 mb-2">
-            <div className="text-base font-semibold truncate" title={name ?? 'Unnamed Container'}>{name ?? 'Unnamed Container'}</div>
+            <div className="text-base font-semibold break-words" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>{name ?? 'Unnamed Container'}</div>
           </div>
           <div className="flex items-center gap-3 min-w-0">
-            <div className="text-sm text-gray-600 truncate">{rest.location ?? ''}</div>
+            <div className="text-sm text-gray-600">{rest.location ?? ''}</div>
             <div className="flex-shrink-0">
               <TypeBadge type={type} />
             </div>
