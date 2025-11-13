@@ -62,7 +62,7 @@ export default function WorklistManager() {
       // Fetch sample data from database
       const { data, error } = await supabase
         .from('samples')
-        .select('*, containers(id, name, location)')
+        .select('*, containers!samples_container_id_fkey(id, name, location)')
         .in('sample_id', sampleIds)
       
       if (error) {
@@ -174,7 +174,7 @@ export default function WorklistManager() {
       // Refresh worklist
       const { data: refreshed } = await supabase
         .from('samples')
-        .select('*, containers(id, name, location)')
+        .select('*, containers!samples_container_id_fkey(id, name, location)')
         .in('sample_id', sampleIds)
       
       // Update worklist state
@@ -262,7 +262,7 @@ export default function WorklistManager() {
       // Refresh worklist
       const { data: refreshed } = await supabase
         .from('samples')
-        .select('*, containers(id, name, location)')
+        .select('*, containers!samples_container_id_fkey(id, name, location)')
         .in('sample_id', sampleIds)
       
       setWorklist(prev => prev.map(item => {
