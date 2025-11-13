@@ -203,10 +203,9 @@ export default function ContainerDetails({ id }: { id: string | number }){
       // After reload, advance to next position using fresh data
       if (updatedData) {
         const samples = updatedData.samples || []
+        // Include ALL samples (archived and active) as occupied positions
         const occupiedPositions = new Set(
-          samples
-            .filter((s: any) => !s.is_archived)
-            .map((s: any) => s.position?.toUpperCase())
+          samples.map((s: any) => s.position?.toUpperCase())
         )
         
         // Parse layout
@@ -214,12 +213,17 @@ export default function ContainerDetails({ id }: { id: string | number }){
         const rows = parseInt(layoutParts[0]) || 9
         const cols = parseInt(layoutParts[1]) || 9
         
+        // For DP Pools, I9 is unavailable
+        const isUnavailable = (pos: string) => {
+          return pos === 'I9' && updatedData.type === 'DP Pools' && updatedData.layout === '9x9'
+        }
+        
         // Find next empty position (column by column, top to bottom, left to right)
         let nextPosition: string | null = null
         for (let c = 0; c < cols; c++) {
           for (let r = 0; r < rows; r++) {
             const position = `${String.fromCharCode(65 + r)}${c + 1}`
-            if (!occupiedPositions.has(position)) {
+            if (!occupiedPositions.has(position) && !isUnavailable(position)) {
               nextPosition = position
               break
             }
