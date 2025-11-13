@@ -65,7 +65,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
 
       <div className="mt-3">
         <div className="flex items-center justify-between gap-2">
-    <div className="text-sm text-gray-500 truncate">Sample type: {type}</div>
           <div className="text-sm flex-shrink-0">
             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium whitespace-nowrap">{occupancy.used}/{occupancy.total}</span>
             <span className="ml-2 text-sm text-gray-500 whitespace-nowrap">{available} available</span>
