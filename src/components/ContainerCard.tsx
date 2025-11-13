@@ -41,22 +41,18 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
     <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}` }}>
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-3 mb-2">
-            <div className="text-base font-semibold break-words" style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}>{name ?? 'Unnamed Container'}</div>
-          </div>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="text-sm text-gray-600">{rest.location ?? ''}</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-base font-semibold whitespace-nowrap">{name ?? 'Unnamed Container'}</div>
             <div className="flex-shrink-0">
               <TypeBadge type={type} />
             </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-2 flex-shrink-0">
-          <div className="inline-flex items-center gap-2">
             <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium whitespace-nowrap">{temperature}</span>
             <span className="px-2 py-1 text-xs bg-gray-100 rounded whitespace-nowrap">{layout}</span>
           </div>
+          <div className="text-sm text-gray-600 mt-1">{rest.location ?? ''}</div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <div className="flex items-center gap-2" onClick={(e)=> e.stopPropagation()}>
             <button className="card-menu" aria-label="open menu" onClick={() => setOpenEdit(true)}>⋮</button>
           </div>
