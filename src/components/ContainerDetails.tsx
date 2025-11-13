@@ -185,23 +185,9 @@ export default function ContainerDetails({ id }: { id: string | number }){
       setLastScannedId(sampleId)
       setScanInput('')
       
-      // Reload container
+      // Reload container to get updated sample list
       await loadContainer()
       
-      // Auto-advance to next empty position
-      setTimeout(() => {
-        const nextPosition = findNextEmptyPosition()
-        if (nextPosition) {
-          setCurrentPosition(nextPosition)
-          setLastScannedId(null)
-          // Auto-focus input for next scan
-          scanInputRef.current?.focus()
-        } else {
-          // Container is full - stay on current position
-          setLastScannedId(null)
-          scanInputRef.current?.focus()
-        }
-      }, 100)
     } catch (error) {
       console.error('Scan error:', error)
       alert('Failed to add sample')
@@ -210,6 +196,24 @@ export default function ContainerDetails({ id }: { id: string | number }){
       setScanning(false)
     }
   }
+  
+  // Effect to auto-advance after data changes from successful scan
+  useEffect(() => {
+    if (lastScannedId && scanningMode) {
+      // After successful scan, move to next position
+      const nextPosition = findNextEmptyPosition()
+      if (nextPosition) {
+        setCurrentPosition(nextPosition)
+        setLastScannedId(null)
+        // Auto-focus input for next scan
+        setTimeout(() => scanInputRef.current?.focus(), 50)
+      } else {
+        // Container is full - stay on current position
+        setLastScannedId(null)
+        setTimeout(() => scanInputRef.current?.focus(), 50)
+      }
+    }
+  }, [data, lastScannedId, scanningMode])
 
   const handleSidebarUpdate = async () => {
     setShowSidebar(false)
