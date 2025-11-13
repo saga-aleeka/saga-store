@@ -71,9 +71,9 @@ export default function Header({route = window.location.hash || '#/containers', 
       </div>
 
       <div className="mt-3 tabs" role="tablist">
-        <button className={(route === '#/containers' ? 'tab active' : 'tab')} onClick={() => navigate('#/containers')}>Containers <span className="ml-2 badge">1</span></button>
-        <button className={(route === '#/archive' ? 'tab active' : 'tab')} onClick={() => navigate('#/archive')}>Archive <span className="ml-2 badge">0</span></button>
-        <button className={(route === '#/samples' ? 'tab active' : 'tab')} onClick={() => navigate('#/samples')}>Samples <span className="ml-2 badge">0</span></button>
+        <button className={(route === '#/containers' ? 'tab active' : 'tab')} onClick={() => navigate('#/containers')}>Containers</button>
+        <button className={(route === '#/archive' ? 'tab active' : 'tab')} onClick={() => navigate('#/archive')}>Archive</button>
+        <button className={(route === '#/samples' ? 'tab active' : 'tab')} onClick={() => navigate('#/samples')}>Samples</button>
       </div>
 
       <div className="search-row mt-3">
