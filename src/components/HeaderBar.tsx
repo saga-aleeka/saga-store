@@ -1,8 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react'
 
-type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boolean, onExitAdmin?: () => void }
+type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boolean, onExitAdmin?: () => void, containersCount?: number, archivedCount?: number, samplesCount?: number }
 
-export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin}: Props){
+export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin, containersCount = 0, archivedCount = 0, samplesCount = 0}: Props){
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement | null>(null)
 

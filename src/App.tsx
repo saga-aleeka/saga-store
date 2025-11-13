@@ -177,11 +177,10 @@ export default function App() {
   if (route.startsWith('#/containers/') && route.split('/').length >= 3) {
     const parts = route.split('/')
     const idWithQuery = decodeURIComponent(parts[2])
-    // Strip query parameters from id
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
         </div>
@@ -192,7 +191,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>
@@ -202,7 +201,7 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />

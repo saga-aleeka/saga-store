@@ -591,11 +591,6 @@ export default function AdminDashboard(){
                   setImporting(false)
                 }}>{importing ? 'Importing…' : 'Import parsed items'}</button>
 
-                <button className="btn ghost" onClick={() => {
-                  // quick demo load: populate pasteText with a sample from the attachments layout
-                  setPasteText(sampleGridExample)
-                }}>Load example grid</button>
-
                 <div style={{fontSize:12,color:'#666'}}>
                   Tip: paste the grid for a box (rows A..I, columns 1..N). The parser will extract non-empty cells as samples and assign positions like A1, B2.
                 </div>
@@ -703,7 +698,6 @@ export default function AdminDashboard(){
 
       {tab === 'users' && (
         <div>
-          <p className="muted">Authorized users (from Supabase)</p>
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}
             {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No authorized users found</div>}
@@ -716,32 +710,7 @@ export default function AdminDashboard(){
               <div style={{fontSize:13,color:'#666'}}>Users: {authUsers.data ? authUsers.data.length : '—'}</div>
             </div>
 
-            <div style={{marginBottom:12,display:'flex',gap:8,alignItems:'center'}}>
-              <button className="btn ghost" onClick={async ()=>{
-                setTestLoading(true)
-                setTestResult(null)
-                try{
-                  const r = await apiFetch('/api/admin_users')
-                  const status = r.status
-                  const hdrs: Record<string,string> = {}
-                  r.headers.forEach((v,k) => { hdrs[k] = v })
-                  const text = await r.text()
-                  let parsed: any = text
-                  try{ parsed = JSON.parse(text) }catch(e){}
-                  setTestResult({ status, headers: hdrs, body: parsed })
-                }catch(e){ setTestResult({ error: String(e) }) }
-                setTestLoading(false)
-              }}>{testLoading ? 'Testing…' : 'Test connection'}</button>
-              {testResult && (
-                <div style={{flex:1}}>
-                  <div style={{marginTop:6,fontSize:13,fontWeight:700}}>Test result</div>
-                  <pre style={{background:'#f7f7fb',padding:8,borderRadius:6,whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{typeof testResult === 'string' ? testResult : JSON.stringify(testResult,null,2)}</pre>
-                  <div style={{marginTop:6}}>
-                    <button className="btn ghost" onClick={()=> navigator.clipboard?.writeText(typeof testResult === 'string' ? testResult : JSON.stringify(testResult,null,2))}>Copy JSON</button>
-                  </div>
-                </div>
-              )}
-            </div>
+
 
               {notice && (
                 <div style={{padding:10,marginBottom:12,borderRadius:6,background: notice.type === 'success' ? '#e6ffed' : '#ffecec', border: notice.type === 'success' ? '1px solid #b7f2c9' : '1px solid #f5c6c6', color: notice.type === 'success' ? '#0b6b2b' : '#8a1b1b'}}>
