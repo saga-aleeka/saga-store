@@ -223,8 +223,14 @@ function useFetch<T>(url: string){
     // allow external triggers to refresh (e.g., after create/update/delete)
     const handler = () => { fetchData() }
     window.addEventListener('authorized_users_updated', handler)
+    window.addEventListener('backups_updated', handler)
 
-    return () => { mounted = false; aborted = true; window.removeEventListener('authorized_users_updated', handler) }
+    return () => { 
+      mounted = false; 
+      aborted = true; 
+      window.removeEventListener('authorized_users_updated', handler)
+      window.removeEventListener('backups_updated', handler)
+    }
   }, [url])
   return { data, loading }
 }
@@ -707,8 +713,8 @@ export default function AdminDashboard(){
                   
                   alert('Backup downloaded successfully!')
                   
-                  // Refresh the backups list
-                  backups.refetch()
+                  // Refresh the backups list by reloading the component
+                  window.location.reload()
                 } catch(e) {
                   console.error('Backup failed:', e)
                   alert('Failed to create backup. Please try again.')
