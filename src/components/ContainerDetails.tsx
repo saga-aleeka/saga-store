@@ -66,11 +66,16 @@ export default function ContainerDetails({ id }: { id: string | number }){
     const rows = parseInt(layoutParts[0]) || 9
     const cols = parseInt(layoutParts[1]) || 9
     
+    // For DP Pools, I9 is unavailable
+    const isUnavailable = (pos: string) => {
+      return pos === 'I9' && data.type === 'DP Pools' && data.layout === '9x9'
+    }
+    
     // Find first empty position (column by column, top to bottom, left to right)
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
         const position = `${String.fromCharCode(65 + r)}${c + 1}`
-        if (!occupiedPositions.has(position)) {
+        if (!occupiedPositions.has(position) && !isUnavailable(position)) {
           return position
         }
       }
@@ -79,6 +84,13 @@ export default function ContainerDetails({ id }: { id: string | number }){
   }
 
   const handleSampleClick = (sample: any | null, position: string) => {
+    // Check if position is unavailable for DP Pools
+    const isUnavailable = position === 'I9' && data?.type === 'DP Pools' && data?.layout === '9x9'
+    if (isUnavailable) {
+      alert('Position I9 is unavailable for DP Pools containers (DP sets come in groups of 4)')
+      return
+    }
+    
     if (scanningMode) {
       // In scanning mode, clicking sets the current position (even if occupied)
       setCurrentPosition(position)

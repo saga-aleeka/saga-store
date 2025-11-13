@@ -160,6 +160,9 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const position = `${getRowLabel(rowIndex)}${getColLabel(colIndex)}`
               const sample = sampleMap.get(position)
               const isOccupied = !!sample
+              
+              // Check if this is I9 for DP Pools (unavailable position)
+              const isUnavailable = position === 'I9' && container?.type === 'DP Pools' && container?.layout === '9x9'
 
               const isHighlighted = highlightedPosition === position
               const isScanning = scanningPosition === position
@@ -167,41 +170,56 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               return (
                 <div
                   key={`cell-${rowIndex}-${colIndex}`}
-                  onClick={() => handleCellClick(position)}
+                  onClick={() => !isUnavailable && handleCellClick(position)}
                   style={{
-                    background: isScanning 
-                      ? '#f3e8ff' 
-                      : getCellColor(sample),
-                    border: isScanning
-                      ? '3px solid #8b5cf6'
-                      : isHighlighted 
-                        ? '3px solid #f59e0b' 
-                        : isOccupied 
-                          ? '2px solid #3b82f6' 
-                          : '1px solid #d1d5db',
+                    background: isUnavailable
+                      ? '#d1d5db'
+                      : isScanning 
+                        ? '#f3e8ff' 
+                        : getCellColor(sample),
+                    border: isUnavailable
+                      ? '2px solid #9ca3af'
+                      : isScanning
+                        ? '3px solid #8b5cf6'
+                        : isHighlighted 
+                          ? '3px solid #f59e0b' 
+                          : isOccupied 
+                            ? '2px solid #3b82f6' 
+                            : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: '4px',
-                    cursor: isOccupied ? 'pointer' : (editMode ? 'pointer' : 'default'),
+                    cursor: isUnavailable 
+                      ? 'not-allowed' 
+                      : isOccupied 
+                        ? 'pointer' 
+                        : (editMode ? 'pointer' : 'default'),
                     transition: 'all 0.15s',
                     fontSize: '11px',
                     fontWeight: isOccupied ? 600 : 400,
-                    color: isOccupied ? '#1f2937' : '#9ca3af',
+                    color: isUnavailable ? '#6b7280' : isOccupied ? '#1f2937' : '#9ca3af',
                     position: 'relative',
                     overflow: 'hidden',
                     boxShadow: isScanning 
                       ? '0 0 0 3px #c4b5fd' 
                       : isHighlighted 
                         ? '0 0 0 2px #fbbf24' 
-                        : 'none'
+                        : 'none',
+                    opacity: isUnavailable ? 0.5 : 1
                   }}
-                  className={isOccupied || editMode ? 'hover:shadow-md hover:scale-105' : ''}
-                  title={isOccupied ? `${sample.sample_id}${sample.is_archived ? ' (archived)' : ''}\n${position}` : position}
+                  className={!isUnavailable && (isOccupied || editMode) ? 'hover:shadow-md hover:scale-105' : ''}
+                  title={isUnavailable 
+                    ? `${position} - Unavailable (DP Sets come in groups of 4)` 
+                    : isOccupied 
+                      ? `${sample.sample_id}${sample.is_archived ? ' (archived)' : ''}\n${position}` 
+                      : position}
                 >
-                  {isOccupied ? (
+                  {isUnavailable ? (
+                    <div style={{ fontSize: '16px', fontWeight: 700, opacity: 0.7 }}>×</div>
+                  ) : isOccupied ? (
                     <>
                       <div style={{ 
                         fontSize: '11px', 

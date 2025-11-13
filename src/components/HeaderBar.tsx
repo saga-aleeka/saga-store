@@ -23,10 +23,10 @@ export default function HeaderBar({route = window.location.hash || '#/containers
   return (
     <header className="topbar bg-white shadow-sm px-4 py-3" ref={root}>
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <img src="/saga-logo.png" alt="SAGA Diagnostics" className="h-8 w-auto" />
+        <div className="flex items-center gap-2">
+          <img src="/saga-logo.png" alt="SAGA Diagnostics" className="h-10 w-auto" />
           <div>
-            <div className="text-sm text-gray-500">{user ? `Signed in: ${user.initials}${user.name ? ' • ' + user.name : ''}` : 'Not signed in'}</div>
+            <div className="text-sm text-gray-600">Laboratory Storage System</div>
           </div>
         </div>
 
@@ -34,7 +34,10 @@ export default function HeaderBar({route = window.location.hash || '#/containers
           <div className="flex gap-2">
             {!isAdmin && (
               <>
-                <button className="btn" onClick={() => navigate('#/new')}>New</button>
+                <button className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors flex items-center gap-2" onClick={() => navigate('#/new')}>
+                  <span className="text-lg font-light">+</span>
+                  <span>Create New Container</span>
+                </button>
               </>
             )}
             {isAdmin && (

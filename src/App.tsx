@@ -303,7 +303,30 @@ export default function App() {
             </div>
             <div className="container-list">
               {loadingContainers && <div className="muted">Loading containers...</div>}
-              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
+              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 px-4">
+                  <div className="text-gray-300 mb-6">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 2C10.3431 2 9 3.34315 9 5V6H7C5.89543 6 5 6.89543 5 8V20C5 21.1046 5.89543 22 7 22H17C18.1046 22 19 21.1046 19 20V8C19 6.89543 18.1046 6 17 6H15V5C15 3.34315 13.6569 2 12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 6V22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="12" cy="18" r="2" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-medium text-gray-600 mb-3">Welcome to Plasma Storage Management</h3>
+                  <p className="text-gray-500 text-center max-w-2xl mb-6">
+                    Get started by creating your first storage container. You can organize
+                    different sample types including DP Pools, cfDNA Tubes, DTC Tubes,
+                    MNC Tubes, PA Pool Tubes, Plasma Tubes, BC Tubes, and IDT Plates.
+                  </p>
+                  <button 
+                    className="px-6 py-3 bg-black text-white rounded hover:bg-gray-800 transition-colors flex items-center gap-2"
+                    onClick={() => window.location.hash = '#/new'}
+                  >
+                    <span className="text-xl font-light">+</span>
+                    <span>Create Your First Container</span>
+                  </button>
+                </div>
+              )}
               {!loadingContainers && filteredContainers && filteredContainers.map(c => (
                 <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
               ))}
