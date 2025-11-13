@@ -47,7 +47,7 @@ export default function WorklistManager() {
     const lines = text.trim().split('\n')
     if (lines.length === 0) return []
     
-    // Parse header to find SampleID column index
+    // Parse header to find SampleID and Source_TubeID columns
     const headerLine = lines[0]
     const headers = headerLine.split(/[,\t]/).map(h => h.trim())
     
@@ -59,11 +59,18 @@ export default function WorklistManager() {
       h.toLowerCase() === 'specimen'
     )
     
-    if (sampleIdIndex === -1) {
-      console.warn('Could not find SampleID column, using first column')
+    // Find Source_TubeID column - try various common names
+    const sourceTubeIndex = headers.findIndex(h => 
+      /^source.*tube.*id$/i.test(h) || 
+      h.toLowerCase() === 'source_tubeid' ||
+      h.toLowerCase() === 'sourcetubeid' ||
+      h.toLowerCase().replace(/[\s_]/g, '') === 'sourcetubeid'
+    )
+    
+    if (sampleIdIndex === -1 && sourceTubeIndex === -1) {
+      console.warn('Could not find SampleID or Source_TubeID column, using first column')
     }
     
-    const columnIndex = sampleIdIndex !== -1 ? sampleIdIndex : 0
     const sampleIds: string[] = []
     const seen = new Set<string>()
     
@@ -73,7 +80,25 @@ export default function WorklistManager() {
       if (!line) continue
       
       const parts = line.split(/[,\t]/).map(p => p.trim())
-      const sampleId = parts[columnIndex]
+      
+      // Try to get value from SampleID column first, then Source_TubeID, then first column
+      let sampleId = ''
+      if (sampleIdIndex !== -1) {
+        sampleId = parts[sampleIdIndex]
+      } else if (sourceTubeIndex !== -1) {
+        sampleId = parts[sourceTubeIndex]
+      } else if (parts.length > 0) {
+        sampleId = parts[0]
+      }
+      
+      // Also include Source_TubeID if it exists and is different from SampleID
+      if (sourceTubeIndex !== -1 && parts[sourceTubeIndex] && parts[sourceTubeIndex] !== sampleId) {
+        const tubeSampleId = parts[sourceTubeIndex]
+        if (tubeSampleId && !seen.has(tubeSampleId)) {
+          sampleIds.push(tubeSampleId)
+          seen.add(tubeSampleId)
+        }
+      }
       
       // Add unique sample IDs only
       if (sampleId && !seen.has(sampleId)) {
