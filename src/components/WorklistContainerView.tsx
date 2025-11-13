@@ -22,7 +22,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
     try {
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select('*, samples(*)')
+        .select('*, samples!samples_container_id_fkey(*)')
         .eq('id', containerId)
         .single()
       

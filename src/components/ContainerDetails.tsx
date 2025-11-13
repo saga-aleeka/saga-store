@@ -24,7 +24,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select('*, samples(*)')
+        .select('*, samples!samples_container_id_fkey(*)')
         .eq('id', id)
         .single()
       

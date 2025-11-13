@@ -73,7 +73,7 @@ module.exports = async function handler(req: any, res: any){
       const id = parts[parts.length - 1]
       const { data, error } = await supabaseAdmin
         .from('containers')
-        .select('*,samples(*)')
+        .select('*,samples!samples_container_id_fkey(*)')
         .eq('id', id)
         .limit(1)
 
