@@ -13,7 +13,6 @@ DECLARE
   inp_container_id uuid;
   inp_position text;
   inp_is_archived boolean;
-  inp_owner text;
   inp_collected_at timestamp;
   inp_data jsonb;
   r RECORD;
@@ -48,7 +47,6 @@ BEGIN
       inp_container_id := NULLIF(coalesce(rec ->> 'container_id', rec ->> 'containerId', ''), '')::uuid;
       inp_position := NULLIF(coalesce(rec ->> 'position', ''), '');
       inp_is_archived := COALESCE((rec ->> 'is_archived')::boolean, false);
-      inp_owner := NULLIF(coalesce(rec ->> 'owner', ''), '');
       inp_collected_at := NULLIF(coalesce(rec ->> 'collected_at', ''), '')::timestamp;
       inp_data := COALESCE(rec -> 'data', '{}'::jsonb);
 
@@ -71,12 +69,11 @@ BEGIN
       -- Handle archived samples
       IF inp_is_archived THEN
         new_event := new_event || jsonb_build_object('action', 'inserted_archived', 'to_container', inp_container_id);
-        INSERT INTO public.samples (sample_id, container_id, position, owner, collected_at, data, is_archived, created_at, updated_at)
+        INSERT INTO public.samples (sample_id, container_id, position, collected_at, data, is_archived, created_at, updated_at)
         VALUES (
           inp_sample_id, 
           inp_container_id, 
           inp_position, 
-          inp_owner,
           inp_collected_at,
           (COALESCE(inp_data, '{}'::jsonb) || jsonb_build_object('history', COALESCE((inp_data->'history'), '[]'::jsonb) || jsonb_build_array(new_event))), 
           true, 
@@ -126,7 +123,6 @@ BEGIN
 
           UPDATE public.samples
             SET position = COALESCE(NULLIF(inp_position, ''), position),
-                owner = COALESCE(NULLIF(inp_owner, ''), owner),
                 collected_at = COALESCE(inp_collected_at, collected_at),
                 data = merged_data,
                 updated_at = now()
@@ -154,7 +150,6 @@ BEGIN
           UPDATE public.samples
             SET container_id = inp_container_id,
                 position = COALESCE(NULLIF(inp_position, ''), position),
-                owner = COALESCE(NULLIF(inp_owner, ''), owner),
                 collected_at = COALESCE(inp_collected_at, collected_at),
                 data = merged_data,
                 updated_at = now()
@@ -178,12 +173,11 @@ BEGIN
       ELSE
         -- Insert new sample
         new_event := new_event || jsonb_build_object('action', 'inserted', 'to_container', inp_container_id);
-        INSERT INTO public.samples (sample_id, container_id, position, owner, collected_at, data, is_archived, created_at, updated_at)
+        INSERT INTO public.samples (sample_id, container_id, position, collected_at, data, is_archived, created_at, updated_at)
         VALUES (
           inp_sample_id, 
           inp_container_id, 
           inp_position, 
-          inp_owner,
           inp_collected_at,
           (COALESCE(inp_data, '{}'::jsonb) || jsonb_build_object('history', COALESCE((inp_data->'history'), '[]'::jsonb) || jsonb_build_array(new_event))), 
           false, 
