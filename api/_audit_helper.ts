@@ -1,5 +1,5 @@
 // Helper function to create audit log entries
-export async function createAuditLog(supabaseAdmin: any, params: {
+async function createAuditLog(supabaseAdmin: any, params: {
   userInitials?: string | null
   userName?: string | null
   entityType: 'container' | 'sample'
@@ -42,8 +42,7 @@ export async function createAuditLog(supabaseAdmin: any, params: {
 }
 
 // Extract user info from request headers
-export function getUserFromRequest(req: any): { initials?: string, name?: string } {
-  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
+function getUserFromRequest(req: any): { initials?: string, name?: string } {
   const userInitials = req.headers['x-user-initials'] || req.headers['x_user_initials'] || null
   const userName = req.headers['x-user-name'] || req.headers['x_user_name'] || null
   
@@ -52,3 +51,5 @@ export function getUserFromRequest(req: any): { initials?: string, name?: string
     name: userName
   }
 }
+
+module.exports = { createAuditLog, getUserFromRequest }
