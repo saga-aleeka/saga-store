@@ -65,12 +65,29 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     return '#e0e7ff' // default - indigo-100
   }
 
+  // Get highlight parameter from URL hash
+  const getHighlightedPosition = () => {
+    const hash = window.location.hash
+    const match = hash.match(/[?&]highlight=([^&]+)/)
+    return match ? decodeURIComponent(match[1]).toUpperCase() : null
+  }
+  
+  const [highlightedPosition, setHighlightedPosition] = useState<string | null>(getHighlightedPosition())
+  
+  useEffect(() => {
+    const handleHashChange = () => {
+      setHighlightedPosition(getHighlightedPosition())
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
   return (
     <div className="container-grid-view">
       <div className="grid-wrapper" style={{ 
         display: 'inline-grid',
-        gridTemplateColumns: `40px repeat(${gridSize.cols}, 60px)`,
-        gridTemplateRows: `30px repeat(${gridSize.rows}, 60px)`,
+        gridTemplateColumns: `40px repeat(${gridSize.cols}, 85px)`,
+        gridTemplateRows: `30px repeat(${gridSize.rows}, 70px)`,
         gap: '2px',
         background: '#e5e7eb',
         padding: '2px',
@@ -128,25 +145,33 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const sample = sampleMap.get(position)
               const isOccupied = !!sample
 
+              const isHighlighted = highlightedPosition === position
+              
               return (
                 <div
                   key={`cell-${rowIndex}-${colIndex}`}
                   onClick={() => handleCellClick(position)}
                   style={{
                     background: getCellColor(sample),
-                    border: isOccupied ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                    border: isHighlighted 
+                      ? '3px solid #f59e0b' 
+                      : isOccupied 
+                        ? '2px solid #3b82f6' 
+                        : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    padding: '4px',
                     cursor: editMode ? 'pointer' : 'default',
                     transition: 'all 0.15s',
                     fontSize: '11px',
                     fontWeight: isOccupied ? 600 : 400,
                     color: isOccupied ? '#1f2937' : '#9ca3af',
                     position: 'relative',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    boxShadow: isHighlighted ? '0 0 0 2px #fbbf24' : 'none'
                   }}
                   className={editMode ? 'hover:shadow-md hover:scale-105' : ''}
                   title={isOccupied ? `${sample.sample_id}\n${position}` : position}
@@ -154,13 +179,12 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                   {isOccupied ? (
                     <>
                       <div style={{ 
-                        fontSize: '10px', 
+                        fontSize: '11px', 
                         fontWeight: 700,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '100%',
-                        paddingX: '2px'
+                        textAlign: 'center',
+                        wordBreak: 'break-all',
+                        lineHeight: '1.2',
+                        width: '100%'
                       }}>
                         {sample.sample_id}
                       </div>

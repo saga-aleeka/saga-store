@@ -141,7 +141,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('samples')
-          .select('*')
+          .select('*, containers(name, location)')
           .eq('is_archived', false)
           .order('created_at', { ascending: false })
         
@@ -228,18 +228,63 @@ export default function App() {
             <div style={{marginTop:12}}>
               {loadingSamples && <div className="muted">Loading samples...</div>}
               {!loadingSamples && samples && samples.length === 0 && <div className="muted">No samples</div>}
-              {!loadingSamples && samples && samples.map((s:any) => (
-                <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                    <div style={{width:36,height:36,flex:'none',borderRadius:6,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12}}>{s.owner ? s.owner[0].toUpperCase() : s.id.slice(-2)}</div>
-                    <div>
-                      <div style={{fontWeight:700}}>{s.id}</div>
-                      <div className="muted">Container: {s.container_id} • Pos: {s.position} • {s.status} • Owner: {s.owner}</div>
+              {!loadingSamples && samples && samples.map((s:any) => {
+                const handleSampleClick = async () => {
+                  // Navigate to container detail with highlighted sample
+                  window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
+                }
+                
+                const containerName = s.containers?.name || s.container_id
+                const containerLocation = s.containers?.location || 'Location unknown'
+                
+                return (
+                  <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <div style={{display:'flex',gap:12,alignItems:'center',flex:1}}>
+                      <div style={{width:36,height:36,flex:'none',borderRadius:6,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12}}>{s.owner ? s.owner[0].toUpperCase() : (s.sample_id || s.id).slice(-2)}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14}}>{s.sample_id}</div>
+                        <div style={{marginTop:4}}>
+                          <button
+                            onClick={handleSampleClick}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '4px 10px',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: '#1e40af',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.background = '#dbeafe'
+                              e.currentTarget.style.borderColor = '#93c5fd'
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.background = '#eff6ff'
+                              e.currentTarget.style.borderColor = '#bfdbfe'
+                            }}
+                            title="Click to view in container grid"
+                          >
+                            <span>📦</span>
+                            <span>{containerName}</span>
+                            <span style={{color:'#60a5fa'}}>•</span>
+                            <span>{s.position}</span>
+                            <span style={{color:'#60a5fa'}}>•</span>
+                            <span style={{fontSize:11,color:'#3b82f6'}}>{containerLocation}</span>
+                          </button>
+                        </div>
+                        <div className="muted" style={{marginTop:4,fontSize:12}}>Owner: {s.owner || 'N/A'} • Collected: {s.collected_at ? new Date(s.collected_at).toLocaleDateString() : 'N/A'}</div>
+                      </div>
                     </div>
+                    <div className="muted" style={{fontSize:12,whiteSpace:'nowrap'}}>{s.updated_at ? new Date(s.updated_at).toLocaleString() : ''}</div>
                   </div>
-                  <div className="muted">{s.collected_at ? s.collected_at : new Date(s.updated_at).toLocaleString()}</div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
