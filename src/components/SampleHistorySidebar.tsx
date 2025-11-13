@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
+import { formatDateTime } from '../lib/dateUtils'
 
 interface HistoryEvent {
   when: string
@@ -69,21 +70,6 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       alert('Failed to archive sample')
     } finally {
       setArchiving(false)
-    }
-  }
-
-  const formatDate = (dateStr: string) => {
-    try {
-      const date = new Date(dateStr)
-      return date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } catch {
-      return dateStr
     }
   }
 
@@ -162,7 +148,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           {sample.created_at && (
             <div>
               <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px' }}>Created</div>
-              <div>{formatDate(sample.created_at)}</div>
+              <div>{formatDateTime(sample.created_at)}</div>
             </div>
           )}
           {sample.is_archived && (
@@ -232,7 +218,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                   {getActionLabel(event.action)}
                 </div>
                 <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '8px' }}>
-                  {formatDate(event.when)}
+                  {formatDateTime(event.when)}
                 </div>
                 {event.from_container && event.to_container && (
                   <div style={{ fontSize: '12px', color: '#4b5563' }}>

@@ -294,10 +294,10 @@ export default function App() {
                             <span style={{fontSize:11,color:'#3b82f6'}}>{containerLocation}</span>
                           </button>
                         </div>
-                        <div className="muted" style={{marginTop:4,fontSize:12}}>Owner: {s.owner || 'N/A'} • Collected: {s.collected_at ? new Date(s.collected_at).toLocaleDateString() : 'N/A'}</div>
+                        <div className="muted" style={{marginTop:4,fontSize:12}}>Owner: {s.owner || 'N/A'} • Collected: {formatDate(s.collected_at)}</div>
                       </div>
                     </div>
-                    <div className="muted" style={{fontSize:12,whiteSpace:'nowrap'}}>{s.updated_at ? new Date(s.updated_at).toLocaleString() : ''}</div>
+                    <div className="muted" style={{fontSize:12,whiteSpace:'nowrap'}}>{formatDateTime(s.updated_at)}</div>
                   </div>
                 )
               })}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import ContainerEditDrawer from './ContainerEditDrawer'
 import { getApiUrl } from '../lib/api'
+import { formatDateTime } from '../lib/dateUtils'
 
 function TypeBadge({ type }: { type?: string }){
   const map: Record<string,string> = {
@@ -82,7 +83,7 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
         </div>
       </div>
 
-      <div className="mt-3 text-sm text-gray-500">Last updated: {updatedAt ?? new Date().toLocaleString()}</div>
+      <div className="mt-3 text-sm text-gray-500">Last updated: {formatDateTime(updatedAt)}</div>
     </div>
     {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt}} onClose={() => setOpenEdit(false)} />}
     </>

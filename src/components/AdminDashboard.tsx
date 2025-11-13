@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import { getApiUrl, apiFetch } from '../lib/api'
+import { formatDateTime } from '../lib/dateUtils'
 
 // parser helpers
 function parseGridText(raw: string){
@@ -627,7 +628,7 @@ export default function AdminDashboard(){
                   <div style={{fontWeight:700}}>{a.type.toUpperCase()} — {a.target}</div>
                   <div className="muted">{a.msg}</div>
                 </div>
-                <div className="muted">{new Date(a.at).toLocaleString()}</div>
+                <div className="muted">{formatDateTime(a.at)}</div>
               </div>
             ))}
           </div>
