@@ -73,6 +73,7 @@ export default function HeaderBar({route = window.location.hash || '#/containers
             <button className={(route === '#/containers' ? 'tab active' : 'tab')} onClick={() => navigate('#/containers')}>Containers</button>
             <button className={(route === '#/archive' ? 'tab active' : 'tab')} onClick={() => navigate('#/archive')}>Archive</button>
             <button className={(route === '#/samples' ? 'tab active' : 'tab')} onClick={() => navigate('#/samples')}>Samples</button>
+            <button className={(route === '#/worklist' ? 'tab active' : 'tab')} onClick={() => navigate('#/worklist')}>Worklist</button>
           </div>
 
           <div className="search-row mt-3">

@@ -6,6 +6,8 @@ import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
 import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
+import WorklistManager from './components/WorklistManager'
+import WorklistContainerView from './components/WorklistContainerView'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -259,6 +261,32 @@ export default function App() {
     return () => { mounted = false }
   }, [route])
 
+  // worklist container view route: #/worklist/container/:id
+  if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
+    const parts = route.split('/')
+    const idWithQuery = decodeURIComponent(parts[3])
+    const id = idWithQuery.split('?')[0]
+    
+    // Parse positions from query string
+    const positionsMatch = route.match(/[?&]positions=([^&]+)/)
+    const positions = positionsMatch 
+      ? decodeURIComponent(positionsMatch[1]).split(',')
+      : []
+
+    return (
+      <div className="app">
+        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
+        <div style={{marginTop:18}}>
+          <WorklistContainerView 
+            containerId={id} 
+            highlightPositions={positions}
+            onBack={() => { window.location.hash = '#/worklist' }}
+          />
+        </div>
+      </div>
+    )
+  }
+
   // container detail route: #/containers/:id
   if (route.startsWith('#/containers/') && route.split('/').length >= 3) {
     const parts = route.split('/')
@@ -448,6 +476,10 @@ export default function App() {
 
         {route === '#/admin' && (
           <AdminDashboard />
+        )}
+
+        {route === '#/worklist' && (
+          <WorklistManager />
         )}
       </div>
     </div>

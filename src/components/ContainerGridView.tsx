@@ -18,9 +18,10 @@ interface ContainerGridViewProps {
   onSampleClick?: (sample: Sample | null, position: string) => void
   editMode?: boolean
   scanningPosition?: string | null
+  highlightedPositions?: string[]
 }
 
-export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null }: ContainerGridViewProps) {
+export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [] }: ContainerGridViewProps) {
   const [gridSize, setGridSize] = useState({ rows: 9, cols: 9 })
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
 
@@ -81,7 +82,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     return '#e0e7ff' // default - indigo-100
   }
 
-  // Get highlight parameter from URL hash
+  // Get highlight parameter from URL hash or from props
   const getHighlightedPosition = () => {
     const hash = window.location.hash
     const match = hash.match(/[?&]highlight=([^&]+)/)
@@ -97,6 +98,14 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
+
+  // Check if a position should be highlighted (from URL or from props array)
+  const isPositionHighlighted = (position: string) => {
+    if (highlightedPositions && highlightedPositions.length > 0) {
+      return highlightedPositions.map(p => p.toUpperCase()).includes(position.toUpperCase())
+    }
+    return highlightedPosition === position.toUpperCase()
+  }
 
   return (
     <div className="container-grid-view">
@@ -164,7 +173,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               // Check if this is I9 for DP Pools (unavailable position)
               const isUnavailable = position === 'I9' && container?.type === 'DP Pools' && container?.layout === '9x9'
 
-              const isHighlighted = highlightedPosition === position
+              const isHighlighted = isPositionHighlighted(position)
               const isScanning = scanningPosition === position
               
               return (
