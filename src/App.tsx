@@ -48,6 +48,65 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Load counts for badges on mount and when route changes
+  useEffect(() => {
+    let mounted = true
+    
+    // Load active containers count
+    async function loadContainersCount() {
+      try {
+        const { count, error } = await supabase
+          .from('containers')
+          .select('*', { count: 'exact', head: true })
+          .eq('archived', false)
+        
+        if (!mounted) return
+        if (error) throw error
+        if (!containers) setContainers(new Array(count || 0))
+      } catch(e) {
+        console.warn('failed to load containers count', e)
+      }
+    }
+    
+    // Load archived containers count
+    async function loadArchivedCount() {
+      try {
+        const { count, error } = await supabase
+          .from('containers')
+          .select('*', { count: 'exact', head: true })
+          .eq('archived', true)
+        
+        if (!mounted) return
+        if (error) throw error
+        if (!archivedContainers) setArchivedContainers(new Array(count || 0))
+      } catch(e) {
+        console.warn('failed to load archived count', e)
+      }
+    }
+    
+    // Load samples count
+    async function loadSamplesCount() {
+      try {
+        const { count, error } = await supabase
+          .from('samples')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_archived', false)
+        
+        if (!mounted) return
+        if (error) throw error
+        if (!samples) setSamples(new Array(count || 0))
+      } catch(e) {
+        console.warn('failed to load samples count', e)
+      }
+    }
+    
+    loadContainersCount()
+    loadArchivedCount()
+    loadSamplesCount()
+    
+    return () => { mounted = false }
+  }, [route])
+
   useEffect(() => {
     // load containers when on containers route
     let mounted = true
