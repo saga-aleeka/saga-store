@@ -61,21 +61,6 @@ module.exports = async function handler(req: any, res: any){
       return res.status(500).json({ error: 'database_error' })
     }
 
-    // Also check for archived samples with the same ID in the target container
-    const { data: existingArchived, error: archivedError } = await supabaseAdmin
-      .from('samples')
-      .select('*')
-      .eq('sample_id', sample_id.toUpperCase())
-      .eq('is_archived', true)
-      .eq('container_id', container_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (archivedError && archivedError.code !== 'PGRST116') {
-      console.error('Archived fetch error:', archivedError)
-      return res.status(500).json({ error: 'database_error' })
-    }
-
     let result
 
     if (existingActive && existingActive.length > 0) {
@@ -125,47 +110,9 @@ module.exports = async function handler(req: any, res: any){
       }
 
       result = { data: updated, action: 'moved' }
-    } else if (existingArchived && existingArchived.length > 0) {
-      // Archived sample exists in this container - UPDATE it (unarchive and move)
-      const sample = existingArchived[0]
-      const currentData = sample.data || {}
-      const currentHistory = currentData.history || []
-
-      const historyEvent = {
-        when: now,
-        action: 'unarchived',
-        user: user || 'unknown',
-        source: 'grid_edit',
-        previous_position: sample.position,
-        new_position: position
-      }
-
-      const updatedData = {
-        ...currentData,
-        ...sampleData,
-        history: [...currentHistory, historyEvent]
-      }
-
-      const { data: updated, error: updateError } = await supabaseAdmin
-        .from('samples')
-        .update({
-          position,
-          data: updatedData,
-          is_archived: false,
-          updated_at: now
-        })
-        .eq('id', sample.id)
-        .select()
-        .single()
-
-      if (updateError) {
-        console.error('Update error:', updateError)
-        return res.status(500).json({ error: 'update_failed', message: updateError.message })
-      }
-
-      result = { data: updated, action: 'unarchived' }
     } else {
-      // Sample doesn't exist - INSERT new one
+      // No active sample exists - INSERT new one
+      // Archived samples with same ID are left untouched and can coexist
       const historyEvent = {
         when: now,
         action: 'inserted',
