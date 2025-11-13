@@ -161,7 +161,9 @@ export default function App() {
   // container detail route: #/containers/:id
   if (route.startsWith('#/containers/') && route.split('/').length >= 3) {
     const parts = route.split('/')
-    const id = decodeURIComponent(parts[2])
+    const idWithQuery = decodeURIComponent(parts[2])
+    // Strip query parameters from id
+    const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
         <Header route={route} />

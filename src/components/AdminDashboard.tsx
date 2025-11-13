@@ -204,9 +204,17 @@ function useFetch<T>(url: string){
       setLoading(true)
       try{
         const r = await fetch(getApiUrl(url))
+        if (!r.ok && r.status === 404) {
+          // Endpoint doesn't exist, return empty array
+          if (mounted && !aborted) { setData([] as any); setLoading(false) }
+          return
+        }
         const j = await r.json()
         if (mounted && !aborted){ setData(j.data ?? j); setLoading(false) }
-      }catch(err){ if (mounted && !aborted) setLoading(false) }
+      }catch(err){ 
+        console.warn('Fetch error for', url, err)
+        if (mounted && !aborted) { setData([] as any); setLoading(false) }
+      }
     }
 
     fetchData()
@@ -531,7 +539,8 @@ export default function AdminDashboard(){
                     for (let i = 0; i < samplesData.length; i += batchSize) {
                       const batch = samplesData.slice(i, i + batchSize)
                       try {
-                        const { error } = await supabase.rpc('samples_upsert_v1', { items: batch })
+                        // RPC expects jsonb array directly, not wrapped in object
+                        const { data, error } = await supabase.rpc('samples_upsert_v1', { sample_json: batch })
                         if (error) throw error
                         done += batch.length
                         setImportProgress(p => ({ ...p, done }))
