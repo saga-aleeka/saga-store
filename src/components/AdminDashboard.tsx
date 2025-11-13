@@ -446,7 +446,6 @@ export default function AdminDashboard(){
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                 <div style={{fontWeight:700}}>Import actions</div>
-                <div className="muted">Mock only</div>
               </div>
 
               <div style={{marginTop:12,display:'grid',gap:8}}>
@@ -455,42 +454,101 @@ export default function AdminDashboard(){
                   setImporting(true)
                   setImportProgress({ total: parsed.items ? parsed.items.length : 0, done: 0, failed: 0 })
                   try{
-                    // ensure containers exist (create with verbatim ids)
-                    const existingRes = await apiFetch('/api/containers')
-                    const existingJson = await existingRes.json()
-                    const existing = existingJson.data ?? existingJson
+                    // Import via Supabase directly
+                    const { supabase } = await import('../lib/api')
+                    
+                    // Helper function to extract sample type from container name
+                    const extractSampleType = (name: string): string => {
+                      const nameUpper = name.toUpperCase()
+                      if (nameUpper.includes('CFDNA')) return 'cfDNA Tubes'
+                      if (nameUpper.includes('DP') && nameUpper.includes('POOL')) return 'DP Pools'
+                      if (nameUpper.includes('DTC')) return 'DTC Tubes'
+                      if (nameUpper.includes('PA') && nameUpper.includes('POOL')) return 'PA Pools'
+                      if (nameUpper.includes('MNC')) return 'MNC Tubes'
+                      if (nameUpper.includes('PLASMA')) return 'Plasma Tubes'
+                      if (nameUpper.includes('BC')) return 'BC Tubes'
+                      if (nameUpper.includes('IDT') && nameUpper.includes('PLATE')) return 'IDT Plates'
+                      return 'Sample Type'
+                    }
+                    
+                    // Get existing containers
+                    const { data: existing } = await supabase.from('containers').select('id, name')
+                    const existingMap = new Map((existing || []).map((c: any) => [String(c.name), c]))
+                    
+                    // Get unique box names from parsed items
                     const boxes = Array.from(new Set(parsed.items.map((it:any)=> it.container_name)))
-                    for (const box of boxes){
-                      const exists = existing.find((c:any) => String(c.id) === String(box))
-                      if (!exists){
-                        // try to find metadata from parsed.boxes
-                        const meta = (parsed.boxes || []).find((bb:any) => String(bb.boxName) === String(box)) || {}
-                        const loc = meta.location ?? 'Imported'
-                        const layout = meta.layout ?? undefined
-                        await apiFetch('/api/containers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: box, name: box, location: loc, total: 81, layout }) })
+                    const containerMap = new Map()
+                    
+                    for (const boxName of boxes){
+                      const exists = existingMap.get(String(boxName))
+                      if (exists){
+                        containerMap.set(boxName, exists.id)
+                      } else {
+                        // Create new container with parsed metadata and detected sample type
+                        const meta = (parsed.boxes || []).find((bb:any) => String(bb.boxName) === String(boxName)) || {}
+                        const location = meta.location ?? 'Imported'
+                        const layout = meta.layout ?? '9x9'
+                        const sampleType = extractSampleType(boxName)
+                        
+                        const { data: newContainer, error: createError } = await supabase
+                          .from('containers')
+                          .insert([{
+                            name: boxName,
+                            location: location,
+                            layout: layout,
+                            type: sampleType,
+                            temperature: '-80°C',
+                            used: 0,
+                            total: 81,
+                            archived: false,
+                            training: false
+                          }])
+                          .select('id')
+                          .single()
+                        
+                        if (createError) {
+                          console.error('Failed to create container:', boxName, createError)
+                          throw createError
+                        }
+                        containerMap.set(boxName, newContainer.id)
                       }
                     }
 
-                    // persist seeds to localStorage so reloads can rehydrate mocks
-                    try{
-                      const seeds = { boxes: parsed.boxes, items: parsed.items }
-                      localStorage.setItem('mock_seeds', JSON.stringify(seeds))
-                    }catch(e){ console.warn('failed to persist seeds', e) }
-
-                    // import items one-by-one to provide progress
+                    // Import samples using the samples_upsert_v1 RPC
                     const items = parsed.items || []
+                    const samplesData = items.map((it: any) => ({
+                      sample_id: it.sample_id,
+                      container_id: containerMap.get(it.container_name),
+                      position: it.position,
+                      owner: '',
+                      collected_at: new Date().toISOString(),
+                      is_archived: false
+                    }))
+                    
                     let done = 0, failed = 0
-                    for (const it of items){
-                      try{
-                        await apiFetch('/api/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ items: [it] }) })
-                        done++
+                    // Process in batches of 50 for better performance
+                    const batchSize = 50
+                    for (let i = 0; i < samplesData.length; i += batchSize) {
+                      const batch = samplesData.slice(i, i + batchSize)
+                      try {
+                        const { error } = await supabase.rpc('samples_upsert_v1', { items: batch })
+                        if (error) throw error
+                        done += batch.length
                         setImportProgress(p => ({ ...p, done }))
-                      }catch(e){ console.warn('item import failed', e); failed++; setImportProgress(p => ({ ...p, failed })) }
+                      } catch(e) {
+                        console.error('Batch import failed:', e)
+                        failed += batch.length
+                        setImportProgress(p => ({ ...p, failed }))
+                      }
                     }
+                    
                     alert('Imported ' + done + ' items' + (failed ? ('; failed: ' + failed) : ''))
                     setParsed(null)
                     setPasteText('')
-                  }catch(e){ console.warn(e); alert('Import failed') }
+                    
+                    // Dispatch event to refresh container list
+                    window.dispatchEvent(new Event('container-updated'))
+                  }catch(e){ console.error('Import error:', e); alert('Import failed: ' + (e as Error).message) }
                   setImporting(false)
                 }}>{importing ? 'Importing…' : 'Import parsed items'}</button>
 

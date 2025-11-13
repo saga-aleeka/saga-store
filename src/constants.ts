@@ -1,8 +1,13 @@
 export const SAMPLE_TYPES = [
   'Sample Type',
   'cfDNA Tubes',
-  'MNC Tubes',
+  'DP Pools',
   'DTC Tubes',
+  'PA Pools',
+  'MNC Tubes',
+  'Plasma Tubes',
+  'BC Tubes',
+  'IDT Plates',
 ]
 
 export const LAYOUTS = ['9x9','5x5','8x12']
