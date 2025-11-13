@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
@@ -21,6 +21,27 @@ export default function WorklistManager() {
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load worklist from localStorage on mount
+  useEffect(() => {
+    const savedWorklist = localStorage.getItem('saga_worklist')
+    if (savedWorklist) {
+      try {
+        const parsed = JSON.parse(savedWorklist)
+        setWorklist(parsed)
+      } catch (e) {
+        console.warn('Failed to parse saved worklist:', e)
+        localStorage.removeItem('saga_worklist')
+      }
+    }
+  }, [])
+
+  // Save worklist to localStorage whenever it changes
+  useEffect(() => {
+    if (worklist.length > 0) {
+      localStorage.setItem('saga_worklist', JSON.stringify(worklist))
+    }
+  }, [worklist])
 
   const parseCSV = (text: string): string[] => {
     const lines = text.trim().split('\n')
@@ -108,6 +129,7 @@ export default function WorklistManager() {
 
       setWorklist(worklistData)
       setSelectedSamples(new Set())
+      localStorage.setItem('saga_worklist', JSON.stringify(worklistData))
     } catch (err: any) {
       console.error('Error processing worklist:', err)
       alert(`Failed to process worklist file: ${err?.message || 'Unknown error'}\n\nCheck console for details.`)
@@ -365,6 +387,20 @@ export default function WorklistManager() {
             </button>
             <button className="btn ghost" onClick={deselectAll} disabled={loading || selectedSamples.size === 0}>
               Deselect All
+            </button>
+            <button 
+              className="btn ghost" 
+              onClick={() => {
+                if (confirm('Clear worklist? This will remove all loaded samples.')) {
+                  setWorklist([])
+                  setSelectedSamples(new Set())
+                  localStorage.removeItem('saga_worklist')
+                }
+              }}
+              disabled={loading}
+              style={{color: '#ef4444'}}
+            >
+              Clear Worklist
             </button>
             <div style={{flex: 1}} />
             <button 
