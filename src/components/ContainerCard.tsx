@@ -42,10 +42,10 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-3">
-            <div className="text-lg font-semibold truncate">{name ?? 'Unnamed Container'}</div>
+            <div className="text-lg font-semibold">{name ?? 'Unnamed Container'}</div>
           </div>
           <div className="flex items-center gap-3 mt-1 min-w-0">
-            <div className="text-sm text-gray-600 truncate flex-shrink">{rest.location ?? ''}</div>
+            <div className="text-sm text-gray-600">{rest.location ?? ''}</div>
             <div className="flex-shrink-0">
               <TypeBadge type={type} />
             </div>
@@ -58,12 +58,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
             <span className="px-2 py-1 text-xs bg-gray-100 rounded whitespace-nowrap">{layout}</span>
           </div>
           <div className="flex items-center gap-2" onClick={(e)=> e.stopPropagation()}>
-            <button className="card-action" aria-label="archive" title="Archive" onClick={async () => {
-              try{
-                await fetch(getApiUrl(`/api/containers/${id}`), { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ archived: true }) })
-                window.dispatchEvent(new CustomEvent('container-updated'))
-              }catch(e){ console.warn(e) }
-            }}>Archive</button>
             <button className="card-menu" aria-label="open menu" onClick={() => setOpenEdit(true)}>⋮</button>
           </div>
         </div>
@@ -85,7 +79,7 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
 
       <div className="mt-3 text-sm text-gray-500">Last updated: {formatDateTime(updatedAt)}</div>
     </div>
-    {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt}} onClose={() => setOpenEdit(false)} />}
+    {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt,archived:rest.archived,location:rest.location}} onClose={() => setOpenEdit(false)} />}
     </>
   )
 }
