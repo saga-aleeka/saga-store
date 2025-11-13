@@ -1,6 +1,6 @@
 import React, {useState, useRef} from 'react'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
-import { getApiUrl, apiFetch } from '../lib/api'
+import { supabase } from '../lib/api'
 
 export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }){
   const defaultForm = {
@@ -33,14 +33,35 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
       return
     }
 
-  const res = await apiFetch('/api/containers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    const j = await res.json().catch(() => ({}))
-    // normalize returned created row (Supabase returns an array when return=representation)
-    const created = Array.isArray(j.data) ? j.data[0] : j.data
-    window.dispatchEvent(new CustomEvent('container-updated', { detail: created }))
-    // navigate to the new container's detail view
-    if (created && created.id) {
-      window.location.hash = `#/containers/${created.id}`
+    // Insert directly via Supabase
+    const { data, error } = await supabase
+      .from('containers')
+      .insert([{
+        name: form.name,
+        location: form.location,
+        layout: form.layout,
+        temperature: form.temperature,
+        type: form.type,
+        used: form.used,
+        total: form.total,
+        archived: form.archived,
+        training: form.training
+      }])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Failed to create container:', error)
+      alert('Failed to create container: ' + error.message)
+      return
+    }
+
+    // Dispatch event to refresh container list
+    window.dispatchEvent(new CustomEvent('container-updated', { detail: data }))
+    
+    // Navigate to the new container's detail view
+    if (data && data.id) {
+      window.location.hash = `#/containers/${data.id}`
     } else {
       onClose()
     }

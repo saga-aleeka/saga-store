@@ -6,7 +6,7 @@ import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
 import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
-import { getApiUrl } from './lib/api'
+import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
@@ -53,10 +53,15 @@ export default function App() {
     async function load(){
       setLoadingContainers(true)
       try{
-  const res = await fetch(getApiUrl('/api/containers'))
-        const j = await res.json()
+        const { data, error } = await supabase
+          .from('containers')
+          .select('*')
+          .eq('archived', false)
+          .order('updated_at', { ascending: false })
+        
         if (!mounted) return
-        setContainers(j.data ?? j)
+        if (error) throw error
+        setContainers(data ?? [])
       }catch(e){
         console.warn('failed to load containers', e)
         if (mounted) setContainers([])
@@ -106,20 +111,25 @@ export default function App() {
   useEffect(() => {
     // load archived containers when on archive route
     let mounted = true
-    async function loadArchived(){
+    async function load(){
       setLoadingArchived(true)
       try{
-  const res = await fetch(getApiUrl('/api/containers?archived=true'))
-        const j = await res.json()
+        const { data, error } = await supabase
+          .from('containers')
+          .select('*')
+          .eq('archived', true)
+          .order('updated_at', { ascending: false })
+        
         if (!mounted) return
-        setArchivedContainers(j.data ?? j)
+        if (error) throw error
+        setArchivedContainers(data ?? [])
       }catch(e){
-        console.warn('failed to load archived containers', e)
+        console.warn('failed to load archived', e)
         if (mounted) setArchivedContainers([])
       }finally{ if (mounted) setLoadingArchived(false) }
     }
 
-    if (route === '#/archive') loadArchived()
+    if (route === '#/archive') load()
     return () => { mounted = false }
   }, [route])
 
@@ -129,10 +139,15 @@ export default function App() {
     async function loadSamples(){
       setLoadingSamples(true)
       try{
-  const res = await fetch(getApiUrl('/api/samples'))
-        const j = await res.json()
+        const { data, error } = await supabase
+          .from('samples')
+          .select('*')
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false })
+        
         if (!mounted) return
-        setSamples(j.data ?? j)
+        if (error) throw error
+        setSamples(data ?? [])
       }catch(e){
         console.warn('failed to load samples', e)
         if (mounted) setSamples([])

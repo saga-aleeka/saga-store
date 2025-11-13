@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import ContainerGridView from './ContainerGridView'
 import SampleHistorySidebar from './SampleHistorySidebar'
-import { getApiUrl } from '../lib/api'
+import { supabase } from '../lib/api'
 import { getToken } from '../lib/auth'
 
 export default function ContainerDetails({ id }: { id: string | number }){
@@ -14,10 +14,14 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const loadContainer = async () => {
     setLoading(true)
     try{
-      const res = await fetch(getApiUrl(`/api/containers/${encodeURIComponent(String(id))}`))
-      if (!res.ok) throw new Error('not found')
-      const j = await res.json()
-      setData(j.data ?? j)
+      const { data, error } = await supabase
+        .from('containers')
+        .select('*, samples(*)')
+        .eq('id', id)
+        .single()
+      
+      if (error) throw error
+      setData(data)
     }catch(e){
       console.warn('failed to load container', e)
       setData(null)
