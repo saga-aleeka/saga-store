@@ -17,9 +17,10 @@ interface ContainerGridViewProps {
   samples: Sample[]
   onSampleClick?: (sample: Sample | null, position: string) => void
   editMode?: boolean
+  scanningPosition?: string | null
 }
 
-export default function ContainerGridView({ container, samples, onSampleClick, editMode = false }: ContainerGridViewProps) {
+export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null }: ContainerGridViewProps) {
   const [gridSize, setGridSize] = useState({ rows: 9, cols: 9 })
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
 
@@ -146,18 +147,23 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const isOccupied = !!sample
 
               const isHighlighted = highlightedPosition === position
+              const isScanning = scanningPosition === position
               
               return (
                 <div
                   key={`cell-${rowIndex}-${colIndex}`}
                   onClick={() => handleCellClick(position)}
                   style={{
-                    background: getCellColor(sample),
-                    border: isHighlighted 
-                      ? '3px solid #f59e0b' 
-                      : isOccupied 
-                        ? '2px solid #3b82f6' 
-                        : '1px solid #d1d5db',
+                    background: isScanning 
+                      ? '#f3e8ff' 
+                      : getCellColor(sample),
+                    border: isScanning
+                      ? '3px solid #8b5cf6'
+                      : isHighlighted 
+                        ? '3px solid #f59e0b' 
+                        : isOccupied 
+                          ? '2px solid #3b82f6' 
+                          : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
@@ -171,7 +177,11 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     color: isOccupied ? '#1f2937' : '#9ca3af',
                     position: 'relative',
                     overflow: 'hidden',
-                    boxShadow: isHighlighted ? '0 0 0 2px #fbbf24' : 'none'
+                    boxShadow: isScanning 
+                      ? '0 0 0 3px #c4b5fd' 
+                      : isHighlighted 
+                        ? '0 0 0 2px #fbbf24' 
+                        : 'none'
                   }}
                   className={editMode ? 'hover:shadow-md hover:scale-105' : ''}
                   title={isOccupied ? `${sample.sample_id}\n${position}` : position}
