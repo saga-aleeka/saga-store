@@ -528,7 +528,6 @@ export default function AdminDashboard(){
                       sample_id: it.sample_id,
                       container_id: containerMap.get(it.container_name),
                       position: it.position,
-                      collected_at: new Date().toISOString(),
                       is_archived: false
                     }))
                     
