@@ -162,18 +162,44 @@ export default function App() {
   }, [containers, selectedTypes, availableOnly, trainingOnly])
 
   useEffect(() => {
-    function onUpdated(e: any){
-      // refresh lists when a container is updated
-      if (route === '#/containers'){
-  fetch(getApiUrl('/api/containers')).then(r=>r.json()).then(j=>setContainers(j.data ?? j))
-      }
-      if (route === '#/archive'){
-  fetch(getApiUrl('/api/containers?archived=true')).then(r=>r.json()).then(j=>setArchivedContainers(j.data ?? j))
+    async function onUpdated(e: any){
+      // refresh both lists when a container is updated (might be archived/unarchived)
+      try {
+        const [activeRes, archivedRes] = await Promise.all([
+          supabase
+            .from('containers')
+            .select('*, samples(id, is_archived)')
+            .eq('archived', false)
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('containers')
+            .select('*, samples(id, is_archived)')
+            .eq('archived', true)
+            .order('updated_at', { ascending: false })
+        ])
+        
+        if (activeRes.data) {
+          const containersWithCounts = activeRes.data.map((c: any) => ({
+            ...c,
+            used: (c.samples || []).filter((s: any) => !s.is_archived).length
+          }))
+          setContainers(containersWithCounts)
+        }
+        
+        if (archivedRes.data) {
+          const containersWithCounts = archivedRes.data.map((c: any) => ({
+            ...c,
+            used: (c.samples || []).filter((s: any) => !s.is_archived).length
+          }))
+          setArchivedContainers(containersWithCounts)
+        }
+      } catch(e) {
+        console.warn('Failed to refresh containers after update', e)
       }
     }
     window.addEventListener('container-updated', onUpdated)
     return () => window.removeEventListener('container-updated', onUpdated)
-  }, [route])
+  }, [])
 
   useEffect(() => {
     // load archived containers when on archive route
