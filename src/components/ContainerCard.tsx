@@ -41,11 +41,11 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
     <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}` }}>
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-3">
-            <div className="text-lg font-semibold">{name ?? 'Unnamed Container'}</div>
+          <div className="flex items-baseline gap-3 mb-2">
+            <div className="text-base font-semibold truncate" title={name ?? 'Unnamed Container'}>{name ?? 'Unnamed Container'}</div>
           </div>
-          <div className="flex items-center gap-3 mt-1 min-w-0">
-            <div className="text-sm text-gray-600">{rest.location ?? ''}</div>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="text-sm text-gray-600 truncate">{rest.location ?? ''}</div>
             <div className="flex-shrink-0">
               <TypeBadge type={type} />
             </div>
