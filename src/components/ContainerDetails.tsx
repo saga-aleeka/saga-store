@@ -22,17 +22,19 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const loadContainer = async () => {
     setLoading(true)
     try{
-      const { data, error } = await supabase
+      const { data: containerData, error } = await supabase
         .from('containers')
         .select('*, samples(*)')
         .eq('id', id)
         .single()
       
       if (error) throw error
-      setData(data)
+      setData(containerData)
+      return containerData
     }catch(e){
       console.warn('failed to load container', e)
       setData(null)
+      return null
     }finally{ 
       setLoading(false) 
     }
@@ -181,12 +183,47 @@ export default function ContainerDetails({ id }: { id: string | number }){
 
       if (!res.ok) throw new Error('Failed to add sample')
       
-      // Show success feedback
-      setLastScannedId(sampleId)
+      // Clear input first
       setScanInput('')
       
       // Reload container to get updated sample list
-      await loadContainer()
+      const updatedData = await loadContainer()
+      
+      // After reload, advance to next position using fresh data
+      if (updatedData) {
+        const samples = updatedData.samples || []
+        const occupiedPositions = new Set(
+          samples
+            .filter((s: any) => !s.is_archived)
+            .map((s: any) => s.position?.toUpperCase())
+        )
+        
+        // Parse layout
+        const layoutParts = (updatedData.layout || '9x9').toLowerCase().split('x')
+        const rows = parseInt(layoutParts[0]) || 9
+        const cols = parseInt(layoutParts[1]) || 9
+        
+        // Find next empty position (column by column, top to bottom, left to right)
+        let nextPosition: string | null = null
+        for (let c = 0; c < cols; c++) {
+          for (let r = 0; r < rows; r++) {
+            const position = `${String.fromCharCode(65 + r)}${c + 1}`
+            if (!occupiedPositions.has(position)) {
+              nextPosition = position
+              break
+            }
+          }
+          if (nextPosition) break
+        }
+        
+        if (nextPosition) {
+          setCurrentPosition(nextPosition)
+        }
+      }
+      
+      // Always refocus
+      setLastScannedId(null)
+      setTimeout(() => scanInputRef.current?.focus(), 50)
       
     } catch (error) {
       console.error('Scan error:', error)
@@ -196,24 +233,6 @@ export default function ContainerDetails({ id }: { id: string | number }){
       setScanning(false)
     }
   }
-  
-  // Effect to auto-advance after data changes from successful scan
-  useEffect(() => {
-    if (lastScannedId && scanningMode) {
-      // After successful scan, move to next position
-      const nextPosition = findNextEmptyPosition()
-      if (nextPosition) {
-        setCurrentPosition(nextPosition)
-        setLastScannedId(null)
-        // Auto-focus input for next scan
-        setTimeout(() => scanInputRef.current?.focus(), 50)
-      } else {
-        // Container is full - stay on current position
-        setLastScannedId(null)
-        setTimeout(() => scanInputRef.current?.focus(), 50)
-      }
-    }
-  }, [data, lastScannedId, scanningMode])
 
   const handleSidebarUpdate = async () => {
     setShowSidebar(false)
