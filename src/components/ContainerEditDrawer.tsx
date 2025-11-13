@@ -22,6 +22,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
   const [errors, setErrors] = useState<{name?:string, location?:string}>({})
   const nameRef = useRef<HTMLInputElement | null>(null)
   const locationRef = useRef<HTMLInputElement | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   if (!container) return null
 
@@ -44,6 +45,34 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
     // notify app that container updated
     window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
     onClose()
+  }
+
+  async function deleteContainer(){
+    if (!window.confirm('Are you sure you want to delete this container? This will permanently delete the container and all its samples. This action cannot be undone.')) {
+      return
+    }
+
+    setDeleting(true)
+    try {
+      const res = await fetch(getApiUrl(`/api/containers/${container.id}`), { 
+        method: 'DELETE', 
+        headers: {'Content-Type':'application/json'} 
+      })
+      
+      if (!res.ok) {
+        throw new Error('Failed to delete container')
+      }
+      
+      // notify app that container was deleted
+      window.dispatchEvent(new CustomEvent('container-updated'))
+      // redirect to containers list
+      window.location.hash = '#/containers'
+      onClose()
+    } catch(e) {
+      console.error('Delete failed:', e)
+      alert('Failed to delete container. Please try again.')
+      setDeleting(false)
+    }
   }
 
   return (
@@ -96,9 +125,19 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
             <input type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} /> Training only
           </label>
 
-          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
-            <button className="btn ghost" onClick={onClose}>Cancel</button>
-            <button className="btn" onClick={save} disabled={!form.name || !form.location}>Save changes</button>
+          <div style={{display:'flex',gap:8,justifyContent:'space-between',marginTop:16,paddingTop:16,borderTop:'1px solid #e5e7eb'}}>
+            <button 
+              className="btn" 
+              onClick={deleteContainer} 
+              disabled={deleting}
+              style={{background:'#ef4444',color:'white',borderColor:'#ef4444'}}
+            >
+              {deleting ? 'Deleting...' : 'Delete Container'}
+            </button>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn ghost" onClick={onClose}>Cancel</button>
+              <button className="btn" onClick={save} disabled={!form.name || !form.location || deleting}>Save changes</button>
+            </div>
           </div>
         </div>
       </div>

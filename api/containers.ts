@@ -141,6 +141,37 @@ module.exports = async function handler(req: any, res: any){
       return res.status(200).json({ data })
     }
 
+    // Delete container
+    if (req.method === 'DELETE'){
+      const parts = req.url.split('/')
+      const id = parts[parts.length - 1]
+      if (!id) return res.status(400).json({ error: 'missing_id' })
+
+      // First delete all samples in this container
+      const { error: samplesError } = await supabaseAdmin
+        .from('samples')
+        .delete()
+        .eq('container_id', id)
+
+      if (samplesError) {
+        console.error('Failed to delete samples:', samplesError)
+        return res.status(502).json({ error: 'supabase_delete_samples_failed', message: samplesError.message })
+      }
+
+      // Then delete the container
+      const { error: containerError } = await supabaseAdmin
+        .from('containers')
+        .delete()
+        .eq('id', id)
+
+      if (containerError) {
+        console.error('Failed to delete container:', containerError)
+        return res.status(502).json({ error: 'supabase_delete_container_failed', message: containerError.message })
+      }
+
+      return res.status(200).json({ success: true })
+    }
+
     return res.status(405).json({ error: 'method_not_allowed' })
   }catch(err:any){
     console.error('containers handler error', err)
