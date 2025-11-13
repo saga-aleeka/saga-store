@@ -202,14 +202,26 @@ export default function WorklistManager() {
         position: null
       }))
 
-      const { error: updateError } = await supabase
-        .from('samples')
-        .upsert(updates)
-
-      if (updateError) {
-        console.error('Error updating samples:', updateError)
-        alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
-        return
+      // Update each sample individually to avoid upsert issues
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('samples')
+          .update({
+            is_checked_out: update.is_checked_out,
+            checked_out_at: update.checked_out_at,
+            checked_out_by: update.checked_out_by,
+            previous_container_id: update.previous_container_id,
+            previous_position: update.previous_position,
+            container_id: update.container_id,
+            position: update.position
+          })
+          .eq('id', update.id)
+        
+        if (updateError) {
+          console.error('Error updating sample:', updateError)
+          alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+          return
+        }
       }
 
       // Refresh worklist
@@ -290,14 +302,26 @@ export default function WorklistManager() {
         return
       }
 
-      const { error: updateError } = await supabase
-        .from('samples')
-        .upsert(updates)
-
-      if (updateError) {
-        console.error('Error restoring samples:', updateError)
-        alert(`Failed to undo checkout: ${updateError.message}`)
-        return
+      // Update each sample individually to avoid upsert issues
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('samples')
+          .update({
+            container_id: update.container_id,
+            position: update.position,
+            is_checked_out: update.is_checked_out,
+            checked_out_at: update.checked_out_at,
+            checked_out_by: update.checked_out_by,
+            previous_container_id: update.previous_container_id,
+            previous_position: update.previous_position
+          })
+          .eq('id', update.id)
+        
+        if (updateError) {
+          console.error('Error restoring sample:', updateError)
+          alert(`Failed to undo checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+          return
+        }
       }
 
       // Refresh worklist
