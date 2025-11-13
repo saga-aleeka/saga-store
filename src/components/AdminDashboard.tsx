@@ -844,14 +844,5 @@ function AuthorizedUsersLink(){
     }catch(e){ console.warn('failed to build supabase console url', e) }
   }
 
-  if (!consoleUrl) return (
-    <div style={{fontSize:13,color:'#666'}}>Set <code>VITE_SUPABASE_URL</code> to enable opening the Supabase table editor.</div>
-  )
-
-  return (
-    <>
-      <a className="btn" href={consoleUrl} target="_blank" rel="noreferrer">Add new user (Open Supabase)</a>
-      <div style={{fontSize:13,color:'#666',alignSelf:'center'}}>Opens Supabase table editor for <code>authorized_users</code></div>
-    </>
-  )
+  return null
 }
