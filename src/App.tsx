@@ -429,7 +429,7 @@ export default function App() {
                   <tbody>
                     {samples.map((s: any, index: number) => {
                       const handleSampleClick = () => {
-                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
+                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
                       }
                       
                       const containerName = s.containers?.name || s.container_id || '-'

@@ -261,6 +261,11 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const samples = data.samples || []
   const activeCount = samples.filter((s: any) => !s.is_archived).length
 
+  // Check for returnTo parameter in URL
+  const urlParams = new URLSearchParams(window.location.hash.split('?')[1])
+  const returnTo = urlParams.get('returnTo')
+  const backUrl = returnTo === 'samples' ? '#/samples' : '#/containers'
+
   return (
     <div style={{ position: 'relative' }}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:20}}>
@@ -284,7 +289,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
           </div>
           <button 
             className="btn ghost" 
-            onClick={() => { window.location.hash = '#/containers' }}
+            onClick={() => { window.location.hash = backUrl }}
           >
             Back
           </button>
