@@ -48,9 +48,24 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   }, [samples])
 
   const handleCellClick = (position: string) => {
-    if (!editMode) return
     const sample = sampleMap.get(position) || null
-    onSampleClick?.(sample, position)
+    
+    // In scanning mode, only handle empty cells
+    if (scanningPosition && !sample) {
+      onSampleClick?.(sample, position)
+      return
+    }
+    
+    // Allow viewing filled cells even when not in edit mode
+    if (sample) {
+      onSampleClick?.(sample, position)
+      return
+    }
+    
+    // Only allow adding to empty cells in edit mode
+    if (!sample && editMode) {
+      onSampleClick?.(sample, position)
+    }
   }
 
   const getRowLabel = (index: number) => String.fromCharCode(65 + index) // A, B, C, ...
@@ -87,8 +102,8 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     <div className="container-grid-view">
       <div className="grid-wrapper" style={{ 
         display: 'inline-grid',
-        gridTemplateColumns: `40px repeat(${gridSize.cols}, 85px)`,
-        gridTemplateRows: `30px repeat(${gridSize.rows}, 70px)`,
+        gridTemplateColumns: `40px repeat(${gridSize.cols}, 95px)`,
+        gridTemplateRows: `30px repeat(${gridSize.rows}, 60px)`,
         gap: '2px',
         background: '#e5e7eb',
         padding: '2px',
@@ -170,7 +185,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: '4px',
-                    cursor: editMode ? 'pointer' : 'default',
+                    cursor: isOccupied ? 'pointer' : (editMode ? 'pointer' : 'default'),
                     transition: 'all 0.15s',
                     fontSize: '11px',
                     fontWeight: isOccupied ? 600 : 400,
@@ -183,7 +198,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                         ? '0 0 0 2px #fbbf24' 
                         : 'none'
                   }}
-                  className={editMode ? 'hover:shadow-md hover:scale-105' : ''}
+                  className={isOccupied || editMode ? 'hover:shadow-md hover:scale-105' : ''}
                   title={isOccupied ? `${sample.sample_id}\n${position}` : position}
                 >
                   {isOccupied ? (
