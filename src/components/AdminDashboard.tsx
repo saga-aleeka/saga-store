@@ -677,18 +677,91 @@ export default function AdminDashboard(){
 
       {tab === 'backups' && (
         <div>
-          <p className="muted">Backups</p>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div>
+              <h3 style={{margin:0,fontSize:18,fontWeight:600}}>Database Backups</h3>
+              <p className="muted" style={{marginTop:4}}>Nightly backups occur automatically at 3:00 AM EST</p>
+            </div>
+            <button 
+              className="btn" 
+              onClick={async () => {
+                try {
+                  const res = await apiFetch('/api/backups', { 
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ nightly: false })
+                  })
+                  
+                  if (!res.ok) throw new Error('Backup failed')
+                  
+                  // Download the CSV
+                  const blob = await res.blob()
+                  const url = window.URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `saga-manual-backup-${new Date().toISOString().split('T')[0]}.csv`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  window.URL.revokeObjectURL(url)
+                  
+                  alert('Backup downloaded successfully!')
+                  
+                  // Refresh the backups list
+                  backups.refetch()
+                } catch(e) {
+                  console.error('Backup failed:', e)
+                  alert('Failed to create backup. Please try again.')
+                }
+              }}
+            >
+              Create Manual Backup
+            </button>
+          </div>
+          
           <div style={{marginTop:12}}>
             {backups.loading && <div className="muted">Loading...</div>}
+            {!backups.loading && (!backups.data || backups.data.length === 0) && (
+              <div className="muted">No backups yet. Create your first manual backup or wait for the nightly backup.</div>
+            )}
             {!backups.loading && backups.data && backups.data.map((b:any) => (
-              <div key={b.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginTop:8}}>
-                <div>
-                  <div style={{fontWeight:700}}>{b.created_at}</div>
-                  <div className="muted">{b.size}</div>
-                </div>
-                <div style={{display:'flex',gap:8}}>
-                  <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(b.id)}>Copy</button>
-                  <button className="btn" onClick={() => doRestore(b.id)}>Restore</button>
+              <div key={b.id} style={{
+                display:'flex',
+                justifyContent:'space-between',
+                alignItems:'center',
+                gap:16,
+                padding:12,
+                marginTop:8,
+                background:'#f9fafb',
+                borderRadius:8,
+                border:'1px solid #e5e7eb'
+              }}>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <div style={{fontWeight:700,fontSize:14}}>{b.filename}</div>
+                    <span style={{
+                      padding:'2px 8px',
+                      background: b.type === 'nightly' ? '#dbeafe' : '#fef3c7',
+                      color: b.type === 'nightly' ? '#1e40af' : '#92400e',
+                      borderRadius:4,
+                      fontSize:11,
+                      fontWeight:600
+                    }}>
+                      {b.type}
+                    </span>
+                  </div>
+                  <div className="muted" style={{marginTop:4,fontSize:12}}>
+                    {new Date(b.created_at).toLocaleString('en-US', { 
+                      timeZone: 'America/New_York',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })} EST • {b.containers_count} containers • {b.samples_count} samples
+                    {b.created_by && b.created_by !== 'system' && ` • by ${b.created_by}`}
+                  </div>
                 </div>
               </div>
             ))}
