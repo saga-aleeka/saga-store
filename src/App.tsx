@@ -238,12 +238,17 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples(id, is_archived, is_training)')
+          .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
           .eq('archived', true)
           .order('updated_at', { ascending: false })
         
         if (!mounted) return
-        if (error) throw error
+        if (error) {
+          console.error('Failed to load archived containers:', error)
+          throw error
+        }
+        
+        console.log('Loaded archived containers:', data)
         
         // Count active samples for each container
         const containersWithCounts = (data ?? []).map((c: any) => ({
