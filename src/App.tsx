@@ -43,6 +43,9 @@ export default function App() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [availableOnly, setAvailableOnly] = useState(false)
   const [trainingOnly, setTrainingOnly] = useState(false)
+  // pagination for samples
+  const [samplesPerPage, setSamplesPerPage] = useState(25)
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
@@ -257,6 +260,7 @@ export default function App() {
         if (!mounted) return
         if (error) throw error
         setSamples(data ?? [])
+        setCurrentPage(1) // Reset to first page when reloading
       }catch(e){
         console.warn('failed to load samples', e)
         if (mounted) setSamples([])
@@ -415,7 +419,35 @@ export default function App() {
 
         {route === '#/samples' && (
           <div>
-            <div className="muted" style={{marginBottom: 16}}>Showing {samples ? samples.length : '...'} samples</div>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+              <div className="muted">
+                Showing {samples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, samples.length)}-${Math.min(currentPage * samplesPerPage, samples.length)} of ${samples.length}` : '...'} samples
+              </div>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <span className="muted" style={{fontSize: 13}}>Per page:</span>
+                {[25, 50, 100].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setSamplesPerPage(size)
+                      setCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: samplesPerPage === size ? '#3b82f6' : 'white',
+                      color: samplesPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: samplesPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && samples && samples.length === 0 && <div className="muted">No samples</div>}
             {!loadingSamples && samples && samples.length > 0 && (
@@ -433,7 +465,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {samples.map((s: any, index: number) => {
+                    {samples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
                       const handleSampleClick = () => {
                         window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
                       }
@@ -482,6 +514,49 @@ export default function App() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {!loadingSamples && samples && samples.length > samplesPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16
+              }}>
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: currentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {currentPage} of {Math.ceil(samples.length / samplesPerPage)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(samples.length / samplesPerPage), p + 1))}
+                  disabled={currentPage >= Math.ceil(samples.length / samplesPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage >= Math.ceil(samples.length / samplesPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: currentPage >= Math.ceil(samples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: currentPage >= Math.ceil(samples.length / samplesPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>
