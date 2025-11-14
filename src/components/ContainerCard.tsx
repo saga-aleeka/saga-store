@@ -33,8 +33,14 @@ type Props = {
 }
 
 export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, ...rest}: Props & any){
-  const pct = Math.round((occupancy.used / Math.max(1, occupancy.total)) * 100)
-  const available = Math.max(0, (occupancy.total - occupancy.used))
+  // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
+  let effectiveTotal = occupancy.total
+  if (type === 'DP Pools' && layout === '9x9' && occupancy.total === 81) {
+    effectiveTotal = 80
+  }
+  
+  const pct = Math.round((occupancy.used / Math.max(1, effectiveTotal)) * 100)
+  const available = Math.max(0, (effectiveTotal - occupancy.used))
   const [openEdit, setOpenEdit] = useState(false)
   return (
     <>
@@ -62,7 +68,7 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       <div className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm flex-shrink-0">
-            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium whitespace-nowrap">{occupancy.used}/{occupancy.total}</span>
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium whitespace-nowrap">{occupancy.used}/{effectiveTotal}</span>
             <span className="ml-2 text-sm text-gray-500 whitespace-nowrap">{available} available</span>
           </div>
         </div>

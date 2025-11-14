@@ -152,7 +152,13 @@ export default function App() {
       // available only
       if (availableOnly){
         const used = Number(c.used || 0)
-        const total = Number(c.total || 0)
+        let total = Number(c.total || 0)
+        
+        // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
+        if (c.type === 'DP Pools' && c.layout === '9x9' && total === 81) {
+          total = 80
+        }
+        
         if ((total - used) <= 0) return false
       }
       // training only
