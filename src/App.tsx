@@ -44,10 +44,10 @@ export default function App() {
   const [availableOnly, setAvailableOnly] = useState(false)
   const [trainingOnly, setTrainingOnly] = useState(false)
   // pagination for samples
-  const [samplesPerPage, setSamplesPerPage] = useState(25)
+  const [samplesPerPage, setSamplesPerPage] = useState(24)
   const [currentPage, setCurrentPage] = useState(1)
   // pagination for containers
-  const [containersPerPage, setContainersPerPage] = useState(25)
+  const [containersPerPage, setContainersPerPage] = useState(24)
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
   // search
   const [searchQuery, setSearchQuery] = useState('')
@@ -389,7 +389,7 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[25, 50, 100].map(size => (
+                {[24, 48, 96].map(size => (
                   <button
                     key={size}
                     onClick={() => {
@@ -477,7 +477,7 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[25, 50, 100].map(size => (
+                {[24, 48, 96].map(size => (
                   <button
                     key={size}
                     onClick={() => {
@@ -616,7 +616,7 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[25, 50, 100].map(size => (
+                {[24, 48, 96].map(size => (
                   <button
                     key={size}
                     onClick={() => {
