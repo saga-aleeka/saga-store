@@ -485,6 +485,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
           }}
           onUpdate={handleSidebarUpdate}
           onArchive={handleSidebarUpdate}
+          onDelete={handleSidebarUpdate}
         />
       )}
     </div>

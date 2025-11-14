@@ -32,10 +32,12 @@ interface SampleHistorySidebarProps {
   onClose: () => void
   onArchive?: (sampleId: string) => void
   onUpdate?: () => void
+  onDelete?: (sampleId: string) => void
 }
 
-export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpdate }: SampleHistorySidebarProps) {
+export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpdate, onDelete }: SampleHistorySidebarProps) {
   const [archiving, setArchiving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   if (!sample) return null
 
@@ -99,6 +101,33 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       alert('Failed to update training status')
     } finally {
       setArchiving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Permanently delete ${sample.sample_id}? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeleting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/samples/${sample.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!res.ok) throw new Error('Failed to delete sample')
+      
+      onDelete?.(sample.id)
+      onClose()
+    } catch (error) {
+      console.error('Delete error:', error)
+      alert('Failed to delete sample')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -244,6 +273,25 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           }}
         >
           {archiving ? 'Updating...' : (sample.is_training ? '❌ Remove Training Status' : '🎓 Mark as Training')}
+        </button>
+
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          style={{
+            marginTop: '12px',
+            width: '100%',
+            padding: '10px',
+            background: deleting ? '#9ca3af' : '#fef2f2',
+            color: '#991b1b',
+            border: '1px solid #fecaca',
+            borderRadius: '6px',
+            fontWeight: 600,
+            cursor: deleting ? 'not-allowed' : 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          {deleting ? 'Deleting...' : '🗑️ Delete Sample'}
         </button>
       </div>
 
