@@ -74,14 +74,11 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   const getColLabel = (index: number) => String(index + 1) // 1, 2, 3, ...
 
   const getCellColor = (sample?: Sample) => {
-    if (!sample) return '#f9fafb' // empty - gray-50
-    if (sample.is_training) return '#e0e7ff' // training - indigo-100
-    if (sample.is_archived) return '#fef3c7' // archived - yellow-100
-    const status = sample.data?.status || sample.status
-    if (status === 'pending') return '#fef3c7' // yellow-100
-    if (status === 'processing') return '#dbeafe' // blue-100
-    if (status === 'complete') return '#d1fae5' // green-100
-    return '#dbeafe' // default - blue-100
+    if (!sample) return '#f9fafb'
+    if (sample.is_training) return '#c7d2fe' // indigo-300
+    if (sample.is_archived) return '#fef3c7'
+    if (sample.data?.status === 'pending') return '#fef3c7'
+    return '#dbeafe'
   }
 
   // Get highlight parameter from URL hash or from props
