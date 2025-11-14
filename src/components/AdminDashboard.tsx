@@ -132,9 +132,10 @@ function parseGridText(raw: string){
       for (let ci=0; ci<cols; ci++){
         const cell = (r.cells[ci] ?? '').toString().trim()
         // For IDT Plates: position is column letter + row number (A1, B2, C3)
+        // Row 1 is at bottom, so we reverse: rows at top are higher numbers
         // For others: position is row letter + column number (A1, B2, C3)
         const pos = isIDTPlates 
-          ? `${String.fromCharCode(65 + ci)}${ri + 1}`
+          ? `${String.fromCharCode(65 + ci)}${rows.length - ri}`
           : `${r.row}${ci+1}`
         if (cell && cell !== '-'){
           items.push({ sample_id: cell, container_name: boxName, position: pos })
