@@ -117,7 +117,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples!samples_container_id_fkey(id, is_archived)')
+          .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
           .eq('archived', false)
           .order('updated_at', { ascending: false })
         
@@ -176,12 +176,12 @@ export default function App() {
         const [activeRes, archivedRes] = await Promise.all([
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(id, is_archived)')
+            .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
             .eq('archived', false)
             .order('updated_at', { ascending: false }),
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(id, is_archived)')
+            .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
             .eq('archived', true)
             .order('updated_at', { ascending: false })
         ])
@@ -217,7 +217,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples(id, is_archived)')
+          .select('*, samples(id, is_archived, is_training)')
           .eq('archived', true)
           .order('updated_at', { ascending: false })
         

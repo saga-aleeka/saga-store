@@ -20,6 +20,7 @@ interface Sample {
   container_id: string
   data?: any
   is_archived?: boolean
+  is_training?: boolean
   owner?: string
   status?: string
   created_at?: string
@@ -43,15 +44,14 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     new Date(b.when).getTime() - new Date(a.when).getTime()
   )
 
-  const handleArchive = async () => {
-    if (!sample.id || archiving) return
-    
-    const confirmed = window.confirm(`Archive sample ${sample.sample_id}? This will mark it as archived but keep it in the system.`)
-    if (!confirmed) return
+    const handleArchive = async () => {
+    if (!window.confirm(`Archive ${sample.sample_id}? This will mark it as archived.`)) {
+      return
+    }
 
     setArchiving(true)
     try {
-      const token = getToken()
+      const token = localStorage.getItem('token')
       const res = await fetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
@@ -68,6 +68,35 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     } catch (error) {
       console.error('Archive error:', error)
       alert('Failed to archive sample')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  const handleTrainingToggle = async () => {
+    const newTrainingState = !sample.is_training
+    if (!window.confirm(`${newTrainingState ? 'Mark' : 'Unmark'} ${sample.sample_id} as training sample?`)) {
+      return
+    }
+
+    setArchiving(true) // Reuse the archiving state for loading
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/samples/${sample.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_training: newTrainingState })
+      })
+
+      if (!res.ok) throw new Error('Failed to update training status')
+      
+      onUpdate?.()
+    } catch (error) {
+      console.error('Training toggle error:', error)
+      alert('Failed to update training status')
     } finally {
       setArchiving(false)
     }
@@ -163,6 +192,18 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               ⚠️ Archived
             </div>
           )}
+          {sample.is_training && (
+            <div style={{
+              padding: '8px 12px',
+              background: '#e0e7ff',
+              color: '#3730a3',
+              borderRadius: '6px',
+              fontWeight: 600,
+              fontSize: '13px'
+            }}>
+              🎓 Training Sample
+            </div>
+          )}
         </div>
 
         {!sample.is_archived && (
@@ -185,6 +226,25 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
             {archiving ? 'Archiving...' : '🗄️ Archive Sample'}
           </button>
         )}
+
+        <button
+          onClick={handleTrainingToggle}
+          disabled={archiving}
+          style={{
+            marginTop: '12px',
+            width: '100%',
+            padding: '10px',
+            background: archiving ? '#9ca3af' : (sample.is_training ? '#6366f1' : '#e0e7ff'),
+            color: sample.is_training ? 'white' : '#3730a3',
+            border: sample.is_training ? 'none' : '1px solid #c7d2fe',
+            borderRadius: '6px',
+            fontWeight: 600,
+            cursor: archiving ? 'not-allowed' : 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          {archiving ? 'Updating...' : (sample.is_training ? '❌ Remove Training Status' : '🎓 Mark as Training')}
+        </button>
       </div>
 
       {/* Movement History */}

@@ -92,6 +92,11 @@ module.exports = async function handler(req: any, res: any){
         }
       }
 
+      // Handle training status
+      if ('is_training' in body) {
+        updates.is_training = body.is_training
+      }
+
       // Handle position/container movement
       if (body.container_id || body.position) {
         const historyEvent: any = {
