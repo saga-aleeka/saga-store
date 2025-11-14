@@ -70,8 +70,21 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     }
   }
 
-  const getRowLabel = (index: number) => String.fromCharCode(65 + index) // A, B, C, ...
-  const getColLabel = (index: number) => String(index + 1) // 1, 2, 3, ...
+  const getRowLabel = (index: number) => {
+    // IDT Plates use numbers for rows, letters for columns
+    if (container?.type === 'IDT Plates') {
+      return String(index + 1) // 1, 2, 3, ...
+    }
+    return String.fromCharCode(65 + index) // A, B, C, ...
+  }
+  
+  const getColLabel = (index: number) => {
+    // IDT Plates use letters for columns, numbers for rows
+    if (container?.type === 'IDT Plates') {
+      return String.fromCharCode(65 + index) // A, B, C, ...
+    }
+    return String(index + 1) // 1, 2, 3, ...
+  }
 
   const getCellColor = (sample?: Sample) => {
     if (!sample) return '#f9fafb'

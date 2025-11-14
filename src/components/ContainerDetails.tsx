@@ -73,7 +73,10 @@ export default function ContainerDetails({ id }: { id: string | number }){
     // Find first empty position (column by column, top to bottom, left to right)
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
-        const position = `${String.fromCharCode(65 + r)}${c + 1}`
+        // IDT Plates use row numbers and column letters (e.g., 1A, 2B)
+        const position = data.type === 'IDT Plates' 
+          ? `${r + 1}${String.fromCharCode(65 + c)}`
+          : `${String.fromCharCode(65 + r)}${c + 1}`
         if (!occupiedPositions.has(position) && !isUnavailable(position)) {
           return position
         }
