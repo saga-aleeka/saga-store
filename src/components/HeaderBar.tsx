@@ -76,34 +76,36 @@ export default function HeaderBar({route = window.location.hash || '#/containers
             <button className={(route === '#/worklist' ? 'tab active' : 'tab')} onClick={() => navigate('#/worklist')}>Worklist</button>
           </div>
 
-          <div className="search-row mt-3">
-            <div className="search flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21l-4.35-4.35" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <input 
-                className="bg-transparent outline-none text-sm flex-1" 
-                placeholder={route === '#/samples' ? 'Search samples by ID, container, location, or position... (separate multiple terms with comma)' : 'Search containers by ID, name, or location... (separate multiple terms with comma)'}
-                value={searchQuery}
-                onChange={(e) => onSearchChange?.(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => onSearchChange?.('')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#64748b',
-                    fontSize: 18,
-                    padding: 0,
-                    lineHeight: 1
-                  }}
-                  aria-label="Clear search"
-                >
-                  ×
-                </button>
-              )}
+          {route !== '#/worklist' && !route.startsWith('#/containers/') && (
+            <div className="search-row mt-3">
+              <div className="search flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21l-4.35-4.35" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <input 
+                  className="bg-transparent outline-none text-sm flex-1" 
+                  placeholder={route === '#/samples' ? 'Search samples by ID, container, location, or position... (separate multiple terms with comma)' : 'Search containers by ID, name, or location... (separate multiple terms with comma)'}
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange?.(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => onSearchChange?.('')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      fontSize: 18,
+                      padding: 0,
+                      lineHeight: 1
+                    }}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </header>
