@@ -46,6 +46,13 @@ export default function App() {
   // pagination for samples
   const [samplesPerPage, setSamplesPerPage] = useState(25)
   const [currentPage, setCurrentPage] = useState(1)
+  // search
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
@@ -147,7 +154,7 @@ export default function App() {
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
     if (!containers) return []
-    return containers.filter((c:any) => {
+    let filtered = containers.filter((c:any) => {
       // sample type filter (if any selected)
       if (selectedTypes && selectedTypes.length){
         if (!selectedTypes.includes(c.type)) return false
@@ -170,7 +177,18 @@ export default function App() {
       }
       return true
     })
-  }, [containers, selectedTypes, availableOnly, trainingOnly])
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+      filtered = filtered.filter((c: any) => {
+        const searchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
+        return terms.some(term => searchText.includes(term))
+      })
+    }
+    
+    return filtered
+  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
 
   useEffect(() => {
     async function onUpdated(e: any){
@@ -271,6 +289,18 @@ export default function App() {
     return () => { mounted = false }
   }, [route])
 
+  // Apply search filter to samples
+  const filteredSamples = React.useMemo(() => {
+    if (!samples) return []
+    if (!searchQuery.trim()) return samples
+    
+    const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    return samples.filter((s: any) => {
+      const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''}`.toLowerCase()
+      return terms.some(term => searchText.includes(term))
+    })
+  }, [samples, searchQuery])
+
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
     const parts = route.split('/')
@@ -285,7 +315,7 @@ export default function App() {
 
     return (
       <div className="app">
-        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
+        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <WorklistContainerView 
             containerId={id} 
@@ -304,7 +334,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
         </div>
@@ -315,7 +345,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>
@@ -325,7 +355,7 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />
@@ -421,7 +451,7 @@ export default function App() {
           <div>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
               <div className="muted">
-                Showing {samples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, samples.length)}-${Math.min(currentPage * samplesPerPage, samples.length)} of ${samples.length}` : '...'} samples
+                Showing {filteredSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredSamples.length)} of ${filteredSamples.length}` : '...'} samples
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
@@ -449,8 +479,8 @@ export default function App() {
               </div>
             </div>
             {loadingSamples && <div className="muted">Loading samples...</div>}
-            {!loadingSamples && samples && samples.length === 0 && <div className="muted">No samples</div>}
-            {!loadingSamples && samples && samples.length > 0 && (
+            {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
@@ -465,7 +495,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {samples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
+                    {filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
                       const handleSampleClick = () => {
                         window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
                       }
@@ -516,7 +546,7 @@ export default function App() {
                 </table>
               </div>
             )}
-            {!loadingSamples && samples && samples.length > samplesPerPage && (
+            {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
@@ -540,19 +570,19 @@ export default function App() {
                   Previous
                 </button>
                 <span className="muted" style={{fontSize: 13}}>
-                  Page {currentPage} of {Math.ceil(samples.length / samplesPerPage)}
+                  Page {currentPage} of {Math.ceil(filteredSamples.length / samplesPerPage)}
                 </span>
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(samples.length / samplesPerPage), p + 1))}
-                  disabled={currentPage >= Math.ceil(samples.length / samplesPerPage)}
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredSamples.length / samplesPerPage), p + 1))}
+                  disabled={currentPage >= Math.ceil(filteredSamples.length / samplesPerPage)}
                   style={{
                     padding: '6px 12px',
-                    background: currentPage >= Math.ceil(samples.length / samplesPerPage) ? '#f3f4f6' : 'white',
+                    background: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#f3f4f6' : 'white',
                     border: '1px solid #d1d5db',
                     borderRadius: 6,
-                    cursor: currentPage >= Math.ceil(samples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
+                    cursor: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
                     fontSize: 13,
-                    color: currentPage >= Math.ceil(samples.length / samplesPerPage) ? '#9ca3af' : '#374151'
+                    color: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#9ca3af' : '#374151'
                   }}
                 >
                   Next
