@@ -749,11 +749,35 @@ export default function AdminDashboard(){
                 marginTop:8,
                 background:'#f9fafb',
                 borderRadius:8,
-                border:'1px solid #e5e7eb'
-              }}>
+                border:'1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+              className="hover:shadow-md hover:bg-white"
+              onClick={async () => {
+                try {
+                  const res = await apiFetch(`/api/backups?filename=${encodeURIComponent(b.filename)}`)
+                  if (!res.ok) throw new Error('Download failed')
+                  
+                  const blob = await res.blob()
+                  const url = window.URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = b.filename
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  window.URL.revokeObjectURL(url)
+                } catch(e) {
+                  console.error('Download failed:', e)
+                  alert('Failed to download backup. Please try again.')
+                }
+              }}
+              title="Click to download"
+              >
                 <div style={{flex:1}}>
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <div style={{fontWeight:700,fontSize:14}}>{b.filename}</div>
+                    <div style={{fontWeight:700,fontSize:14}}>📥 {b.filename}</div>
                     <span style={{
                       padding:'2px 8px',
                       background: b.type === 'nightly' ? '#dbeafe' : '#fef3c7',

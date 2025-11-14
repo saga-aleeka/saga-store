@@ -73,8 +73,55 @@ module.exports = async function handler(req: any, res: any) {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // GET /api/backups - list available backups
+    // GET /api/backups - list available backups or download specific backup
     if (req.method === 'GET') {
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      const filename = url.searchParams.get('filename')
+      
+      // If filename is provided, return the CSV content for download
+      if (filename) {
+        // Fetch the backup metadata
+        const { data: backup, error: backupError } = await supabaseAdmin
+          .from('backups')
+          .select('*')
+          .eq('filename', filename)
+          .single()
+        
+        if (backupError || !backup) {
+          return res.status(404).json({ error: 'backup_not_found' })
+        }
+        
+        // Regenerate CSV from current database state (since we don't store the actual CSV)
+        const { data: containers } = await supabaseAdmin
+          .from('containers')
+          .select('*')
+          .order('name', { ascending: true })
+        
+        const { data: samples } = await supabaseAdmin
+          .from('samples')
+          .select('*')
+          .order('container_id', { ascending: true })
+        
+        const csvContent = generateCSV(containers || [], samples || [])
+        
+        res.setHeader('Content-Type', 'text/csv')
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+        return res.status(200).send(csvContent)
+      }
+      
+      // Delete backups older than 14 days
+      const fourteenDaysAgo = new Date()
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+      
+      try {
+        await supabaseAdmin
+          .from('backups')
+          .delete()
+          .lt('created_at', fourteenDaysAgo.toISOString())
+      } catch(e) {
+        console.warn('Failed to clean up old backups:', e)
+      }
+      
       // Query backups table (we'll create this to store backup metadata)
       const { data, error } = await supabaseAdmin
         .from('backups')

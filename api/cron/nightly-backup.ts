@@ -80,6 +80,40 @@ module.exports = async function handler(req: any, res: any) {
 
     console.log('Starting nightly backup...')
 
+    // Clean up backups older than 14 days
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    
+    try {
+      const { data: oldBackups } = await supabaseAdmin
+        .from('backups')
+        .select('filename, storage_path')
+        .lt('created_at', fourteenDaysAgo.toISOString())
+      
+      if (oldBackups && oldBackups.length > 0) {
+        console.log(`Deleting ${oldBackups.length} old backups...`)
+        
+        // Delete from storage if storage_path exists
+        for (const backup of oldBackups) {
+          if (backup.storage_path) {
+            await supabaseAdmin.storage
+              .from('backups')
+              .remove([backup.storage_path])
+          }
+        }
+        
+        // Delete metadata from database
+        await supabaseAdmin
+          .from('backups')
+          .delete()
+          .lt('created_at', fourteenDaysAgo.toISOString())
+        
+        console.log(`Deleted ${oldBackups.length} old backups`)
+      }
+    } catch(e) {
+      console.warn('Failed to clean up old backups:', e)
+    }
+
     // Fetch all containers
     const { data: containers, error: containersError } = await supabaseAdmin
       .from('containers')
