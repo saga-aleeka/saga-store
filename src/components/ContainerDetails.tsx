@@ -261,6 +261,17 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const samples = data.samples || []
   const activeCount = samples.filter((s: any) => !s.is_archived).length
 
+  // Calculate effective total based on layout
+  const layoutParts = (data.layout || '9x9').toLowerCase().split('x')
+  const rows = parseInt(layoutParts[0]) || 9
+  const cols = parseInt(layoutParts[1]) || 9
+  let effectiveTotal = rows * cols
+  
+  // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
+  if (data.type === 'DP Pools' && data.layout === '9x9' && effectiveTotal === 81) {
+    effectiveTotal = 80
+  }
+
   // Check for returnTo parameter in URL
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1])
   const returnTo = urlParams.get('returnTo')
@@ -285,7 +296,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
             fontWeight: 600,
             color: '#1e40af'
           }}>
-            {activeCount}/{data.total} filled
+            {activeCount}/{effectiveTotal} filled
           </div>
           <button 
             className="btn ghost" 

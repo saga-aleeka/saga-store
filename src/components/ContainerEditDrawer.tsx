@@ -27,7 +27,26 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
   if (!container) return null
 
-  const updateField = (k: string, v: any) => setForm((f:any)=> ({...f, [k]: v}))
+  const updateField = (k: string, v: any) => {
+    const newForm = {...form, [k]: v}
+    
+    // Auto-update total capacity based on layout and type
+    if (k === 'layout' || k === 'type') {
+      const layout = k === 'layout' ? v : form.layout
+      const type = k === 'type' ? v : form.type
+      const [rows, cols] = layout.split('x').map((n: string) => parseInt(n))
+      const maxPositions = rows * cols
+      
+      // DP Pools always have 80 capacity (I9 is unavailable)
+      if (type === 'DP Pools' && layout === '9x9') {
+        newForm.total = 80
+      } else {
+        newForm.total = maxPositions
+      }
+    }
+    
+    setForm(newForm)
+  }
 
   async function save(){
     // validation with inline errors and focus
