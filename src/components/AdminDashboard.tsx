@@ -122,12 +122,20 @@ function parseGridText(raw: string){
       }
     }
 
+    // Detect if this is an IDT Plates container by checking the box name
+    const nameUpper = String(boxName || '').toUpperCase()
+    const isIDTPlates = nameUpper.includes('IDT') && nameUpper.includes('PLATE')
+
     // build items from non-empty cells; blank cells are considered empty positions but do not create items
     for (let ri=0; ri<rows.length; ri++){
       const r = rows[ri]
       for (let ci=0; ci<cols; ci++){
         const cell = (r.cells[ci] ?? '').toString().trim()
-        const pos = `${r.row}${ci+1}`
+        // For IDT Plates: position is column letter + row number (A1, B2, C3)
+        // For others: position is row letter + column number (A1, B2, C3)
+        const pos = isIDTPlates 
+          ? `${String.fromCharCode(65 + ci)}${ri + 1}`
+          : `${r.row}${ci+1}`
         if (cell && cell !== '-'){
           items.push({ sample_id: cell, container_name: boxName, position: pos })
         }
