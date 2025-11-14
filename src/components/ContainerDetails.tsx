@@ -74,7 +74,8 @@ export default function ContainerDetails({ id }: { id: string | number }){
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
         // IDT Plates use column letter + row number (e.g., A1, B2, C3)
-        // For IDT Plates, row 1 is at bottom, so we reverse: A14, A13, ... A1
+        // For IDT Plates, row 1 is at bottom, so row index 0 = row 14, index 1 = row 13, etc.
+        // This makes it scan from top (A14) down (A13, A12...) then next column (B14, B13...)
         // Other containers use row letter + column number (e.g., A1, B2, C3)
         const position = data.type === 'IDT Plates' 
           ? `${String.fromCharCode(65 + c)}${rows - r}`
