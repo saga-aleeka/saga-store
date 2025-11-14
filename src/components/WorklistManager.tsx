@@ -50,6 +50,7 @@ export default function WorklistManager() {
   const [loading, setLoading] = useState(false)
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load worklist from localStorage on mount
@@ -130,8 +131,8 @@ export default function WorklistManager() {
         }
       }
       
-      // Add unique sample IDs only
-      if (sampleId && !seen.has(sampleId)) {
+      // Add unique sample IDs only, exclude "See Form" entries
+      if (sampleId && !seen.has(sampleId) && !/see\s*form/i.test(sampleId)) {
         sampleIds.push(sampleId)
         seen.add(sampleId)
       }
@@ -470,10 +471,18 @@ export default function WorklistManager() {
       {loading && <div className="muted">Loading...</div>}
 
       {worklist.length > 0 && (() => {
-        // Get unique containers needed
+        // Get unique sample types for filter
+        const availableTypes = Array.from(new Set(worklist.map(s => s.sample_type).filter((t): t is string => t !== 'Unknown' && t !== undefined)))
+        
+        // Apply type filter
+        const filteredWorklist = selectedTypes.length > 0 
+          ? worklist.filter(s => s.sample_type && selectedTypes.includes(s.sample_type))
+          : worklist
+        
+        // Get unique containers needed from filtered list
         const containersNeeded = Array.from(
           new Map(
-            worklist
+            filteredWorklist
               .filter(s => s.container_id && s.container_name)
               .map(s => [s.container_id, { name: s.container_name!, location: s.container_location || 'Unknown' }])
           ).values()
@@ -481,6 +490,39 @@ export default function WorklistManager() {
         
         return (
         <>
+          {availableTypes.length > 0 && (
+            <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
+              <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+                {availableTypes.map(type => (
+                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTypes.includes(type)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTypes([...selectedTypes, type])
+                        } else {
+                          setSelectedTypes(selectedTypes.filter(t => t !== type))
+                        }
+                      }}
+                    />
+                    <span style={{fontSize: 13}}>{type}</span>
+                  </label>
+                ))}
+                {selectedTypes.length > 0 && (
+                  <button 
+                    className="btn ghost" 
+                    onClick={() => setSelectedTypes([])}
+                    style={{fontSize: 12, padding: '2px 8px', marginLeft: 8}}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
           {containersNeeded.length > 0 && (
             <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
               <h3 style={{fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#1e40af'}}>Containers Needed ({containersNeeded.length})</h3>
@@ -545,10 +587,10 @@ export default function WorklistManager() {
 
           <div style={{marginBottom: 16}}>
             <div className="muted">
-              Showing {worklist.length} samples • 
-              {' '}{worklist.filter(s => s.is_checked_out).length} checked out • 
-              {' '}{worklist.filter(s => s.container_id).length} in containers • 
-              {' '}{worklist.filter(s => !s.container_id && !s.is_checked_out).length} not found
+              Showing {filteredWorklist.length} of {worklist.length} samples • 
+              {' '}{filteredWorklist.filter(s => s.is_checked_out).length} checked out • 
+              {' '}{filteredWorklist.filter(s => s.container_id).length} in containers • 
+              {' '}{filteredWorklist.filter(s => !s.container_id && !s.is_checked_out).length} not found
             </div>
           </div>
 
@@ -559,8 +601,14 @@ export default function WorklistManager() {
                   <th style={{padding: 12, textAlign: 'left', width: 40}}>
                     <input
                       type="checkbox"
-                      checked={selectedSamples.size === worklist.length}
-                      onChange={(e) => e.target.checked ? selectAll() : deselectAll()}
+                      checked={selectedSamples.size === filteredWorklist.length && filteredWorklist.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSamples(new Set(filteredWorklist.map(s => s.sample_id)))
+                        } else {
+                          deselectAll()
+                        }
+                      }}
                     />
                   </th>
                   <th style={{padding: 12, textAlign: 'left'}}>Sample ID</th>
@@ -573,7 +621,7 @@ export default function WorklistManager() {
                 </tr>
               </thead>
               <tbody>
-                {worklist.map((sample, index) => (
+                {filteredWorklist.map((sample, index) => (
                   <tr 
                     key={sample.sample_id}
                     style={{
