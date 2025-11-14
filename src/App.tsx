@@ -394,12 +394,12 @@ export default function App() {
               <h3 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Archived Samples</h3>
               <div className="muted" style={{marginBottom:12}}>Samples marked as archived</div>
               {loadingSamples && <div className="muted">Loading archived samples...</div>}
-              {!loadingSamples && (
+              {!loadingSamples && samples && samples.length === 0 && (
+                <div className="muted">No archived samples</div>
+              )}
+              {!loadingSamples && samples && samples.length > 0 && (
                 <div>
-                  {samples && samples.filter((s: any) => s.is_archived).length === 0 && (
-                    <div className="muted">No archived samples</div>
-                  )}
-                  {samples && samples.filter((s: any) => s.is_archived).map((s:any) => {
+                  {samples.map((s:any) => {
                     const handleSampleClick = async () => {
                       window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}`
                     }
