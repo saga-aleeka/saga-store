@@ -46,13 +46,27 @@ export default function App() {
   // pagination for samples
   const [samplesPerPage, setSamplesPerPage] = useState(25)
   const [currentPage, setCurrentPage] = useState(1)
+  // pagination for containers
+  const [containersPerPage, setContainersPerPage] = useState(25)
+  const [containersCurrentPage, setContainersCurrentPage] = useState(1)
   // search
   const [searchQuery, setSearchQuery] = useState('')
 
   // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1)
+    setContainersCurrentPage(1)
   }, [searchQuery])
+
+  // Reset containers page when filters change
+  useEffect(() => {
+    setContainersCurrentPage(1)
+  }, [selectedTypes, availableOnly, trainingOnly])
+
+  // Reset containers page when route changes
+  useEffect(() => {
+    setContainersCurrentPage(1)
+  }, [route])
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
@@ -369,7 +383,35 @@ export default function App() {
       <div style={{marginTop:18}}>
         {route === '#/containers' && (
           <>
-            <div className="muted">Showing {filteredContainers ? filteredContainers.length : '...'} active containers</div>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+              <div className="muted">
+                Showing {filteredContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, filteredContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, filteredContainers.length)} of ${filteredContainers.length}` : '...'} active containers
+              </div>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <span className="muted" style={{fontSize: 13}}>Per page:</span>
+                {[25, 50, 100].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setContainersPerPage(size)
+                      setContainersCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: containersPerPage === size ? '#3b82f6' : 'white',
+                      color: containersPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: containersPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
             {/* Filters */}
             <div style={{marginTop:8}}>
               <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
@@ -377,23 +419,137 @@ export default function App() {
             <div className="container-list">
               {loadingContainers && <div className="muted">Loading containers...</div>}
               {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
-              {!loadingContainers && filteredContainers && filteredContainers.map(c => (
+              {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
                 <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
               ))}
             </div>
+            {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16
+              }}>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={containersCurrentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {containersCurrentPage} of {Math.ceil(filteredContainers.length / containersPerPage)}
+                </span>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(filteredContainers.length / containersPerPage), p + 1))}
+                  disabled={containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </>
         )}
 
         {route === '#/archive' && (
           <>
-            <div className="muted">Showing {archivedContainers ? archivedContainers.length : '...'} archived containers</div>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+              <div className="muted">
+                Showing {archivedContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, archivedContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, archivedContainers.length)} of ${archivedContainers.length}` : '...'} archived containers
+              </div>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <span className="muted" style={{fontSize: 13}}>Per page:</span>
+                {[25, 50, 100].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setContainersPerPage(size)
+                      setContainersCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: containersPerPage === size ? '#3b82f6' : 'white',
+                      color: containersPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: containersPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="container-list">
               {loadingArchived && <div className="muted">Loading archived containers...</div>}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
-              {!loadingArchived && archivedContainers && archivedContainers.map((c:any) => (
+              {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c:any) => (
                 <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived={c.archived} />
               ))}
             </div>
+            {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16
+              }}>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={containersCurrentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {containersCurrentPage} of {Math.ceil(archivedContainers.length / containersPerPage)}
+                </span>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(archivedContainers.length / containersPerPage), p + 1))}
+                  disabled={containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             
             <div style={{marginTop:32,paddingTop:24,borderTop:'1px solid #e5e7eb'}}>
               <h3 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Archived Samples</h3>
