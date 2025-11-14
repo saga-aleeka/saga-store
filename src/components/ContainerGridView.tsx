@@ -71,7 +71,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   }
 
   const getRowLabel = (index: number) => {
-    // IDT Plates use numbers for rows, letters for columns
+    // IDT Plates use numbers for rows (displayed on left side)
     if (container?.type === 'IDT Plates') {
       return String(index + 1) // 1, 2, 3, ...
     }
@@ -79,7 +79,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   }
   
   const getColLabel = (index: number) => {
-    // IDT Plates use letters for columns, numbers for rows
+    // IDT Plates use letters for columns (displayed on top)
     if (container?.type === 'IDT Plates') {
       return String.fromCharCode(65 + index) // A, B, C, ...
     }
@@ -178,7 +178,11 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
 
             {/* Grid cells */}
             {Array.from({ length: gridSize.cols }).map((_, colIndex) => {
-              const position = `${getRowLabel(rowIndex)}${getColLabel(colIndex)}`
+              // IDT Plates use column letter + row number (e.g., A1, B2)
+              // Other containers use row letter + column number (e.g., A1, B2)
+              const position = container?.type === 'IDT Plates'
+                ? `${getColLabel(colIndex)}${getRowLabel(rowIndex)}`
+                : `${getRowLabel(rowIndex)}${getColLabel(colIndex)}`
               const sample = sampleMap.get(position)
               const isOccupied = !!sample
               
