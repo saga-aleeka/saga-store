@@ -4,7 +4,7 @@ import { rest } from 'msw';
 const containers = [
   { id: 1, name: 'Freezer A1', location: 'Lab A / Shelf 1', type: 'cfDNA Tubes', temperature: '-80°C', layout: '9x9', used: 12, total: 81, archived: false, training: false, updated_at: '2025-10-31T19:37:00Z' },
   { id: 2, name: 'Rack B2', location: 'Storage B / Rack 2', type: 'MNC Tubes', temperature: '-20°C', layout: '5x5', used: 20, total: 25, archived: true, training: false, updated_at: '2025-09-01T12:00:00Z' },
-  { id: 3, name: 'Shelf C', location: 'Cold Room / Shelf C', type: 'DTC Tubes', temperature: '4°C', layout: '8x12', used: 5, total: 96, archived: false, training: true, updated_at: '2025-10-15T08:00:00Z' },
+  { id: 3, name: 'Shelf C', location: 'Cold Room / Shelf C', type: 'DTC Tubes', temperature: '4°C', layout: '14x7', used: 5, total: 98, archived: false, training: true, updated_at: '2025-10-15T08:00:00Z' },
   { id: 4, name: 'Box D', location: 'Vault / Box D', type: 'cfDNA Tubes', temperature: '-80°C', layout: '5x5', used: 0, total: 25, archived: false, training: false, updated_at: '2025-10-20T14:22:00Z' },
   { id: 5, name: 'Archive E', location: 'Long-term / Archive E', type: 'MNC Tubes', temperature: '-20°C', layout: '9x9', used: 81, total: 81, archived: true, training: false, updated_at: '2024-12-01T09:00:00Z' }
 ]

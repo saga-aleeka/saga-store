@@ -65,7 +65,7 @@ function parseGridText(raw: string){
   const rows: any[] = []
   let cols = 0
   let detectedLayout: string | null = null
-    // peek first few gridLines for a layout specification like 9x9 or 8x12 and possible location
+    // peek first few gridLines for a layout specification like 9x9 or 14x7 and possible location
     for (let gi=0; gi<Math.min(4, gridLines.length); gi++){
       const gline = gridLines[gi]
       const m = gline.match(/(\d+)\s*[xX]\s*(\d+)/)

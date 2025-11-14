@@ -27,7 +27,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
 
   useEffect(() => {
-    // Parse layout (e.g., "9x9", "8x12")
+    // Parse layout (e.g., "9x9", "14x7")
     if (container?.layout) {
       const parts = container.layout.toLowerCase().split('x')
       if (parts.length === 2) {

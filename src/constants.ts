@@ -10,5 +10,5 @@ export const SAMPLE_TYPES = [
   'IDT Plates',
 ]
 
-export const LAYOUTS = ['9x9','5x5','8x12']
+export const LAYOUTS = ['9x9','5x5','14x7']
 export const TEMPS = ['-80°C','-20°C','4°C']
