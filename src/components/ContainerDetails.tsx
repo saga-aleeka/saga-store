@@ -207,7 +207,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       const updatedData = await loadContainer(true)
       
       // After reload, advance to next position using fresh data
-      if (updatedData) {
+      if (updatedData && currentPosition) {
         const samples = updatedData.samples || []
         // Include ALL samples (archived and active) as occupied positions
         const occupiedPositions = new Set(
@@ -218,23 +218,61 @@ export default function ContainerDetails({ id }: { id: string | number }){
         const layoutParts = (updatedData.layout || '9x9').toLowerCase().split('x')
         const rows = parseInt(layoutParts[0]) || 9
         const cols = parseInt(layoutParts[1]) || 9
+        const isIDTPlates = updatedData.type === 'IDT Plates'
         
         // For DP Pools, I9 is unavailable
         const isUnavailable = (pos: string) => {
           return pos === 'I9' && updatedData.type === 'DP Pools' && updatedData.layout === '9x9'
         }
         
-        // Find next empty position (column by column, top to bottom, left to right)
+        // Parse current position to get row and column indices
+        const currentPosUpper = currentPosition.toUpperCase()
+        let currentRow: number, currentCol: number
+        
+        if (isIDTPlates) {
+          // IDT Plates: Column letter + Row number (e.g., A14, B13)
+          currentCol = currentPosUpper.charCodeAt(0) - 65 // A=0, B=1, etc.
+          currentRow = rows - parseInt(currentPosUpper.slice(1)) // 14=0, 13=1, ..., 1=13
+        } else {
+          // Regular containers: Row letter + Column number (e.g., A1, B2)
+          currentRow = currentPosUpper.charCodeAt(0) - 65 // A=0, B=1, etc.
+          currentCol = parseInt(currentPosUpper.slice(1)) - 1 // 1=0, 2=1, etc.
+        }
+        
+        // Find next empty position starting from current position, going down then right
         let nextPosition: string | null = null
-        for (let c = 0; c < cols; c++) {
-          for (let r = 0; r < rows; r++) {
-            const position = `${String.fromCharCode(65 + r)}${c + 1}`
+        
+        // Start from current column, but next row
+        for (let c = currentCol; c < cols; c++) {
+          // If same column as current, start from next row; otherwise start from top
+          const startRow = (c === currentCol) ? currentRow + 1 : 0
+          
+          for (let r = startRow; r < rows; r++) {
+            const position = isIDTPlates
+              ? `${String.fromCharCode(65 + c)}${rows - r}` // Column letter + row number (A14, A13...)
+              : `${String.fromCharCode(65 + r)}${c + 1}` // Row letter + column number (A1, B1...)
             if (!occupiedPositions.has(position) && !isUnavailable(position)) {
               nextPosition = position
               break
             }
           }
           if (nextPosition) break
+        }
+        
+        // If no position found forward, wrap around from beginning
+        if (!nextPosition) {
+          for (let c = 0; c < cols; c++) {
+            for (let r = 0; r < rows; r++) {
+              const position = isIDTPlates
+                ? `${String.fromCharCode(65 + c)}${rows - r}` // Column letter + row number
+                : `${String.fromCharCode(65 + r)}${c + 1}` // Row letter + column number
+              if (!occupiedPositions.has(position) && !isUnavailable(position)) {
+                nextPosition = position
+                break
+              }
+            }
+            if (nextPosition) break
+          }
         }
         
         if (nextPosition) {
