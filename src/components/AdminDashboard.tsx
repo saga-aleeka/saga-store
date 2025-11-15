@@ -248,6 +248,10 @@ export default function AdminDashboard(){
 
   const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'>('import')
 
+  // Pagination state for audit logs
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditPerPage, setAuditPerPage] = useState(24)
+
   // fetch authorized users (server-side endpoint will use service role key in production)
   const authUsers = useFetch<any[]>('/api/admin_users')
   const [showAdd, setShowAdd] = useState(false)
@@ -629,10 +633,55 @@ export default function AdminDashboard(){
       {tab === 'audit' && (
         <div>
           <p className="muted">Comprehensive audit log of all container and sample changes</p>
+          
+          {/* Pagination controls */}
+          {!audits.loading && audits.data && audits.data.length > 0 && (
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:12,marginBottom:12}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <span style={{fontSize:14,color:'#6b7280'}}>Items per page:</span>
+                <select 
+                  value={auditPerPage} 
+                  onChange={(e) => {
+                    setAuditPerPage(Number(e.target.value))
+                    setAuditPage(1)
+                  }}
+                  style={{padding:'4px 8px',borderRadius:4,border:'1px solid #d1d5db'}}
+                >
+                  <option value={24}>24</option>
+                  <option value={48}>48</option>
+                  <option value={96}>96</option>
+                </select>
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <button 
+                  className="btn ghost"
+                  disabled={auditPage === 1}
+                  onClick={() => setAuditPage(p => p - 1)}
+                  style={{opacity: auditPage === 1 ? 0.5 : 1}}
+                >
+                  Previous
+                </button>
+                <span style={{fontSize:14,color:'#6b7280'}}>
+                  Page {auditPage} of {Math.ceil(audits.data.length / auditPerPage)}
+                </span>
+                <button 
+                  className="btn ghost"
+                  disabled={auditPage >= Math.ceil(audits.data.length / auditPerPage)}
+                  onClick={() => setAuditPage(p => p + 1)}
+                  style={{opacity: auditPage >= Math.ceil(audits.data.length / auditPerPage) ? 0.5 : 1}}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          
           <div style={{marginTop:12}}>
             {audits.loading && <div className="muted">Loading...</div>}
             {!audits.loading && audits.data && audits.data.length === 0 && <div className="muted">No audit events</div>}
-            {!audits.loading && audits.data && audits.data.map((a:any) => (
+            {!audits.loading && audits.data && audits.data
+              .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
+              .map((a:any) => (
               <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6}}>
                 <div style={{flex:1}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
