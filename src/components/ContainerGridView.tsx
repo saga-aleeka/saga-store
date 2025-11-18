@@ -71,9 +71,9 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
   }
 
   const getRowLabel = (index: number) => {
-    // IDT Plates use numbers for rows (displayed on left side), with row 1 at bottom
+    // IDT Plates use numbers for rows (displayed on left side), with row 1 at top
     if (container?.type === 'IDT Plates') {
-      return String(gridSize.rows - index) // 14, 13, 12, ... 1
+      return String(index + 1) // 1, 2, 3, ... 14
     }
     return String.fromCharCode(65 + index) // A, B, C, ...
   }
