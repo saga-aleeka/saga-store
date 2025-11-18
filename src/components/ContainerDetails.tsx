@@ -265,7 +265,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
   if (!data) return <div className="muted">Container not found</div>
 
   const samples = data.samples || []
-  const activeCount = samples.filter((s: any) => !s.is_archived).length
+  const usedCount = samples.length  // Count all samples including archived
 
   // Calculate effective total based on layout
   const layoutParts = (data.layout || '9x9').toLowerCase().split('x')
@@ -302,7 +302,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
             fontWeight: 600,
             color: '#1e40af'
           }}>
-            {activeCount}/{effectiveTotal} filled
+            {usedCount}/{effectiveTotal} filled
           </div>
           <button 
             className="btn ghost" 
