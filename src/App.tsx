@@ -189,9 +189,10 @@ export default function App() {
         
         if ((total - used) <= 0) return false
       }
-      // training only
+      // training only - show containers marked as training OR containing training samples
       if (trainingOnly){
-        if (!c.training) return false
+        const hasTrainingSamples = (c.samples || []).some((s: any) => s.is_training && !s.is_archived)
+        if (!c.training && !hasTrainingSamples) return false
       }
       return true
     })
