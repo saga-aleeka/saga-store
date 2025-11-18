@@ -45,32 +45,60 @@ module.exports = async function handler(req: any, res: any){
       return res.status(400).json({ error: 'container_id_and_position_required' })
     }
 
+    // Normalize sample_id: trim whitespace and uppercase
+    const normalizedSampleId = String(sample_id).trim().toUpperCase()
+    
+    if (!normalizedSampleId) {
+      return res.status(400).json({ error: 'sample_id_required' })
+    }
+
+    console.log(`[UPSERT] Attempting to upsert sample: "${normalizedSampleId}" to container ${container_id} at position ${position}`)
+
     const now = new Date().toISOString()
 
     // Check if sample already exists (active, non-archived) in ANY container
+    // Use exact match with explicit trim to ensure no false positives
     const { data: existingActive, error: fetchError } = await supabaseAdmin
       .from('samples')
       .select('*')
-      .eq('sample_id', sample_id.toUpperCase())
+      .eq('sample_id', normalizedSampleId)
       .eq('is_archived', false)
       .order('created_at', { ascending: true })
-      .limit(1)
+      .limit(10)  // Get more to check for issues
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Fetch error:', fetchError)
       return res.status(500).json({ error: 'database_error' })
     }
 
+    // Filter to ensure EXACT match (in case database has case-sensitivity issues)
+    const exactMatches = (existingActive || []).filter(s => 
+      String(s.sample_id).trim().toUpperCase() === normalizedSampleId
+    )
+
+    console.log(`[UPSERT] Found ${existingActive?.length || 0} potential matches, ${exactMatches.length} exact matches for "${normalizedSampleId}"`)
+    if (exactMatches.length > 0) {
+      console.log(`[UPSERT] Existing sample found:`, {
+        id: exactMatches[0].id,
+        sample_id: exactMatches[0].sample_id,
+        container_id: exactMatches[0].container_id,
+        position: exactMatches[0].position
+      })
+    }
+
     let result
 
-    if (existingActive && existingActive.length > 0) {
+    if (exactMatches.length > 0) {
       // Active sample exists - UPDATE it (move to new location)
-      const sample = existingActive[0]
+      const sample = exactMatches[0]
       
       // Prevent moving to same position in same container
       if (sample.container_id === container_id && sample.position === position) {
+        console.log(`[UPSERT] Sample "${normalizedSampleId}" already at target position, no change needed`)
         return res.status(200).json({ data: sample, action: 'unchanged' })
       }
+      
+      console.log(`[UPSERT] Moving sample "${normalizedSampleId}" from ${sample.container_id}/${sample.position} to ${container_id}/${position}`)
       
       const currentData = sample.data || {}
       const currentHistory = currentData.history || []
@@ -109,6 +137,7 @@ module.exports = async function handler(req: any, res: any){
         return res.status(500).json({ error: 'update_failed', message: updateError.message })
       }
 
+      console.log(`[UPSERT] Successfully moved sample "${normalizedSampleId}"`)
       result = { data: updated, action: 'moved' }
     } else {
       // No active sample exists - INSERT new one
@@ -130,7 +159,7 @@ module.exports = async function handler(req: any, res: any){
       const { data: inserted, error: insertError } = await supabaseAdmin
         .from('samples')
         .insert({
-          sample_id: sample_id.toUpperCase(),
+          sample_id: normalizedSampleId,
           container_id,
           position,
           data: newData,
@@ -146,6 +175,7 @@ module.exports = async function handler(req: any, res: any){
         return res.status(500).json({ error: 'insert_failed', message: insertError.message })
       }
 
+      console.log(`[UPSERT] Inserted new sample "${normalizedSampleId}" at ${container_id}/${position}`)
       result = { data: inserted, action: 'inserted' }
     }
 
