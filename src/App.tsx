@@ -141,7 +141,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
+          .select('*, samples!samples_container_id_fkey(*)')
           .eq('archived', false)
           .order('updated_at', { ascending: false })
         
@@ -149,10 +149,14 @@ export default function App() {
         if (error) throw error
         
         // Count all samples (including archived) for each container
-        const containersWithCounts = (data ?? []).map((c: any) => ({
-          ...c,
-          used: (c.samples || []).length
-        }))
+        const containersWithCounts = (data ?? []).map((c: any) => {
+          const sampleCount = (c.samples || []).length
+          console.log(`Container ${c.name}: ${sampleCount} samples (including archived)`, c.samples)
+          return {
+            ...c,
+            used: sampleCount
+          }
+        })
         
         setContainers(containersWithCounts)
       }catch(e){
@@ -211,12 +215,12 @@ export default function App() {
         const [activeRes, archivedRes] = await Promise.all([
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
+            .select('*, samples!samples_container_id_fkey(*)')
             .eq('archived', false)
             .order('updated_at', { ascending: false }),
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
+            .select('*, samples!samples_container_id_fkey(*)')
             .eq('archived', true)
             .order('updated_at', { ascending: false })
         ])
@@ -252,7 +256,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples!samples_container_id_fkey(id, is_archived, is_training)')
+          .select('*, samples!samples_container_id_fkey(*)')
           .eq('archived', true)
           .order('updated_at', { ascending: false })
         
