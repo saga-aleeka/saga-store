@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
+import { supabase } from '../lib/supabaseClient'
 
 interface HistoryEvent {
   when: string
@@ -38,6 +39,7 @@ interface SampleHistorySidebarProps {
 export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpdate, onDelete }: SampleHistorySidebarProps) {
   const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [containerNames, setContainerNames] = useState<Map<string, string>>(new Map())
 
   if (!sample) return null
 
@@ -45,6 +47,46 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
   const sortedHistory = [...history].sort((a, b) => 
     new Date(b.when).getTime() - new Date(a.when).getTime()
   )
+
+  // Fetch container names for UUIDs in history
+  useEffect(() => {
+    async function fetchContainerNames() {
+      const containerIds = new Set<string>()
+      
+      // Collect all unique container IDs from history
+      history.forEach(event => {
+        if (event.from_container) containerIds.add(event.from_container)
+        if (event.to_container) containerIds.add(event.to_container)
+      })
+      
+      if (containerIds.size === 0) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('containers')
+          .select('id, name')
+          .in('id', Array.from(containerIds))
+        
+        if (error) throw error
+        
+        const nameMap = new Map<string, string>()
+        data?.forEach(container => {
+          nameMap.set(container.id, container.name)
+        })
+        
+        setContainerNames(nameMap)
+      } catch (error) {
+        console.error('Failed to fetch container names:', error)
+      }
+    }
+    
+    fetchContainerNames()
+  }, [sample?.id])
+
+  const getContainerDisplay = (containerId: string | undefined) => {
+    if (!containerId) return 'Unknown'
+    return containerNames.get(containerId) || containerId
+  }
 
     const handleArchive = async () => {
     if (!window.confirm(`Archive ${sample.sample_id}? This will mark it as archived.`)) {
@@ -330,13 +372,13 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                 </div>
                 {event.from_container && event.to_container && (
                   <div style={{ fontSize: '12px', color: '#4b5563' }}>
-                    From: {event.from_container} ({event.from_position})<br />
-                    To: {event.to_container} ({event.to_position})
+                    From: {getContainerDisplay(event.from_container)} ({event.from_position})<br />
+                    To: {getContainerDisplay(event.to_container)} ({event.to_position})
                   </div>
                 )}
                 {event.to_container && !event.from_container && (
                   <div style={{ fontSize: '12px', color: '#4b5563' }}>
-                    Container: {event.to_container} ({event.to_position})
+                    Container: {getContainerDisplay(event.to_container)} ({event.to_position})
                   </div>
                 )}
                 {event.user && (
