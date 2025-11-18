@@ -156,10 +156,15 @@ export default function WorklistManager() {
       }
 
       // Fetch sample data from database
+      // Note: We need to fetch ALL samples (including archived) because archived samples
+      // still exist and may be in the worklist. We'll query for each sample ID individually
+      // or use a case-insensitive approach.
+      
+      // First, try to fetch all samples that match (case-insensitive, including archived)
       const { data, error } = await supabase
         .from('samples')
         .select('*, containers!samples_container_id_fkey(id, name, location)')
-        .in('sample_id', sampleIds)
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (error) {
         console.error('Database error:', error)
@@ -168,8 +173,11 @@ export default function WorklistManager() {
       }
 
       // Build worklist with container info and sample type
+      // Match samples case-insensitively since database query was case-insensitive
       const worklistData: WorklistSample[] = sampleIds.map(id => {
-        const sample = data?.find(s => s.sample_id === id)
+        const sample = data?.find(s => 
+          s.sample_id.trim().toUpperCase() === id.trim().toUpperCase()
+        )
         return {
           sample_id: id,
           container_id: sample?.container_id,
