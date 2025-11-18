@@ -148,10 +148,10 @@ export default function App() {
         if (!mounted) return
         if (error) throw error
         
-        // Count active samples for each container
+        // Count all samples (including archived) for each container
         const containersWithCounts = (data ?? []).map((c: any) => ({
           ...c,
-          used: (c.samples || []).filter((s: any) => !s.is_archived).length
+          used: (c.samples || []).length
         }))
         
         setContainers(containersWithCounts)
@@ -224,7 +224,7 @@ export default function App() {
         if (activeRes.data) {
           const containersWithCounts = activeRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).filter((s: any) => !s.is_archived).length
+            used: (c.samples || []).length
           }))
           setContainers(containersWithCounts)
         }
@@ -232,7 +232,7 @@ export default function App() {
         if (archivedRes.data) {
           const containersWithCounts = archivedRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).filter((s: any) => !s.is_archived).length
+            used: (c.samples || []).length
           }))
           setArchivedContainers(containersWithCounts)
         }
@@ -264,10 +264,10 @@ export default function App() {
         
         console.log('Loaded archived containers:', data)
         
-        // Count active samples for each container
+        // Count all samples (including archived) for each container
         const containersWithCounts = (data ?? []).map((c: any) => ({
           ...c,
-          used: (c.samples || []).filter((s: any) => !s.is_archived).length
+          used: (c.samples || []).length
         }))
         
         setArchivedContainers(containersWithCounts)
