@@ -228,11 +228,11 @@ export default function WorklistManager() {
 
     setLoading(true)
     try {
-      // Get current sample data to save previous positions
+      // Get current sample data to save previous positions (case-insensitive)
       const { data: currentSamples, error: fetchError } = await supabase
         .from('samples')
         .select('id, sample_id, container_id, position, is_checked_out')
-        .in('sample_id', sampleIds)
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
@@ -324,11 +324,11 @@ export default function WorklistManager() {
 
     setLoading(true)
     try {
-      // Get samples with previous position data
+      // Get samples with previous position data (case-insensitive)
       const { data: samples, error: fetchError } = await supabase
         .from('samples')
         .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
-        .in('sample_id', sampleIds)
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
