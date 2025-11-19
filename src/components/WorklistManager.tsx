@@ -162,14 +162,20 @@ export default function WorklistManager() {
         const sample = data?.find(s => 
           s.sample_id.trim().toUpperCase() === id.trim().toUpperCase()
         )
+        
+        // Fix inconsistent state: if sample has container_id, it shouldn't be checked out
+        // This handles cases where samples were put back in containers without using "Undo Checkout"
+        const hasContainer = sample?.container_id != null
+        const isActuallyCheckedOut = sample?.is_checked_out && !hasContainer
+        
         return {
           sample_id: id,
           container_id: sample?.container_id,
           container_name: sample?.containers?.name,
           container_location: sample?.containers?.location,
           position: sample?.position,
-          is_checked_out: sample?.is_checked_out || false,
-          checked_out_at: sample?.checked_out_at,
+          is_checked_out: isActuallyCheckedOut,
+          checked_out_at: isActuallyCheckedOut ? sample?.checked_out_at : null,
           previous_container_id: sample?.previous_container_id,
           previous_position: sample?.previous_position,
           sample_type: detectSampleType(id, sample?.containers?.name)
