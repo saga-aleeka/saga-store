@@ -51,37 +51,77 @@ export default function ContainerDetails({ id }: { id: string | number }){
     }
   }, [scanningMode])
   
-  // Helper to find next empty position (column priority: A1, B1, C1... then A2, B2, C2...)
-  const findNextEmptyPosition = (): string | null => {
-    if (!data) return null
-    const samples = data.samples || []
+  // Helper to find next empty position starting from current position or from beginning
+  const findNextEmptyPosition = (startFrom?: string | null, containerData?: any): string | null => {
+    const dataToUse = containerData || data
+    if (!dataToUse) return null
+    const samples = dataToUse.samples || []
     // Include ALL samples (archived and active) as occupied positions
     const occupiedPositions = new Set(
       samples.map((s: any) => s.position?.toUpperCase())
     )
     
     // Parse layout
-    const layoutParts = (data.layout || '9x9').toLowerCase().split('x')
+    const layoutParts = (dataToUse.layout || '9x9').toLowerCase().split('x')
     const rows = parseInt(layoutParts[0]) || 9
     const cols = parseInt(layoutParts[1]) || 9
     
     // For DP Pools, I9 is unavailable
     const isUnavailable = (pos: string) => {
-      return pos === 'I9' && data.type === 'DP Pools' && data.layout === '9x9'
+      return pos === 'I9' && dataToUse.type === 'DP Pools' && dataToUse.layout === '9x9'
     }
     
-    // Find first empty position (column by column, top to bottom, left to right)
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        // IDT Plates use column letter + row number (e.g., A1, B2, C3)
-        // For IDT Plates, row 1 is at top, so row index 0 = row 1, index 1 = row 2, etc.
-        // This makes it scan from top (A1) down (A2, A3...) then next column (B1, B2...)
-        // Other containers use row letter + column number (e.g., A1, B2, C3)
-        const position = data.type === 'IDT Plates' 
-          ? `${String.fromCharCode(65 + c)}${r + 1}`
-          : `${String.fromCharCode(65 + r)}${c + 1}`
-        if (!occupiedPositions.has(position) && !isUnavailable(position)) {
-          return position
+    // Determine if we should start from a specific position
+    let startCol = 0
+    let startRow = 0
+    let skipToNext = false
+    
+    if (startFrom) {
+      const startFromUpper = startFrom.toUpperCase()
+      if (dataToUse.type === 'IDT Plates') {
+        // IDT Plates: column letter + row number (A1, B2, C3)
+        const colMatch = startFromUpper.match(/^([A-Z])/)
+        const rowMatch = startFromUpper.match(/(\d+)$/)
+        if (colMatch && rowMatch) {
+          startCol = colMatch[1].charCodeAt(0) - 65
+          startRow = parseInt(rowMatch[1]) - 1
+          skipToNext = true // Skip the starting position itself
+        }
+      } else {
+        // Standard: row letter + column number (A1, B2, C3)
+        const rowMatch = startFromUpper.match(/^([A-Z])/)
+        const colMatch = startFromUpper.match(/(\d+)$/)
+        if (rowMatch && colMatch) {
+          startRow = rowMatch[1].charCodeAt(0) - 65
+          startCol = parseInt(colMatch[1]) - 1
+          skipToNext = true
+        }
+      }
+    }
+    
+    // Scan for next empty position
+    // For IDT Plates: scan column by column (A1, A2, A3... then B1, B2, B3...)
+    // For others: scan column by column (A1, B1, C1... then A2, B2, C2...)
+    if (dataToUse.type === 'IDT Plates') {
+      // IDT Plates: iterate columns first, then rows
+      for (let c = startCol; c < cols; c++) {
+        const rStart = (c === startCol && skipToNext) ? startRow + 1 : 0
+        for (let r = rStart; r < rows; r++) {
+          const position = `${String.fromCharCode(65 + c)}${r + 1}`
+          if (!occupiedPositions.has(position) && !isUnavailable(position)) {
+            return position
+          }
+        }
+      }
+    } else {
+      // Standard containers: iterate columns first, then rows
+      for (let c = startCol; c < cols; c++) {
+        const rStart = (c === startCol && skipToNext) ? startRow + 1 : 0
+        for (let r = rStart; r < rows; r++) {
+          const position = `${String.fromCharCode(65 + r)}${c + 1}`
+          if (!occupiedPositions.has(position) && !isUnavailable(position)) {
+            return position
+          }
         }
       }
     }
@@ -206,36 +246,10 @@ export default function ContainerDetails({ id }: { id: string | number }){
       // Reload container to get updated sample list (skip loading state to avoid blip)
       const updatedData = await loadContainer(true)
       
-      // After reload, advance to next position using fresh data
+      // After reload, advance to next position using the helper function
       if (updatedData) {
-        const samples = updatedData.samples || []
-        // Include ALL samples (archived and active) as occupied positions
-        const occupiedPositions = new Set(
-          samples.map((s: any) => s.position?.toUpperCase())
-        )
-        
-        // Parse layout
-        const layoutParts = (updatedData.layout || '9x9').toLowerCase().split('x')
-        const rows = parseInt(layoutParts[0]) || 9
-        const cols = parseInt(layoutParts[1]) || 9
-        
-        // For DP Pools, I9 is unavailable
-        const isUnavailable = (pos: string) => {
-          return pos === 'I9' && updatedData.type === 'DP Pools' && updatedData.layout === '9x9'
-        }
-        
-        // Find next empty position (column by column, top to bottom, left to right)
-        let nextPosition: string | null = null
-        for (let c = 0; c < cols; c++) {
-          for (let r = 0; r < rows; r++) {
-            const position = `${String.fromCharCode(65 + r)}${c + 1}`
-            if (!occupiedPositions.has(position) && !isUnavailable(position)) {
-              nextPosition = position
-              break
-            }
-          }
-          if (nextPosition) break
-        }
+        // Find next position after current position using updated data
+        const nextPosition = findNextEmptyPosition(currentPosition, updatedData)
         
         if (nextPosition) {
           setCurrentPosition(nextPosition)
