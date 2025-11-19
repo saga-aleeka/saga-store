@@ -308,15 +308,17 @@ export default function WorklistManager() {
         }
       }
 
-      // Refresh worklist
+      // Refresh worklist with case-insensitive query
       const { data: refreshed } = await supabase
         .from('samples')
         .select('*, containers!samples_container_id_fkey(id, name, location)')
-        .in('sample_id', sampleIds)
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
-      // Update worklist state
+      // Update worklist state with case-insensitive matching
       setWorklist(prev => prev.map(item => {
-        const updated = refreshed?.find(s => s.sample_id === item.sample_id)
+        const updated = refreshed?.find(s => 
+          s.sample_id.trim().toUpperCase() === item.sample_id.trim().toUpperCase()
+        )
         if (updated) {
           return {
             ...item,
@@ -408,14 +410,16 @@ export default function WorklistManager() {
         }
       }
 
-      // Refresh worklist
+      // Refresh worklist with case-insensitive query
       const { data: refreshed } = await supabase
         .from('samples')
         .select('*, containers!samples_container_id_fkey(id, name, location)')
-        .in('sample_id', sampleIds)
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       setWorklist(prev => prev.map(item => {
-        const updated = refreshed?.find(s => s.sample_id === item.sample_id)
+        const updated = refreshed?.find(s => 
+          s.sample_id.trim().toUpperCase() === item.sample_id.trim().toUpperCase()
+        )
         if (updated) {
           return {
             ...item,
