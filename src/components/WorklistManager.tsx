@@ -578,6 +578,53 @@ export default function WorklistManager() {
             </button>
             <button 
               className="btn ghost" 
+              onClick={async () => {
+                if (worklist.length === 0) return
+                setLoading(true)
+                const sampleIds = worklist.map(s => s.sample_id)
+                try {
+                  const { data, error } = await supabase
+                    .from('samples')
+                    .select('*, containers!samples_container_id_fkey(id, name, location)')
+                    .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+                  
+                  if (error) throw error
+                  
+                  const updatedWorklist = worklist.map(item => {
+                    const updated = data?.find(s => 
+                      s.sample_id.trim().toUpperCase() === item.sample_id.trim().toUpperCase()
+                    )
+                    if (updated) {
+                      return {
+                        ...item,
+                        container_id: updated.container_id,
+                        container_name: updated.containers?.name,
+                        container_location: updated.containers?.location,
+                        position: updated.position,
+                        is_checked_out: updated.is_checked_out,
+                        checked_out_at: updated.checked_out_at,
+                        previous_container_id: updated.previous_container_id,
+                        previous_position: updated.previous_position
+                      }
+                    }
+                    return item
+                  })
+                  setWorklist(updatedWorklist)
+                  alert('Worklist refreshed from database')
+                } catch (err: any) {
+                  console.error('Error refreshing:', err)
+                  alert(`Failed to refresh: ${err?.message || 'Unknown error'}`)
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              disabled={loading}
+              style={{color: '#3b82f6'}}
+            >
+              🔄 Refresh Status
+            </button>
+            <button 
+              className="btn ghost" 
               onClick={() => {
                 if (confirm('Clear worklist? This will remove all loaded samples.')) {
                   setWorklist([])
