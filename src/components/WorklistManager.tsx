@@ -51,6 +51,7 @@ export default function WorklistManager() {
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [sortMode, setSortMode] = useState<'worklist' | 'container'>('worklist')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load worklist from localStorage on mount
@@ -483,9 +484,26 @@ export default function WorklistManager() {
         const availableTypes = Array.from(new Set(worklist.map(s => s.sample_type).filter((t): t is string => t !== 'Unknown' && t !== undefined)))
         
         // Apply type filter
-        const filteredWorklist = selectedTypes.length > 0 
+        let filteredWorklist = selectedTypes.length > 0 
           ? worklist.filter(s => s.sample_type && selectedTypes.includes(s.sample_type))
           : worklist
+        
+        // Apply sort based on mode
+        if (sortMode === 'container') {
+          filteredWorklist = [...filteredWorklist].sort((a, b) => {
+            // First sort by container name
+            const containerA = a.container_name || ''
+            const containerB = b.container_name || ''
+            if (containerA !== containerB) {
+              return containerA.localeCompare(containerB)
+            }
+            // Then by position within same container
+            const posA = a.position || ''
+            const posB = b.position || ''
+            return posA.localeCompare(posB)
+          })
+        }
+        // else keep worklist order (default)
         
         // Get unique containers needed from filtered list
         const containersNeeded = Array.from(
@@ -530,6 +548,26 @@ export default function WorklistManager() {
               </div>
             </div>
           )}
+          
+          <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
+            <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Sort Order:</div>
+            <div style={{display: 'flex', gap: 8}}>
+              <button
+                className={sortMode === 'worklist' ? 'btn' : 'btn ghost'}
+                onClick={() => setSortMode('worklist')}
+                style={{fontSize: 13, padding: '6px 12px'}}
+              >
+                Worklist Order
+              </button>
+              <button
+                className={sortMode === 'container' ? 'btn' : 'btn ghost'}
+                onClick={() => setSortMode('container')}
+                style={{fontSize: 13, padding: '6px 12px'}}
+              >
+                Group by Container & Position
+              </button>
+            </div>
+          </div>
           
           {containersNeeded.length > 0 && (
             <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
