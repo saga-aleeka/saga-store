@@ -54,25 +54,8 @@ export default function WorklistManager() {
   const [sortMode, setSortMode] = useState<'worklist' | 'container'>('worklist')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load worklist from localStorage on mount and refresh data from database
-  useEffect(() => {
-    const savedWorklist = localStorage.getItem('saga_worklist')
-    if (savedWorklist) {
-      try {
-        const parsed = JSON.parse(savedWorklist)
-        setWorklist(parsed)
-        
-        // Immediately refresh data from database to get current status
-        refreshWorklistData(parsed)
-      } catch (e) {
-        console.warn('Failed to parse saved worklist:', e)
-        localStorage.removeItem('saga_worklist')
-      }
-    }
-  }, [])
-
   // Function to refresh worklist data from database
-  const refreshWorklistData = async (currentWorklist: WorklistSample[]) => {
+  const refreshWorklistData = React.useCallback(async (currentWorklist: WorklistSample[]) => {
     if (currentWorklist.length === 0) return
     
     const sampleIds = currentWorklist.map(s => s.sample_id)
@@ -113,7 +96,24 @@ export default function WorklistManager() {
     } catch (err) {
       console.error('Error refreshing worklist data:', err)
     }
-  }
+  }, [])
+
+  // Load worklist from localStorage on mount and refresh data from database
+  useEffect(() => {
+    const savedWorklist = localStorage.getItem('saga_worklist')
+    if (savedWorklist) {
+      try {
+        const parsed = JSON.parse(savedWorklist)
+        setWorklist(parsed)
+        
+        // Immediately refresh data from database to get current status
+        refreshWorklistData(parsed)
+      } catch (e) {
+        console.warn('Failed to parse saved worklist:', e)
+        localStorage.removeItem('saga_worklist')
+      }
+    }
+  }, [refreshWorklistData])
 
   // Save worklist to localStorage whenever it changes
   useEffect(() => {

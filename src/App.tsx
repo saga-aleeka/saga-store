@@ -295,7 +295,7 @@ export default function App() {
         const isArchiveRoute = route === '#/archive'
         const { data, error } = await supabase
           .from('samples')
-          .select('*, containers!samples_container_id_fkey(name, location)')
+          .select('*, containers!samples_container_id_fkey(id, name, location)')
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
         
@@ -320,7 +320,8 @@ export default function App() {
     
     const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
     return samples.filter((s: any) => {
-      const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''}`.toLowerCase()
+      const checkedOutText = s.is_checked_out ? 'checked out' : ''
+      const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
       return terms.some(term => searchText.includes(term))
     })
   }, [samples, searchQuery])
