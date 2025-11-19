@@ -72,6 +72,9 @@ export default function WorklistManager() {
   useEffect(() => {
     if (worklist.length > 0) {
       localStorage.setItem('saga_worklist', JSON.stringify(worklist))
+    } else {
+      // If worklist is empty, clear localStorage
+      localStorage.removeItem('saga_worklist')
     }
   }, [worklist])
 
@@ -145,6 +148,11 @@ export default function WorklistManager() {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    // Clear existing worklist and localStorage before uploading new file
+    setWorklist([])
+    setSelectedSamples(new Set())
+    localStorage.removeItem('saga_worklist')
 
     setLoading(true)
     try {
