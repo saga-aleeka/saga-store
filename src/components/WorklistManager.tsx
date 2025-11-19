@@ -54,19 +54,66 @@ export default function WorklistManager() {
   const [sortMode, setSortMode] = useState<'worklist' | 'container'>('worklist')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load worklist from localStorage on mount
+  // Load worklist from localStorage on mount and refresh data from database
   useEffect(() => {
     const savedWorklist = localStorage.getItem('saga_worklist')
     if (savedWorklist) {
       try {
         const parsed = JSON.parse(savedWorklist)
         setWorklist(parsed)
+        
+        // Immediately refresh data from database to get current status
+        refreshWorklistData(parsed)
       } catch (e) {
         console.warn('Failed to parse saved worklist:', e)
         localStorage.removeItem('saga_worklist')
       }
     }
   }, [])
+
+  // Function to refresh worklist data from database
+  const refreshWorklistData = async (currentWorklist: WorklistSample[]) => {
+    if (currentWorklist.length === 0) return
+    
+    const sampleIds = currentWorklist.map(s => s.sample_id)
+    
+    try {
+      const { data, error } = await supabase
+        .from('samples')
+        .select('*, containers!samples_container_id_fkey(id, name, location)')
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      
+      if (error) {
+        console.error('Error refreshing worklist:', error)
+        return
+      }
+      
+      // Update worklist with fresh data
+      const updatedWorklist = currentWorklist.map(item => {
+        const updated = data?.find(s => 
+          s.sample_id.trim().toUpperCase() === item.sample_id.trim().toUpperCase()
+        )
+        if (updated) {
+          return {
+            ...item,
+            container_id: updated.container_id,
+            container_name: updated.containers?.name,
+            container_location: updated.containers?.location,
+            position: updated.position,
+            is_checked_out: updated.is_checked_out,
+            checked_out_at: updated.checked_out_at,
+            previous_container_id: updated.previous_container_id,
+            previous_position: updated.previous_position
+          }
+        }
+        return item
+      })
+      
+      setWorklist(updatedWorklist)
+    } catch (err) {
+      console.error('Error refreshing worklist data:', err)
+    }
+  }
 
   // Save worklist to localStorage whenever it changes
   useEffect(() => {
