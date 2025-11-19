@@ -126,7 +126,12 @@ module.exports = async function handler(req: any, res: any){
           container_id,
           position,
           data: updatedData,
-          updated_at: now
+          updated_at: now,
+          is_checked_out: false,
+          checked_out_at: null,
+          checked_out_by: null,
+          previous_container_id: null,
+          previous_position: null
         })
         .eq('id', sample.id)
         .select()
@@ -164,6 +169,11 @@ module.exports = async function handler(req: any, res: any){
           position,
           data: newData,
           is_archived: false,
+          is_checked_out: false,
+          checked_out_at: null,
+          checked_out_by: null,
+          previous_container_id: null,
+          previous_position: null,
           created_at: now,
           updated_at: now
         })
