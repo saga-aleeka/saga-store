@@ -125,11 +125,12 @@ module.exports = async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'failed_to_fetch_containers' })
     }
 
-    // Fetch all samples
+    // Fetch all samples (remove 1000 row limit)
     const { data: samples, error: samplesError } = await supabaseAdmin
       .from('samples')
       .select('*')
       .order('container_id', { ascending: true })
+      .range(0, 999999)
 
     if (samplesError) {
       console.error('Failed to fetch samples:', samplesError)

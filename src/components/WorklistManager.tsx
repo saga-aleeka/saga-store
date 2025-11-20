@@ -246,8 +246,12 @@ export default function WorklistManager() {
         return
       }
       
-      // Filter to only non-checked-out samples (do it client-side for compatibility)
-      const availableSamples = currentSamples?.filter((s: any) => !s.is_checked_out) || []
+      // Filter to samples that can be checked out:
+      // - Must not already be checked out, OR
+      // - If marked as checked out but has a container_id, treat as available (inconsistent state)
+      const availableSamples = currentSamples?.filter((s: any) => 
+        !s.is_checked_out || (s.is_checked_out && s.container_id != null)
+      ) || []
       
       if (!availableSamples || availableSamples.length === 0) {
         alert('No samples available to checkout (they may already be checked out)')
