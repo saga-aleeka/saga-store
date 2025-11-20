@@ -313,7 +313,7 @@ export default function AdminDashboard(){
       {tab === 'import' && (
         <div>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <p className="muted">Upload CSV or paste grid-style records (see example). The parser will extract boxes and sample positions.</p>
+            <p className="muted">Upload CSV or paste grid-style records. The parser will extract boxes and sample positions.</p>
           </div>
 
               <div style={{display:'grid',gridTemplateColumns:'1fr 360px',gap:12,marginTop:12}}>
