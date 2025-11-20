@@ -6,67 +6,41 @@ const { createClient } = require('@supabase/supabase-js')
 function generateCSV(containers: any[], samples: any[]): string {
   const lines: string[] = []
   
-  lines.push('Container ID,Container Name,Location,Layout,Temperature,Type,Archived,Training,Sample Position,Sample ID,Sample Created,Sample Updated,Sample Archived,Checked Out,Checked Out By,Checked Out At')
+  lines.push('Sample ID,Sample Position,Container ID,Container Name,Container Location,Container Layout,Container Temperature,Container Type,Container Archived,Container Training,Sample Created,Sample Updated,Sample Archived,Checked Out,Checked Out By,Checked Out At')
   
-  const sortedContainers = [...containers].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-  
-  // Track which samples have been included
-  const includedSampleIds = new Set<string>()
-  
-  for (const container of sortedContainers) {
-    const containerSamples = samples.filter((s: any) => s.container_id === container.id)
-    
-    if (containerSamples.length === 0) {
-      lines.push([
-        container.id,
-        container.name || '',
-        container.location || '',
-        container.layout || '',
-        container.temperature || '',
-        container.type || '',
-        container.archived ? 'Yes' : 'No',
-        container.training ? 'Yes' : 'No',
-        '', '', '', '', '', '', '', ''
-      ].map(escapeCSV).join(','))
-    } else {
-      for (const sample of containerSamples) {
-        includedSampleIds.add(sample.id)
-        lines.push([
-          container.id,
-          container.name || '',
-          container.location || '',
-          container.layout || '',
-          container.temperature || '',
-          container.type || '',
-          container.archived ? 'Yes' : 'No',
-          container.training ? 'Yes' : 'No',
-          sample.position || '',
-          sample.sample_id || '',
-          sample.created_at || '',
-          sample.updated_at || '',
-          sample.is_archived ? 'Yes' : 'No',
-          sample.is_checked_out ? 'Yes' : 'No',
-          sample.checked_out_by || '',
-          sample.checked_out_at || ''
-        ].map(escapeCSV).join(','))
-      }
-    }
+  // Create a map of container IDs to container data for quick lookup
+  const containerMap = new Map()
+  for (const container of containers) {
+    containerMap.set(container.id, container)
   }
   
-  // Add samples that are checked out (no container_id)
-  const checkedOutSamples = samples.filter((s: any) => !s.container_id && !includedSampleIds.has(s.id))
-  for (const sample of checkedOutSamples) {
+  // Sort samples by container and position
+  const sortedSamples = [...samples].sort((a, b) => {
+    // Sort by container name first, then by position
+    const containerA = containerMap.get(a.container_id)
+    const containerB = containerMap.get(b.container_id)
+    const nameA = containerA?.name || 'ZZZZZ' // Put checked out samples at end
+    const nameB = containerB?.name || 'ZZZZZ'
+    
+    if (nameA !== nameB) return nameA.localeCompare(nameB)
+    return (a.position || '').localeCompare(b.position || '')
+  })
+  
+  // Output each sample with its container info
+  for (const sample of sortedSamples) {
+    const container = containerMap.get(sample.container_id)
+    
     lines.push([
-      '',
-      'CHECKED OUT',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      sample.previous_position || '',
       sample.sample_id || '',
+      sample.position || '',
+      container?.id || '',
+      container?.name || (sample.is_checked_out ? 'CHECKED OUT' : ''),
+      container?.location || '',
+      container?.layout || '',
+      container?.temperature || '',
+      container?.type || '',
+      container?.archived ? 'Yes' : 'No',
+      container?.training ? 'Yes' : 'No',
       sample.created_at || '',
       sample.updated_at || '',
       sample.is_archived ? 'Yes' : 'No',
