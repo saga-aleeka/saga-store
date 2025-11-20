@@ -1,5 +1,6 @@
 // Sample upsert endpoint - creates or updates samples without duplicates
 const { createClient } = require('@supabase/supabase-js')
+const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -143,6 +144,24 @@ module.exports = async function handler(req: any, res: any){
       }
 
       console.log(`[UPSERT] Successfully moved sample "${normalizedSampleId}"`)
+      
+      // Log to audit
+      await createAuditLog(supabaseAdmin, {
+        userInitials: user,
+        entityType: 'sample',
+        entityId: updated.id,
+        action: 'moved',
+        entityName: normalizedSampleId,
+        description: `Sample ${normalizedSampleId} moved`,
+        metadata: {
+          from_container: sample.container_id,
+          from_position: sample.position,
+          to_container: container_id,
+          to_position: position,
+          source: 'grid_edit'
+        }
+      })
+      
       result = { data: updated, action: 'moved' }
     } else {
       // No active sample exists - INSERT new one
@@ -186,6 +205,22 @@ module.exports = async function handler(req: any, res: any){
       }
 
       console.log(`[UPSERT] Inserted new sample "${normalizedSampleId}" at ${container_id}/${position}`)
+      
+      // Log to audit
+      await createAuditLog(supabaseAdmin, {
+        userInitials: user,
+        entityType: 'sample',
+        entityId: inserted.id,
+        action: 'created',
+        entityName: normalizedSampleId,
+        description: `Sample ${normalizedSampleId} created`,
+        metadata: {
+          container_id: container_id,
+          position: position,
+          source: 'grid_edit'
+        }
+      })
+      
       result = { data: inserted, action: 'inserted' }
     }
 

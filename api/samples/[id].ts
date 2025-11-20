@@ -1,6 +1,7 @@
 // Server-side sample management endpoint
 // Handles sample updates, moves, and archiving with history tracking
 const { createClient } = require('@supabase/supabase-js')
+const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -89,12 +90,40 @@ module.exports = async function handler(req: any, res: any){
             ...currentData,
             history: [...currentHistory, historyEvent]
           }
+          
+          // Log to audit
+          await createAuditLog(supabaseAdmin, {
+            userInitials: user,
+            entityType: 'sample',
+            entityId: sampleId,
+            action: body.is_archived ? 'archived' : 'unarchived',
+            entityName: current.sample_id,
+            description: `Sample ${current.sample_id} ${body.is_archived ? 'archived' : 'unarchived'}`,
+            metadata: {
+              container_id: current.container_id,
+              position: current.position
+            }
+          })
         }
       }
 
       // Handle training status
       if ('is_training' in body) {
         updates.is_training = body.is_training
+        
+        // Log to audit
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: body.is_training ? 'marked_training' : 'unmarked_training',
+          entityName: current.sample_id,
+          description: `Sample ${current.sample_id} ${body.is_training ? 'marked as training' : 'unmarked as training'}`,
+          metadata: {
+            container_id: current.container_id,
+            position: current.position
+          }
+        })
       }
 
       // Handle position/container movement
@@ -122,6 +151,22 @@ module.exports = async function handler(req: any, res: any){
           ...currentData,
           history: [...currentHistory, historyEvent]
         }
+        
+        // Log to audit
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: 'moved',
+          entityName: current.sample_id,
+          description: `Sample ${current.sample_id} moved`,
+          metadata: {
+            from_container: current.container_id,
+            from_position: current.position,
+            to_container: body.container_id || current.container_id,
+            to_position: body.position || current.position
+          }
+        })
       }
 
       // Handle other data updates
@@ -150,6 +195,13 @@ module.exports = async function handler(req: any, res: any){
     }
 
     if (req.method === 'DELETE') {
+      // Get sample info before deletion for audit log
+      const { data: sample } = await supabaseAdmin
+        .from('samples')
+        .select('*')
+        .eq('id', sampleId)
+        .single()
+      
       // Hard delete (use with caution)
       const { error } = await supabaseAdmin
         .from('samples')
@@ -158,6 +210,22 @@ module.exports = async function handler(req: any, res: any){
 
       if (error) {
         return res.status(500).json({ error: 'delete_failed', message: error.message })
+      }
+      
+      // Log to audit
+      if (sample) {
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: 'deleted',
+          entityName: sample.sample_id,
+          description: `Sample ${sample.sample_id} permanently deleted`,
+          metadata: {
+            container_id: sample.container_id,
+            position: sample.position
+          }
+        })
       }
 
       return res.status(200).json({ success: true })

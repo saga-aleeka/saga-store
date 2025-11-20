@@ -725,8 +725,12 @@ export default function AdminDashboard(){
                     <div className="muted" style={{fontSize:12,marginTop:4}}>
                       {a.metadata.location && `Location: ${a.metadata.location} • `}
                       {a.metadata.position && `Position: ${a.metadata.position} • `}
+                      {a.metadata.from_container && a.metadata.to_container && 
+                        `Moved: Container ${a.metadata.from_container.substring(0,8)}... (${a.metadata.from_position}) → ${a.metadata.to_container.substring(0,8)}... (${a.metadata.to_position}) • `}
+                      {a.metadata.container_id && !a.metadata.from_container && `Container: ${a.metadata.container_id.substring(0,8)}... • `}
                       {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
-                      {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted}`}
+                      {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted} • `}
+                      {a.metadata.source && `Source: ${a.metadata.source}`}
                     </div>
                   )}
                 </div>
