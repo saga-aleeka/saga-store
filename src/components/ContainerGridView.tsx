@@ -20,9 +20,10 @@ interface ContainerGridViewProps {
   editMode?: boolean
   scanningPosition?: string | null
   highlightedPositions?: string[]
+  selectedPositions?: string[]
 }
 
-export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [] }: ContainerGridViewProps) {
+export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [], selectedPositions = [] }: ContainerGridViewProps) {
   const [gridSize, setGridSize] = useState({ rows: 9, cols: 9 })
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
 
@@ -190,6 +191,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const isUnavailable = position === 'I9' && container?.type === 'DP Pools' && container?.layout === '9x9'
 
               const isHighlighted = isPositionHighlighted(position)
+              const isSelected = selectedPositions.map(p => p.toUpperCase()).includes(position.toUpperCase())
               const isScanning = scanningPosition === position
               
               return (
@@ -200,17 +202,21 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     background: isUnavailable
                       ? '#d1d5db'
                       : isScanning 
-                        ? '#f3e8ff' 
-                        : getCellColor(sample),
+                        ? '#f3e8ff'
+                        : isSelected
+                          ? '#dbeafe'
+                          : getCellColor(sample),
                     border: isUnavailable
                       ? '2px solid #9ca3af'
                       : isScanning
                         ? '3px solid #8b5cf6'
-                        : isHighlighted 
-                          ? '3px solid #f59e0b' 
-                          : isOccupied 
-                            ? '2px solid #3b82f6' 
-                            : '1px solid #d1d5db',
+                        : isSelected
+                          ? '3px solid #3b82f6'
+                          : isHighlighted 
+                            ? '3px solid #f59e0b' 
+                            : isOccupied 
+                              ? '2px solid #3b82f6' 
+                              : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
@@ -229,10 +235,12 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     position: 'relative',
                     overflow: 'hidden',
                     boxShadow: isScanning 
-                      ? '0 0 0 3px #c4b5fd' 
-                      : isHighlighted 
-                        ? '0 0 0 2px #fbbf24' 
-                        : 'none',
+                      ? '0 0 0 3px #c4b5fd'
+                      : isSelected
+                        ? '0 0 0 2px #60a5fa'
+                        : isHighlighted 
+                          ? '0 0 0 2px #fbbf24' 
+                          : 'none',
                     opacity: isUnavailable ? 0.5 : 1
                   }}
                   className={!isUnavailable && (isOccupied || editMode) ? 'hover:shadow-md hover:scale-105' : ''}

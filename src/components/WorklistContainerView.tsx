@@ -263,6 +263,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         onSampleClick={handleSampleClick}
         editMode={false}
         highlightedPositions={highlightPositions}
+        selectedPositions={Array.from(selectedPositions)}
       />
     </div>
   )
