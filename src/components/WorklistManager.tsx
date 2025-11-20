@@ -54,6 +54,29 @@ export default function WorklistManager() {
   const [sortMode, setSortMode] = useState<'worklist' | 'container'>('worklist')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Load worklist from sessionStorage on mount (persists during navigation)
+  useEffect(() => {
+    const savedWorklist = sessionStorage.getItem('saga_worklist')
+    if (savedWorklist) {
+      try {
+        const parsed = JSON.parse(savedWorklist)
+        setWorklist(parsed)
+      } catch (e) {
+        console.warn('Failed to parse saved worklist:', e)
+        sessionStorage.removeItem('saga_worklist')
+      }
+    }
+  }, [])
+
+  // Save worklist to sessionStorage whenever it changes
+  useEffect(() => {
+    if (worklist.length > 0) {
+      sessionStorage.setItem('saga_worklist', JSON.stringify(worklist))
+    } else {
+      sessionStorage.removeItem('saga_worklist')
+    }
+  }, [worklist])
+
   const parseCSV = (text: string): string[] => {
     const lines = text.trim().split('\n')
     if (lines.length === 0) return []
