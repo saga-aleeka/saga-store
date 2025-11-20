@@ -164,20 +164,37 @@ module.exports = async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'failed_to_fetch_containers' })
     }
 
-    // Fetch all samples (remove 1000 row limit)
-    const { data: samples, error: samplesError } = await supabaseAdmin
-      .from('samples')
-      .select('*')
-      .order('container_id', { ascending: true })
-      .range(0, 999999)
-
-    if (samplesError) {
-      console.error('Failed to fetch samples:', samplesError)
-      return res.status(500).json({ error: 'failed_to_fetch_samples' })
+    // Fetch all samples with pagination (Supabase limits to 1000 per request)
+    let allSamples: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+    
+    while (hasMore) {
+      const { data: samplesPage, error: samplesError } = await supabaseAdmin
+        .from('samples')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+      
+      if (samplesError) {
+        console.error('Failed to fetch samples page:', samplesError)
+        return res.status(500).json({ error: 'failed_to_fetch_samples' })
+      }
+      
+      if (samplesPage && samplesPage.length > 0) {
+        allSamples = allSamples.concat(samplesPage)
+        page++
+        hasMore = samplesPage.length === pageSize
+      } else {
+        hasMore = false
+      }
     }
+    
+    console.log(`Fetched ${allSamples.length} total samples across ${page} pages`)
 
     // Generate CSV
-    const csvContent = generateCSV(containers || [], samples || [])
+    const csvContent = generateCSV(containers || [], allSamples || [])
     const timestamp = new Date().toISOString()
     const filename = `saga-nightly-backup-${timestamp.split('T')[0]}.csv`
 
@@ -201,7 +218,7 @@ module.exports = async function handler(req: any, res: any) {
         filename,
         type: 'nightly',
         containers_count: containers?.length || 0,
-        samples_count: samples?.length || 0,
+        samples_count: allSamples?.length || 0,
         created_by: 'system',
         created_at: timestamp,
         storage_path: uploadError ? null : filename
@@ -212,13 +229,13 @@ module.exports = async function handler(req: any, res: any) {
     }
 
     console.log(`Nightly backup completed: ${filename}`)
-    console.log(`Containers: ${containers?.length || 0}, Samples: ${samples?.length || 0}`)
+    console.log(`Containers: ${containers?.length || 0}, Samples: ${allSamples?.length || 0}`)
 
     return res.status(200).json({ 
       success: true, 
       filename,
       containers_count: containers?.length || 0,
-      samples_count: samples?.length || 0
+      samples_count: allSamples?.length || 0
     })
   } catch (err: any) {
     console.error('Nightly backup error:', err)
