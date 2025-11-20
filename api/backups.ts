@@ -203,7 +203,7 @@ module.exports = async function handler(req: any, res: any) {
       }
 
       // Generate CSV
-      const csvContent = generateCSV(containers || [], samples || [])
+      const csvContent = generateCSV(allContainers || [], samples || [])
       const timestamp = new Date().toISOString()
       const filename = isNightly 
         ? `saga-nightly-backup-${timestamp.split('T')[0]}.csv`
@@ -216,7 +216,7 @@ module.exports = async function handler(req: any, res: any) {
           .insert({
             filename,
             type: isNightly ? 'nightly' : 'manual',
-            containers_count: containers?.length || 0,
+            containers_count: allContainers?.length || 0,
             samples_count: samples?.length || 0,
             created_by: userInitials,
             created_at: timestamp
