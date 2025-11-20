@@ -6,9 +6,12 @@ const { createClient } = require('@supabase/supabase-js')
 function generateCSV(containers: any[], samples: any[]): string {
   const lines: string[] = []
   
-  lines.push('Container ID,Container Name,Location,Layout,Temperature,Type,Archived,Training,Sample Position,Sample ID,Sample Created,Sample Updated,Sample Archived')
+  lines.push('Container ID,Container Name,Location,Layout,Temperature,Type,Archived,Training,Sample Position,Sample ID,Sample Created,Sample Updated,Sample Archived,Checked Out,Checked Out By,Checked Out At')
   
   const sortedContainers = [...containers].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+  
+  // Track which samples have been included
+  const includedSampleIds = new Set<string>()
   
   for (const container of sortedContainers) {
     const containerSamples = samples.filter((s: any) => s.container_id === container.id)
@@ -23,10 +26,11 @@ function generateCSV(containers: any[], samples: any[]): string {
         container.type || '',
         container.archived ? 'Yes' : 'No',
         container.training ? 'Yes' : 'No',
-        '', '', '', '', ''
+        '', '', '', '', '', '', '', ''
       ].map(escapeCSV).join(','))
     } else {
       for (const sample of containerSamples) {
+        includedSampleIds.add(sample.id)
         lines.push([
           container.id,
           container.name || '',
@@ -40,10 +44,36 @@ function generateCSV(containers: any[], samples: any[]): string {
           sample.sample_id || '',
           sample.created_at || '',
           sample.updated_at || '',
-          sample.is_archived ? 'Yes' : 'No'
+          sample.is_archived ? 'Yes' : 'No',
+          sample.is_checked_out ? 'Yes' : 'No',
+          sample.checked_out_by || '',
+          sample.checked_out_at || ''
         ].map(escapeCSV).join(','))
       }
     }
+  }
+  
+  // Add samples that are checked out (no container_id)
+  const checkedOutSamples = samples.filter((s: any) => !s.container_id && !includedSampleIds.has(s.id))
+  for (const sample of checkedOutSamples) {
+    lines.push([
+      '',
+      'CHECKED OUT',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      sample.previous_position || '',
+      sample.sample_id || '',
+      sample.created_at || '',
+      sample.updated_at || '',
+      sample.is_archived ? 'Yes' : 'No',
+      sample.is_checked_out ? 'Yes' : 'No',
+      sample.checked_out_by || '',
+      sample.checked_out_at || ''
+    ].map(escapeCSV).join(','))
   }
   
   return lines.join('\n')
