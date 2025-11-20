@@ -126,6 +126,7 @@ module.exports = async function handler(req: any, res: any) {
           .from('containers')
           .select('*')
           .order('name', { ascending: true })
+          .range(0, 999999)
         
         const { data: samples } = await supabaseAdmin
           .from('samples')
@@ -182,7 +183,6 @@ module.exports = async function handler(req: any, res: any) {
         .from('containers')
         .select('*')
         .order('name', { ascending: true })
-        .range(0, 999999)
         .range(0, 999999)
 
       if (containersError) {
