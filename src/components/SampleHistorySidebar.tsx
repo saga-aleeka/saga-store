@@ -39,6 +39,7 @@ interface SampleHistorySidebarProps {
 export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpdate, onDelete }: SampleHistorySidebarProps) {
   const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
   const [containerNames, setContainerNames] = useState<Map<string, string>>(new Map())
 
   if (!sample) return null
@@ -88,8 +89,9 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     return containerNames.get(containerId) || containerId
   }
 
-    const handleArchive = async () => {
-    if (!window.confirm(`Archive ${sample.sample_id}? This will mark it as archived.`)) {
+  const handleArchiveToggle = async () => {
+    const newArchivedState = !sample.is_archived
+    if (!window.confirm(`${newArchivedState ? 'Archive' : 'Unarchive'} ${sample.sample_id}?`)) {
       return
     }
 
@@ -102,16 +104,16 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ is_archived: true })
+        body: JSON.stringify({ is_archived: newArchivedState })
       })
 
-      if (!res.ok) throw new Error('Failed to archive sample')
+      if (!res.ok) throw new Error('Failed to update archive status')
       
       onArchive?.(sample.id)
       onUpdate?.()
     } catch (error) {
-      console.error('Archive error:', error)
-      alert('Failed to archive sample')
+      console.error('Archive toggle error:', error)
+      alert('Failed to update archive status')
     } finally {
       setArchiving(false)
     }
@@ -143,6 +145,49 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       alert('Failed to update training status')
     } finally {
       setArchiving(false)
+    }
+  }
+
+  const handleCheckout = async () => {
+    if (!window.confirm(`Check out ${sample.sample_id}? This will remove it from the container and mark it as checked out.`)) {
+      return
+    }
+
+    setCheckingOut(true)
+    try {
+      const token = localStorage.getItem('token')
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      const username = user.username || 'Unknown'
+
+      const res = await fetch('/api/samples', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          samples: [{
+            sample_id: sample.sample_id,
+            is_checked_out: true,
+            previous_container_id: sample.container_id,
+            previous_position: sample.position,
+            checked_out_at: new Date().toISOString(),
+            checked_out_by: username,
+            container_id: null,
+            position: null
+          }]
+        })
+      })
+
+      if (!res.ok) throw new Error('Failed to checkout sample')
+      
+      onUpdate?.()
+      onClose()
+    } catch (error) {
+      console.error('Checkout error:', error)
+      alert('Failed to checkout sample')
+    } finally {
+      setCheckingOut(false)
     }
   }
 
@@ -277,46 +322,115 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           )}
         </div>
 
-        {!sample.is_archived && (
+        {/* Archive Toggle */}
+        <div style={{
+          marginTop: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px',
+          background: '#f9fafb',
+          borderRadius: '6px',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>🗄️</span>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Archive</span>
+          </div>
           <button
-            onClick={handleArchive}
+            onClick={handleArchiveToggle}
             disabled={archiving}
             style={{
-              marginTop: '16px',
-              width: '100%',
-              padding: '10px',
-              background: archiving ? '#9ca3af' : '#ef4444',
-              color: 'white',
+              position: 'relative',
+              width: '44px',
+              height: '24px',
+              background: archiving ? '#9ca3af' : (sample.is_archived ? '#ef4444' : '#d1d5db'),
               border: 'none',
-              borderRadius: '6px',
-              fontWeight: 600,
+              borderRadius: '12px',
               cursor: archiving ? 'not-allowed' : 'pointer',
-              fontSize: '14px'
+              transition: 'background 0.2s',
+              padding: 0
             }}
           >
-            {archiving ? 'Archiving...' : '🗄️ Archive Sample'}
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: sample.is_archived ? '22px' : '2px',
+              width: '20px',
+              height: '20px',
+              background: 'white',
+              borderRadius: '10px',
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+            }} />
           </button>
-        )}
+        </div>
 
+        {/* Training Toggle */}
+        <div style={{
+          marginTop: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px',
+          background: '#f9fafb',
+          borderRadius: '6px',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>🎓</span>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Training Sample</span>
+          </div>
+          <button
+            onClick={handleTrainingToggle}
+            disabled={archiving}
+            style={{
+              position: 'relative',
+              width: '44px',
+              height: '24px',
+              background: archiving ? '#9ca3af' : (sample.is_training ? '#6366f1' : '#d1d5db'),
+              border: 'none',
+              borderRadius: '12px',
+              cursor: archiving ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s',
+              padding: 0
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: sample.is_training ? '22px' : '2px',
+              width: '20px',
+              height: '20px',
+              background: 'white',
+              borderRadius: '10px',
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+            }} />
+          </button>
+        </div>
+
+        {/* Checkout Button */}
         <button
-          onClick={handleTrainingToggle}
-          disabled={archiving}
+          onClick={handleCheckout}
+          disabled={checkingOut}
           style={{
             marginTop: '12px',
             width: '100%',
             padding: '10px',
-            background: archiving ? '#9ca3af' : (sample.is_training ? '#6366f1' : '#e0e7ff'),
-            color: sample.is_training ? 'white' : '#3730a3',
-            border: sample.is_training ? 'none' : '1px solid #c7d2fe',
+            background: checkingOut ? '#9ca3af' : '#3b82f6',
+            color: 'white',
+            border: 'none',
             borderRadius: '6px',
             fontWeight: 600,
-            cursor: archiving ? 'not-allowed' : 'pointer',
+            cursor: checkingOut ? 'not-allowed' : 'pointer',
             fontSize: '14px'
           }}
         >
-          {archiving ? 'Updating...' : (sample.is_training ? '❌ Remove Training Status' : '🎓 Mark as Training')}
+          {checkingOut ? 'Checking Out...' : '📤 Checkout Sample'}
         </button>
 
+        {/* Delete Button */}
         <button
           onClick={handleDelete}
           disabled={deleting}
