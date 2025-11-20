@@ -80,6 +80,40 @@ module.exports = async function handler(req: any, res: any) {
 
     console.log('Starting nightly backup...')
 
+    // Delete samples that have been checked out for 30+ days
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    try {
+      const { data: oldCheckouts, error: checkoutError } = await supabaseAdmin
+        .from('samples')
+        .select('sample_id, checked_out_at')
+        .eq('is_checked_out', true)
+        .lt('checked_out_at', thirtyDaysAgo.toISOString())
+      
+      if (checkoutError) {
+        console.warn('Failed to query old checkouts:', checkoutError)
+      } else if (oldCheckouts && oldCheckouts.length > 0) {
+        console.log(`Deleting ${oldCheckouts.length} samples checked out for 30+ days...`)
+        
+        const { error: deleteError } = await supabaseAdmin
+          .from('samples')
+          .delete()
+          .eq('is_checked_out', true)
+          .lt('checked_out_at', thirtyDaysAgo.toISOString())
+        
+        if (deleteError) {
+          console.warn('Failed to delete old checkouts:', deleteError)
+        } else {
+          console.log(`Deleted ${oldCheckouts.length} old checked-out samples`)
+        }
+      } else {
+        console.log('No samples checked out for 30+ days')
+      }
+    } catch(e) {
+      console.warn('Failed to clean up old checkouts:', e)
+    }
+
     // Clean up backups older than 14 days
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
