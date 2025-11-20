@@ -178,10 +178,12 @@ module.exports = async function handler(req: any, res: any) {
       const userInitials = req.headers['x-user-initials'] || 'system'
 
       // Fetch all containers
-      const { data: containers, error: containersError } = await supabaseAdmin
+      const { data: allContainers, error: containersError } = await supabaseAdmin
         .from('containers')
         .select('*')
         .order('name', { ascending: true })
+        .range(0, 999999)
+        .range(0, 999999)
 
       if (containersError) {
         console.error('Failed to fetch containers:', containersError)

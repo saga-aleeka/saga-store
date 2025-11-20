@@ -183,6 +183,7 @@ module.exports = async function handler(req: any, res: any) {
       .from('containers')
       .select('*')
       .order('name', { ascending: true })
+      .range(0, 999999)
 
     if (containersError) {
       console.error('Failed to fetch containers:', containersError)
