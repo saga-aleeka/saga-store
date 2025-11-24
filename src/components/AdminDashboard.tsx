@@ -252,6 +252,7 @@ export default function AdminDashboard(){
   // Pagination state for audit logs
   const [auditPage, setAuditPage] = useState(1)
   const [auditPerPage, setAuditPerPage] = useState(24)
+  const [auditSearchQuery, setAuditSearchQuery] = useState('')
 
   // fetch authorized users (server-side endpoint will use service role key in production)
   const authUsers = useFetch<any[]>('/api/admin_users')
@@ -676,54 +677,106 @@ export default function AdminDashboard(){
         <div>
           <p className="muted">Comprehensive audit log of all container and sample changes</p>
           
-          {/* Pagination controls */}
-          {!audits.loading && audits.data && audits.data.length > 0 && (
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:12,marginBottom:12}}>
-              <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <span style={{fontSize:14,color:'#6b7280'}}>Items per page:</span>
-                <select 
-                  value={auditPerPage} 
-                  onChange={(e) => {
-                    setAuditPerPage(Number(e.target.value))
-                    setAuditPage(1)
-                  }}
-                  style={{padding:'4px 8px',borderRadius:4,border:'1px solid #d1d5db'}}
-                >
-                  <option value={24}>24</option>
-                  <option value={48}>48</option>
-                  <option value={96}>96</option>
-                </select>
-              </div>
-              <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <button 
-                  className="btn ghost"
-                  disabled={auditPage === 1}
-                  onClick={() => setAuditPage(p => p - 1)}
-                  style={{opacity: auditPage === 1 ? 0.5 : 1}}
-                >
-                  Previous
-                </button>
-                <span style={{fontSize:14,color:'#6b7280'}}>
-                  Page {auditPage} of {Math.ceil(audits.data.length / auditPerPage)}
-                </span>
-                <button 
-                  className="btn ghost"
-                  disabled={auditPage >= Math.ceil(audits.data.length / auditPerPage)}
-                  onClick={() => setAuditPage(p => p + 1)}
-                  style={{opacity: auditPage >= Math.ceil(audits.data.length / auditPerPage) ? 0.5 : 1}}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Search bar */}
+          <div style={{marginTop:12,marginBottom:12}}>
+            <input
+              type="text"
+              placeholder="Search by sample ID or container name..."
+              value={auditSearchQuery}
+              onChange={(e) => {
+                setAuditSearchQuery(e.target.value)
+                setAuditPage(1) // Reset to first page on search
+              }}
+              style={{
+                width:'100%',
+                padding:'8px 12px',
+                borderRadius:6,
+                border:'1px solid #d1d5db',
+                fontSize:14
+              }}
+            />
+          </div>
           
-          <div style={{marginTop:12}}>
-            {audits.loading && <div className="muted">Loading...</div>}
-            {!audits.loading && audits.data && audits.data.length === 0 && <div className="muted">No audit events</div>}
-            {!audits.loading && audits.data && audits.data
-              .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
-              .map((a:any) => (
+          {/* Pagination controls */}
+          {!audits.loading && audits.data && audits.data.length > 0 && (() => {
+            // Filter audit logs based on search query
+            const filteredAudits = auditSearchQuery.trim() === '' 
+              ? audits.data 
+              : audits.data.filter((a: any) => {
+                  const query = auditSearchQuery.toLowerCase().trim()
+                  
+                  // Search in entity name (sample ID or container name)
+                  if (a.entity_name?.toLowerCase().includes(query)) return true
+                  
+                  // Search in description
+                  if (a.description?.toLowerCase().includes(query)) return true
+                  
+                  // Search in container names from metadata
+                  if (a.metadata?.container_id && containerNames.get(a.metadata.container_id)?.toLowerCase().includes(query)) return true
+                  if (a.metadata?.from_container && containerNames.get(a.metadata.from_container)?.toLowerCase().includes(query)) return true
+                  if (a.metadata?.to_container && containerNames.get(a.metadata.to_container)?.toLowerCase().includes(query)) return true
+                  
+                  // Search in entity_id if it's a container
+                  if (a.entity_type === 'container' && a.entity_id && containerNames.get(a.entity_id)?.toLowerCase().includes(query)) return true
+                  
+                  return false
+                })
+            
+            const totalPages = Math.ceil(filteredAudits.length / auditPerPage)
+            
+            return (
+              <>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <span style={{fontSize:14,color:'#6b7280'}}>
+                      {filteredAudits.length} {filteredAudits.length === 1 ? 'result' : 'results'}
+                      {auditSearchQuery.trim() && ` for "${auditSearchQuery}"`}
+                    </span>
+                    <span style={{fontSize:14,color:'#6b7280'}}>•</span>
+                    <span style={{fontSize:14,color:'#6b7280'}}>Items per page:</span>
+                    <select 
+                      value={auditPerPage} 
+                      onChange={(e) => {
+                        setAuditPerPage(Number(e.target.value))
+                        setAuditPage(1)
+                      }}
+                      style={{padding:'4px 8px',borderRadius:4,border:'1px solid #d1d5db'}}
+                    >
+                      <option value={24}>24</option>
+                      <option value={48}>48</option>
+                      <option value={96}>96</option>
+                    </select>
+                  </div>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <button 
+                      className="btn ghost"
+                      disabled={auditPage === 1}
+                      onClick={() => setAuditPage(p => p - 1)}
+                      style={{opacity: auditPage === 1 ? 0.5 : 1}}
+                    >
+                      Previous
+                    </button>
+                    <span style={{fontSize:14,color:'#6b7280'}}>
+                      Page {auditPage} of {totalPages || 1}
+                    </span>
+                    <button 
+                      className="btn ghost"
+                      disabled={auditPage >= totalPages}
+                      onClick={() => setAuditPage(p => p + 1)}
+                      style={{opacity: auditPage >= totalPages ? 0.5 : 1}}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+                
+                <div style={{marginTop:12}}>
+                  {filteredAudits.length === 0 && (
+                    <div className="muted">No audit events matching "{auditSearchQuery}"</div>
+                  )}
+                  {filteredAudits
+                    .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
+                    .map((a:any) => (
               <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6}}>
                 <div style={{flex:1}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
@@ -784,7 +837,15 @@ export default function AdminDashboard(){
                 </div>
               </div>
             ))}
-          </div>
+                </div>
+              </>
+            )
+          })()}
+          
+          {audits.loading && <div className="muted" style={{marginTop:12}}>Loading...</div>}
+          {!audits.loading && audits.data && audits.data.length === 0 && (
+            <div className="muted" style={{marginTop:12}}>No audit events</div>
+          )}
         </div>
       )}
 
