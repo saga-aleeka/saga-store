@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
+import { supabase } from '../lib/supabaseClient'
 
 // parser helpers
 function parseGridText(raw: string){
@@ -288,6 +289,47 @@ export default function AdminDashboard(){
 
   const audits = useFetch<any[]>('/api/audit')
   const backups = useFetch<any[]>('/api/backups')
+  
+  // Fetch container names for audit log display
+  const [containerNames, setContainerNames] = React.useState<Map<string, string>>(new Map())
+  
+  React.useEffect(() => {
+    async function fetchContainerNames() {
+      if (!audits.data || audits.data.length === 0) return
+      
+      const containerIds = new Set<string>()
+      
+      // Collect all unique container IDs from audit metadata
+      audits.data.forEach((audit: any) => {
+        if (audit.metadata?.container_id) containerIds.add(audit.metadata.container_id)
+        if (audit.metadata?.from_container) containerIds.add(audit.metadata.from_container)
+        if (audit.metadata?.to_container) containerIds.add(audit.metadata.to_container)
+        if (audit.entity_type === 'container' && audit.entity_id) containerIds.add(audit.entity_id)
+      })
+      
+      if (containerIds.size === 0) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('containers')
+          .select('id, name')
+          .in('id', Array.from(containerIds))
+        
+        if (error) throw error
+        
+        const nameMap = new Map<string, string>()
+        data?.forEach((container: any) => {
+          nameMap.set(container.id, container.name)
+        })
+        
+        setContainerNames(nameMap)
+      } catch (error) {
+        console.error('Failed to fetch container names for audit log:', error)
+      }
+    }
+    
+    fetchContainerNames()
+  }, [audits.data])
 
   async function doImport(){
     const payload = { items: [ { sample_id: 'S-NEW', container: 1 } ] }
@@ -718,16 +760,19 @@ export default function AdminDashboard(){
                     )}
                   </div>
                   <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.description || a.entity_name}</div>
-                  {a.entity_name && a.description && (
-                    <div className="muted" style={{fontSize:12}}>Entity: {a.entity_name}</div>
+                  {a.entity_name && a.description && a.entity_type === 'container' && (
+                    <div className="muted" style={{fontSize:12}}>Container: {containerNames.get(a.entity_id) || a.entity_name}</div>
+                  )}
+                  {a.entity_name && a.description && a.entity_type === 'sample' && (
+                    <div className="muted" style={{fontSize:12}}>Sample: {a.entity_name}</div>
                   )}
                   {a.metadata && (
                     <div className="muted" style={{fontSize:12,marginTop:4}}>
                       {a.metadata.location && `Location: ${a.metadata.location} • `}
                       {a.metadata.position && `Position: ${a.metadata.position} • `}
                       {a.metadata.from_container && a.metadata.to_container && 
-                        `Moved: Container ${a.metadata.from_container.substring(0,8)}... (${a.metadata.from_position}) → ${a.metadata.to_container.substring(0,8)}... (${a.metadata.to_position}) • `}
-                      {a.metadata.container_id && !a.metadata.from_container && `Container: ${a.metadata.container_id.substring(0,8)}... • `}
+                        `Moved: ${containerNames.get(a.metadata.from_container) || a.metadata.from_container.substring(0,8) + '...'} (${a.metadata.from_position}) → ${containerNames.get(a.metadata.to_container) || a.metadata.to_container.substring(0,8) + '...'} (${a.metadata.to_position}) • `}
+                      {a.metadata.container_id && !a.metadata.from_container && `Container: ${containerNames.get(a.metadata.container_id) || a.metadata.container_id.substring(0,8) + '...'} • `}
                       {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
                       {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted} • `}
                       {a.metadata.source && `Source: ${a.metadata.source}`}
