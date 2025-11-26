@@ -821,11 +821,28 @@ export default function AdminDashboard(){
                   )}
                   {a.metadata && (
                     <div className="muted" style={{fontSize:12,marginTop:4}}>
-                      {a.metadata.location && `Location: ${a.metadata.location} • `}
-                      {a.metadata.position && `Position: ${a.metadata.position} • `}
+                      {/* Sample metadata */}
+                      {a.entity_type === 'sample' && a.metadata.sample_id && `Sample: ${a.metadata.sample_id} • `}
+                      {a.metadata.position && !a.metadata.from_position && `Position: ${a.metadata.position} • `}
+                      
+                      {/* Container info for samples */}
+                      {a.entity_type === 'sample' && a.metadata.container_id && !a.metadata.from_container && 
+                        `Container: ${containerNames.get(a.metadata.container_id) || a.metadata.container_id.substring(0,8) + '...'} • `}
+                      
+                      {/* Movement info */}
                       {a.metadata.from_container && a.metadata.to_container && 
                         `Moved: ${containerNames.get(a.metadata.from_container) || a.metadata.from_container.substring(0,8) + '...'} (${a.metadata.from_position}) → ${containerNames.get(a.metadata.to_container) || a.metadata.to_container.substring(0,8) + '...'} (${a.metadata.to_position}) • `}
-                      {a.metadata.container_id && !a.metadata.from_container && `Container: ${containerNames.get(a.metadata.container_id) || a.metadata.container_id.substring(0,8) + '...'} • `}
+                      
+                      {/* Checkout status */}
+                      {a.metadata.is_checked_out && `Checked Out • `}
+                      {a.metadata.checked_out_by && `By: ${a.metadata.checked_out_by} • `}
+                      
+                      {/* Previous location for deleted samples */}
+                      {a.action === 'deleted' && a.metadata.previous_container_id && 
+                        `Previous: ${containerNames.get(a.metadata.previous_container_id) || a.metadata.previous_container_id.substring(0,8) + '...'} (${a.metadata.previous_position}) • `}
+                      
+                      {/* Container metadata */}
+                      {a.entity_type === 'container' && a.metadata.location && `Location: ${a.metadata.location} • `}
                       {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
                       {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted} • `}
                       {a.metadata.source && `Source: ${a.metadata.source}`}

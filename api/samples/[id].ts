@@ -90,21 +90,24 @@ module.exports = async function handler(req: any, res: any){
             ...currentData,
             history: [...currentHistory, historyEvent]
           }
-          
-          // Log to audit
-          await createAuditLog(supabaseAdmin, {
-            userInitials: user,
-            entityType: 'sample',
-            entityId: sampleId,
-            action: body.is_archived ? 'archived' : 'unarchived',
-            entityName: current.sample_id,
-            description: `Sample ${current.sample_id} ${body.is_archived ? 'archived' : 'unarchived'}`,
-            metadata: {
-              container_id: current.container_id,
-              position: current.position
-            }
-          })
         }
+        
+        // Log to audit (for both archive and unarchive)
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: body.is_archived ? 'archived' : 'unarchived',
+          entityName: current.sample_id,
+          description: `Sample ${current.sample_id} ${body.is_archived ? 'archived' : 'unarchived'}`,
+          metadata: {
+            sample_id: current.sample_id,
+            container_id: current.container_id || null,
+            position: current.position || null,
+            is_checked_out: current.is_checked_out || false,
+            checked_out_by: current.checked_out_by || null
+          }
+        })
       }
 
       // Handle training status
@@ -120,8 +123,11 @@ module.exports = async function handler(req: any, res: any){
           entityName: current.sample_id,
           description: `Sample ${current.sample_id} ${body.is_training ? 'marked as training' : 'unmarked as training'}`,
           metadata: {
-            container_id: current.container_id,
-            position: current.position
+            sample_id: current.sample_id,
+            container_id: current.container_id || null,
+            position: current.position || null,
+            is_checked_out: current.is_checked_out || false,
+            checked_out_by: current.checked_out_by || null
           }
         })
       }
@@ -161,8 +167,9 @@ module.exports = async function handler(req: any, res: any){
           entityName: current.sample_id,
           description: `Sample ${current.sample_id} moved`,
           metadata: {
-            from_container: current.container_id,
-            from_position: current.position,
+            sample_id: current.sample_id,
+            from_container: current.container_id || null,
+            from_position: current.position || null,
             to_container: body.container_id || current.container_id,
             to_position: body.position || current.position
           }
@@ -222,8 +229,13 @@ module.exports = async function handler(req: any, res: any){
           entityName: sample.sample_id,
           description: `Sample ${sample.sample_id} permanently deleted`,
           metadata: {
-            container_id: sample.container_id,
-            position: sample.position
+            sample_id: sample.sample_id,
+            container_id: sample.container_id || null,
+            position: sample.position || null,
+            is_checked_out: sample.is_checked_out || false,
+            checked_out_by: sample.checked_out_by || null,
+            previous_container_id: sample.previous_container_id || null,
+            previous_position: sample.previous_position || null
           }
         })
       }

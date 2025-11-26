@@ -154,8 +154,9 @@ module.exports = async function handler(req: any, res: any){
         entityName: normalizedSampleId,
         description: `Sample ${normalizedSampleId} moved`,
         metadata: {
-          from_container: sample.container_id,
-          from_position: sample.position,
+          sample_id: normalizedSampleId,
+          from_container: sample.container_id || null,
+          from_position: sample.position || null,
           to_container: container_id,
           to_position: position,
           source: 'grid_edit'
@@ -215,8 +216,10 @@ module.exports = async function handler(req: any, res: any){
         entityName: normalizedSampleId,
         description: `Sample ${normalizedSampleId} created`,
         metadata: {
+          sample_id: normalizedSampleId,
           container_id: container_id,
           position: position,
+          is_checked_out: false,
           source: 'grid_edit'
         }
       })
