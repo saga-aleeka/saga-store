@@ -326,7 +326,11 @@ export default function App() {
         const isArchiveRoute = route === '#/archive'
         const { data, error } = await supabase
           .from('samples')
-          .select('*, containers!samples_container_id_fkey(id, name, location, type)', { count: 'exact' })
+          .select(`
+            *, 
+            containers!samples_container_id_fkey(id, name, location, type),
+            previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
+          `, { count: 'exact' })
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
           .range(0, 999999)
@@ -353,7 +357,10 @@ export default function App() {
     // Apply type filter
     if (sampleTypeFilters.length > 0) {
       filtered = filtered.filter((s: any) => {
-        const containerType = s.containers?.type || 'Sample Type'
+        // For checked out samples, use previous container type; otherwise use current container type
+        const containerType = s.is_checked_out && s.previous_containers?.type
+          ? s.previous_containers.type
+          : (s.containers?.type || 'Sample Type')
         return sampleTypeFilters.includes(containerType)
       })
     }
@@ -693,7 +700,12 @@ export default function App() {
             
             {/* Sample Type Filters */}
             {(() => {
-              const availableSampleTypes = samples ? Array.from(new Set(samples.map((s: any) => s.containers?.type || 'Sample Type'))).sort() : []
+              const availableSampleTypes = samples ? Array.from(new Set(samples.map((s: any) => {
+                // For checked out samples, use previous container type; otherwise use current container type
+                return s.is_checked_out && s.previous_containers?.type
+                  ? s.previous_containers.type
+                  : (s.containers?.type || 'Sample Type')
+              }))).sort() : []
               
               if (availableSampleTypes.length > 0) {
                 return (
@@ -767,7 +779,10 @@ export default function App() {
                       
                       const containerName = s.containers?.name || s.container_id || '-'
                       const containerLocation = s.containers?.location || '-'
-                      const containerType = s.containers?.type || 'Sample Type'
+                      // For checked out samples, use previous container type; otherwise use current container type
+                      const containerType = s.is_checked_out && s.previous_containers?.type
+                        ? s.previous_containers.type
+                        : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
                       return (
