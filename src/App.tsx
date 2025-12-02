@@ -705,7 +705,7 @@ export default function App() {
                 return s.is_checked_out && s.previous_containers?.type
                   ? s.previous_containers.type
                   : (s.containers?.type || 'Sample Type')
-              }))).sort() : []
+              }))).filter(type => type !== 'Sample Type').sort() : []
               
               if (availableSampleTypes.length > 0) {
                 return (
