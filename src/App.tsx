@@ -13,6 +13,34 @@ import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
 
+// Sample type color mapping (same as ContainerFilters)
+const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
+  'PA Pools': '#fb923c',
+  'DP Pools': '#10b981',
+  'cfDNA Tubes': '#9ca3af',
+  'DTC Tubes': '#7c3aed',
+  'MNC Tubes': '#ef4444',
+  'Plasma Tubes': '#f59e0b',
+  'BC Tubes': '#3b82f6',
+  'IDT Plates': '#06b6d4',
+  'Sample Type': '#6b7280'
+}
+
+// Compute readable text color (white or black) based on background hex
+function readableTextColor(hex: string){
+  try{
+    const h = hex.replace('#','')
+    const r = parseInt(h.substring(0,2),16)/255
+    const g = parseInt(h.substring(2,4),16)/255
+    const b = parseInt(h.substring(4,6),16)/255
+    const Rs = r <= 0.03928 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)
+    const Gs = g <= 0.03928 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4)
+    const Bs = b <= 0.03928 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4)
+    const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
+    return lum > 0.6 ? '#111827' : '#ffffff'
+  }catch(e){ return '#ffffff' }
+}
+
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
 const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
 const _mode = (import.meta as any).env?.MODE ?? (import.meta as any).MODE ?? 'development'
@@ -671,43 +699,42 @@ export default function App() {
                 return (
                   <div style={{marginTop: 12, marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
                     <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                      {availableSampleTypes.map(type => (
-                        <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-                          <input
-                            type="checkbox"
-                            checked={sampleTypeFilters.includes(type)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSampleTypeFilters([...sampleTypeFilters, type])
-                              } else {
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center'}}>
+                      {availableSampleTypes.map(type => {
+                        const active = sampleTypeFilters.includes(type)
+                        const color = SAMPLE_TYPE_COLORS[type] || '#6b7280'
+                        const inactiveBg = `${color}22`
+                        const activeBg = color
+                        const style = active 
+                          ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${color}33`, border: 'none' } 
+                          : { background: inactiveBg, color: color, border: 'none' }
+                        
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              if (active) {
                                 setSampleTypeFilters(sampleTypeFilters.filter(t => t !== type))
+                              } else {
+                                setSampleTypeFilters([...sampleTypeFilters, type])
                               }
                               setCurrentPage(1)
                             }}
-                          />
-                          <span style={{fontSize: 13}}>{type}</span>
-                        </label>
-                      ))}
-                      {sampleTypeFilters.length > 0 && (
-                        <button
-                          onClick={() => {
-                            setSampleTypeFilters([])
-                            setCurrentPage(1)
-                          }}
-                          style={{
-                            padding: '2px 8px',
-                            fontSize: 12,
-                            background: '#fee2e2',
-                            color: '#991b1b',
-                            border: '1px solid #fecaca',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Clear filters
-                        </button>
-                      )}
+                            style={{
+                              ...style,
+                              padding: '6px 12px',
+                              borderRadius: 9999,
+                              fontSize: 14,
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              outline: 'none'
+                            }}
+                          >
+                            {type}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 )
@@ -741,6 +768,7 @@ export default function App() {
                       const containerName = s.containers?.name || s.container_id || '-'
                       const containerLocation = s.containers?.location || '-'
                       const containerType = s.containers?.type || 'Sample Type'
+                      const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
                       return (
                         <tr 
@@ -753,11 +781,11 @@ export default function App() {
                           <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
                           <td style={{padding: 12}}>
                             <span style={{
-                              padding: '2px 8px',
-                              background: '#f3f4f6',
-                              color: '#374151',
-                              borderRadius: 4,
-                              fontSize: 12,
+                              padding: '4px 10px',
+                              background: `${typeColor}22`,
+                              color: typeColor,
+                              borderRadius: 9999,
+                              fontSize: 13,
                               fontWeight: 500
                             }}>
                               {containerType}
