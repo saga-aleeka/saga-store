@@ -23,7 +23,7 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
     const name = containerName.toUpperCase()
     if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
     if (name.includes('DTC')) return 'DTC'
-    if (name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
+    if (name.includes('PA POOL') || name.includes('PAPOOL') || name.includes('PA TUBE') || name.includes('PATUBE')) return 'PA Pools'
     if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
     if (name.includes('MNC')) return 'MNC'
     if (name.includes('IDT')) return 'IDT'
@@ -38,7 +38,8 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   if (/PAP\d+$/i.test(id)) return 'PA Pools'
   if (/DPP\d+[A-D]$/i.test(id)) return 'DP Pools'
   if (/NC\d+$/i.test(id)) return 'MNC'
-  if (/PP\d+$/i.test(id)) return 'IDT'
+  // Match PP followed by 2 or 3 digits at the end (PP## or PP###)
+  if (/PP\d{2,3}$/i.test(id)) return 'IDT'
   if (/BC\d+$/i.test(id)) return 'BC Tubes'
   if (/PL\d+$/i.test(id)) return 'Plasma'
   
