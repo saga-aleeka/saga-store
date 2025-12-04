@@ -534,7 +534,7 @@ export default function AdminDashboard(){
                       if (nameUpper.includes('CFDNA')) return 'cfDNA Tubes'
                       if (nameUpper.includes('DP') && nameUpper.includes('POOL')) return 'DP Pools'
                       if (nameUpper.includes('DTC')) return 'DTC Tubes'
-                      if ((nameUpper.includes('PA') && nameUpper.includes('POOL')) || (nameUpper.includes('PA') && nameUpper.includes('TUBE'))) return 'PA Pools'
+                      if (nameUpper.includes('PA') && nameUpper.includes('POOL')) return 'PA Pools'
                       if (nameUpper.includes('MNC')) return 'MNC Tubes'
                       if (nameUpper.includes('PLASMA')) return 'Plasma Tubes'
                       if (nameUpper.includes('BC')) return 'BC Tubes'
