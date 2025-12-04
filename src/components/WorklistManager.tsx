@@ -3,6 +3,23 @@ import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 
+// Sample type color mapping (matches ContainerFilters)
+const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
+  'PA Pools': '#fb923c',
+  'DP Pools': '#10b981',
+  'cfDNA Tubes': '#9ca3af',
+  'cfDNA': '#9ca3af',
+  'DTC Tubes': '#7c3aed',
+  'DTC': '#7c3aed',
+  'MNC Tubes': '#ef4444',
+  'MNC': '#ef4444',
+  'Plasma Tubes': '#f59e0b',
+  'Plasma': '#f59e0b',
+  'BC Tubes': '#3b82f6',
+  'IDT Plates': '#06b6d4',
+  'IDT': '#06b6d4'
+}
+
 interface WorklistSample {
   sample_id: string
   container_id?: string
@@ -540,22 +557,32 @@ export default function WorklistManager() {
             <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
               <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
               <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {availableTypes.map(type => (
-                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-                    <input
-                      type="checkbox"
-                      checked={selectedTypes.includes(type)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTypes([...selectedTypes, type])
-                        } else {
-                          setSelectedTypes(selectedTypes.filter(t => t !== type))
-                        }
-                      }}
-                    />
-                    <span style={{fontSize: 13}}>{type}</span>
-                  </label>
-                ))}
+                {availableTypes.map(type => {
+                  const typeColor = SAMPLE_TYPE_COLORS[type] || '#6b7280'
+                  return (
+                    <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTypes.includes(type)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTypes([...selectedTypes, type])
+                          } else {
+                            setSelectedTypes(selectedTypes.filter(t => t !== type))
+                          }
+                        }}
+                      />
+                      <span style={{
+                        fontSize: 13,
+                        padding: '4px 10px',
+                        background: `${typeColor}22`,
+                        color: typeColor,
+                        borderRadius: 9999,
+                        fontWeight: 500
+                      }}>{type}</span>
+                    </label>
+                  )
+                })}
                 {selectedTypes.length > 0 && (
                   <button 
                     className="btn ghost" 
@@ -704,11 +731,11 @@ export default function WorklistManager() {
                     <td style={{padding: 12, fontWeight: 600}}>{sample.sample_id}</td>
                     <td style={{padding: 12}}>
                       <span style={{
-                        padding: '2px 8px',
-                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : '#dbeafe',
-                        color: sample.sample_type === 'Unknown' ? '#6b7280' : '#1e40af',
-                        borderRadius: 4,
-                        fontSize: 12,
+                        padding: '4px 10px',
+                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : `${SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'}22`,
+                        color: sample.sample_type === 'Unknown' ? '#6b7280' : (SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'),
+                        borderRadius: 9999,
+                        fontSize: 13,
                         fontWeight: 500
                       }}>
                         {sample.sample_type}
