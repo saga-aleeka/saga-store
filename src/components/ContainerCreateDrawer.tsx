@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react'
+import React, {useState, useRef, useEffect} from 'react'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
 import { supabase } from '../lib/api'
 
@@ -201,48 +201,22 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
         </div>
 
         <div style={{marginTop:12,display:'grid',gap:10}}>
-          {/* Sample Type - First field with template selector */}
-          <div style={{
-            padding: '12px',
-            background: '#f0f9ff',
-            border: '2px solid #3b82f6',
-            borderRadius: '8px',
-            marginBottom: '8px'
-          }}>
-            <label style={{fontWeight: 600, color: '#1e40af'}}>
-              Sample type (Select to apply template)
-              <select 
-                value={form.type} 
-                onChange={(e) => {
-                  const selectedType = e.target.value
-                  if (selectedType !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[selectedType]) {
-                    applyTemplate(selectedType)
-                  } else {
-                    updateField('type', selectedType)
-                  }
-                }}
-                style={{
-                  fontWeight: 600,
-                  fontSize: '15px',
-                  border: '2px solid #3b82f6'
-                }}
-              >
-                {SAMPLE_TYPES.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </label>
-            {form.type && form.type !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[form.type] && (
-              <div style={{
-                marginTop: '8px',
-                padding: '8px',
-                background: 'white',
-                borderRadius: '6px',
-                fontSize: '13px',
-                color: '#475569'
-              }}>
-                <strong>✓ Template applied:</strong> {SAMPLE_TYPE_TEMPLATES[form.type].description}
-              </div>
-            )}
-          </div>
+          <label>
+            Sample Type
+            <select 
+              value={form.type} 
+              onChange={(e) => {
+                const selectedType = e.target.value
+                if (selectedType !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[selectedType]) {
+                  applyTemplate(selectedType)
+                } else {
+                  updateField('type', selectedType)
+                }
+              }}
+            >
+              {SAMPLE_TYPES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </label>
 
           <label>
             Container Name
