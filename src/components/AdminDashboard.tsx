@@ -6,44 +6,87 @@ import { supabase } from '../lib/supabaseClient'
 // Helper to format audit log descriptions with container names and positions
 function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
   const metadata = audit.metadata || {}
+  const sampleId = metadata.sample_id || audit.entity_name
   
-  // If there's already a description with placeholders, replace them
-  if (audit.description) {
-    let desc = audit.description
-    
-    // Replace container placeholders with stored names
-    if (metadata.container_name) {
-      desc = desc.replace(/\{container\}/g, metadata.container_name)
-    }
-    if (metadata.previous_container_name) {
-      desc = desc.replace(/\{container\}/g, metadata.previous_container_name)
-    }
-    if (metadata.from_container_name) {
-      desc = desc.replace(/\{from_container\}/g, metadata.from_container_name)
-    }
-    if (metadata.to_container_name) {
-      desc = desc.replace(/\{to_container\}/g, metadata.to_container_name)
+  // Build detailed description based on action
+  if (audit.entity_type === 'sample') {
+    if (audit.action === 'moved') {
+      const fromContainer = metadata.from_container_name || containerNames.get(metadata.from_container) || 'Unknown'
+      const toContainer = metadata.to_container_name || containerNames.get(metadata.to_container) || 'Unknown'
+      const fromPos = metadata.from_position || '?'
+      const toPos = metadata.to_position || '?'
+      
+      if (fromContainer === toContainer) {
+        return `Sample ${sampleId} moved within ${toContainer} (${fromPos} → ${toPos})`
+      }
+      return `Sample ${sampleId} moved from ${fromContainer} (${fromPos}) to ${toContainer} (${toPos})`
     }
     
-    // Replace position placeholders
-    if (metadata.position) {
-      desc = desc.replace(/\{position\}/g, metadata.position)
-    }
-    if (metadata.previous_position) {
-      desc = desc.replace(/\{position\}/g, metadata.previous_position)
-    }
-    if (metadata.from_position) {
-      desc = desc.replace(/\{from_position\}/g, metadata.from_position)
-    }
-    if (metadata.to_position) {
-      desc = desc.replace(/\{to_position\}/g, metadata.to_position)
+    if (audit.action === 'created' || audit.action === 'inserted') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} created and stored in ${container} (${position})`
     }
     
-    return desc
+    if (audit.action === 'checked_out') {
+      const container = metadata.previous_container_name || containerNames.get(metadata.previous_container_id) || 'Unknown'
+      const position = metadata.previous_position || '?'
+      const displacedBy = metadata.displaced_by ? ` (displaced by ${metadata.displaced_by})` : ''
+      return `Sample ${sampleId} checked out from ${container} (${position})${displacedBy}`
+    }
+    
+    if (audit.action === 'archived') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} archived from ${container} (${position})`
+    }
+    
+    if (audit.action === 'unarchived') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} unarchived in ${container} (${position})`
+    }
+    
+    if (audit.action === 'deleted') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} permanently deleted from ${container} (${position})`
+    }
+    
+    if (audit.action === 'marked_training') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} marked as training in ${container} (${position})`
+    }
+    
+    if (audit.action === 'unmarked_training') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} unmarked as training in ${container} (${position})`
+    }
   }
   
-  // Fallback to entity name if no description
-  return audit.entity_name || 'Unknown action'
+  if (audit.entity_type === 'container') {
+    if (audit.action === 'created') {
+      return `Container ${audit.entity_name} was created`
+    }
+    if (audit.action === 'archived') {
+      return `Container ${audit.entity_name} was archived`
+    }
+    if (audit.action === 'unarchived') {
+      return `Container ${audit.entity_name} was unarchived`
+    }
+    if (audit.action === 'updated') {
+      return `Container ${audit.entity_name} was updated`
+    }
+    if (audit.action === 'deleted') {
+      const sampleCount = metadata.samples_deleted || 0
+      return `Container ${audit.entity_name} was deleted (${sampleCount} samples removed)`
+    }
+  }
+  
+  // Fallback
+  return audit.description || audit.entity_name || 'Unknown action'
 }
 
 // parser helpers
