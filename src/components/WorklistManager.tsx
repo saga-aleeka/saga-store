@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
-import { formatErrorMessage } from '../lib/utils'
+import { formatErrorMessage, retryWithBackoff } from '../lib/utils'
 
 interface WorklistSample {
   sample_id: string
@@ -260,10 +260,15 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get current sample data to save previous positions (case-insensitive)
-      const { data: currentSamples, error: fetchError } = await supabase
-        .from('samples')
-        .select('id, sample_id, container_id, position, is_checked_out')
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const { data: currentSamples, error: fetchError } = await retryWithBackoff(async () => {
+        const result = await supabase
+          .from('samples')
+          .select('id, sample_id, container_id, position, is_checked_out')
+          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+        
+        if (result.error) throw result.error
+        return result
+      })
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
@@ -297,18 +302,23 @@ export default function WorklistManager() {
 
       // Update each sample individually to avoid upsert issues
       for (const update of updates) {
-        const { error: updateError } = await supabase
-          .from('samples')
-          .update({
-            is_checked_out: update.is_checked_out,
-            checked_out_at: update.checked_out_at,
-            checked_out_by: update.checked_out_by,
-            previous_container_id: update.previous_container_id,
-            previous_position: update.previous_position,
-            container_id: update.container_id,
-            position: update.position
-          })
-          .eq('id', update.id)
+        const { error: updateError } = await retryWithBackoff(async () => {
+          const result = await supabase
+            .from('samples')
+            .update({
+              is_checked_out: update.is_checked_out,
+              checked_out_at: update.checked_out_at,
+              checked_out_by: update.checked_out_by,
+              previous_container_id: update.previous_container_id,
+              previous_position: update.previous_position,
+              container_id: update.container_id,
+              position: update.position
+            })
+            .eq('id', update.id)
+          
+          if (result.error) throw result.error
+          return result
+        })
         
         if (updateError) {
           console.error('Error updating sample:', updateError)
@@ -318,10 +328,15 @@ export default function WorklistManager() {
       }
 
       // Refresh worklist with case-insensitive query
-      const { data: refreshed } = await supabase
-        .from('samples')
-        .select('*, containers!samples_container_id_fkey(id, name, location)')
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const { data: refreshed } = await retryWithBackoff(async () => {
+        const result = await supabase
+          .from('samples')
+          .select('*, containers!samples_container_id_fkey(id, name, location)')
+          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+        
+        if (result.error) throw result.error
+        return result
+      })
       
       // Update worklist state with case-insensitive matching
       setWorklist(prev => prev.map(item => {
@@ -360,10 +375,15 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get samples with previous position data (case-insensitive)
-      const { data: samples, error: fetchError } = await supabase
-        .from('samples')
-        .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const { data: samples, error: fetchError } = await retryWithBackoff(async () => {
+        const result = await supabase
+          .from('samples')
+          .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
+          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+        
+        if (result.error) throw result.error
+        return result
+      })
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
@@ -399,18 +419,23 @@ export default function WorklistManager() {
 
       // Update each sample individually to avoid upsert issues
       for (const update of updates) {
-        const { error: updateError } = await supabase
-          .from('samples')
-          .update({
-            container_id: update.container_id,
-            position: update.position,
-            is_checked_out: update.is_checked_out,
-            checked_out_at: update.checked_out_at,
-            checked_out_by: update.checked_out_by,
-            previous_container_id: update.previous_container_id,
-            previous_position: update.previous_position
-          })
-          .eq('id', update.id)
+        const { error: updateError } = await retryWithBackoff(async () => {
+          const result = await supabase
+            .from('samples')
+            .update({
+              container_id: update.container_id,
+              position: update.position,
+              is_checked_out: update.is_checked_out,
+              checked_out_at: update.checked_out_at,
+              checked_out_by: update.checked_out_by,
+              previous_container_id: update.previous_container_id,
+              previous_position: update.previous_position
+            })
+            .eq('id', update.id)
+          
+          if (result.error) throw result.error
+          return result
+        })
         
         if (updateError) {
           console.error('Error restoring sample:', updateError)
