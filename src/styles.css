@@ -172,3 +172,17 @@ body{
 @media (max-width:520px){
 	.container-list{grid-template-columns:1fr}
 }
+
+/* Loading skeleton animations */
+@keyframes shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}
+
+.skeleton {
+	animation: shimmer 1.5s infinite;
+}

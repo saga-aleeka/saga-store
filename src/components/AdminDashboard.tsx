@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react'
 import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
+import { AuditLogSkeleton, TableSkeleton } from './LoadingSkeleton'
 
 // Helper to format audit log descriptions with container names and positions
 function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
@@ -921,7 +922,11 @@ export default function AdminDashboard(){
             )
           })()}
           
-          {audits.loading && <div className="muted" style={{marginTop:12}}>Loading...</div>}
+          {audits.loading && (
+            <div>
+              {[...Array(5)].map((_, i) => <AuditLogSkeleton key={i} />)}
+            </div>
+          )}
           {!audits.loading && audits.data && audits.data.length === 0 && (
             <div className="muted" style={{marginTop:12}}>No audit events</div>
           )}
@@ -973,7 +978,7 @@ export default function AdminDashboard(){
           </div>
           
           <div style={{marginTop:12}}>
-            {backups.loading && <div className="muted">Loading...</div>}
+            {backups.loading && <TableSkeleton rows={3} columns={3} />}
             {!backups.loading && (!backups.data || backups.data.length === 0) && (
               <div className="muted">No backups yet. Create your first manual backup or wait for the nightly backup.</div>
             )}
