@@ -255,6 +255,13 @@ export default function AdminDashboard(){
   const [auditPage, setAuditPage] = useState(1)
   const [auditPerPage, setAuditPerPage] = useState(24)
   const [auditSearchQuery, setAuditSearchQuery] = useState('')
+  
+  // Audit log filters
+  const [auditDateStart, setAuditDateStart] = useState('')
+  const [auditDateEnd, setAuditDateEnd] = useState('')
+  const [auditUserFilter, setAuditUserFilter] = useState<string>('all')
+  const [auditActionFilter, setAuditActionFilter] = useState<string[]>([])
+  const [auditEntityFilter, setAuditEntityFilter] = useState<string[]>([])
 
   // fetch authorized users (server-side endpoint will use service role key in production)
   const authUsers = useFetch<any[]>('/api/admin_users')
@@ -699,30 +706,232 @@ export default function AdminDashboard(){
             />
           </div>
           
+          {/* Filters */}
+          <div style={{
+            marginBottom:12,
+            padding:12,
+            background:'#f9fafb',
+            borderRadius:6,
+            border:'1px solid #e5e7eb'
+          }}>
+            <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'flex-end'}}>
+              {/* Date Range */}
+              <div style={{flex:'0 1 auto'}}>
+                <label style={{display:'block',fontSize:12,color:'#6b7280',marginBottom:4}}>Start Date</label>
+                <input
+                  type="date"
+                  value={auditDateStart}
+                  onChange={(e) => {
+                    setAuditDateStart(e.target.value)
+                    setAuditPage(1)
+                  }}
+                  style={{
+                    padding:'6px 8px',
+                    borderRadius:4,
+                    border:'1px solid #d1d5db',
+                    fontSize:13
+                  }}
+                />
+              </div>
+              
+              <div style={{flex:'0 1 auto'}}>
+                <label style={{display:'block',fontSize:12,color:'#6b7280',marginBottom:4}}>End Date</label>
+                <input
+                  type="date"
+                  value={auditDateEnd}
+                  onChange={(e) => {
+                    setAuditDateEnd(e.target.value)
+                    setAuditPage(1)
+                  }}
+                  style={{
+                    padding:'6px 8px',
+                    borderRadius:4,
+                    border:'1px solid #d1d5db',
+                    fontSize:13
+                  }}
+                />
+              </div>
+              
+              {/* User Filter */}
+              <div style={{flex:'0 1 auto'}}>
+                <label style={{display:'block',fontSize:12,color:'#6b7280',marginBottom:4}}>User</label>
+                <select
+                  value={auditUserFilter}
+                  onChange={(e) => {
+                    setAuditUserFilter(e.target.value)
+                    setAuditPage(1)
+                  }}
+                  style={{
+                    padding:'6px 8px',
+                    borderRadius:4,
+                    border:'1px solid #d1d5db',
+                    fontSize:13,
+                    minWidth:120
+                  }}
+                >
+                  <option value="all">All Users</option>
+                  {audits.data && Array.from(new Set(audits.data
+                    .map((a: any) => a.user_initials)
+                    .filter(Boolean)
+                  )).sort().map((initials: any) => (
+                    <option key={initials} value={initials}>{initials}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Action Type Multi-Select */}
+              <div style={{flex:'0 1 auto'}}>
+                <label style={{display:'block',fontSize:12,color:'#6b7280',marginBottom:4}}>Actions</label>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {['created', 'updated', 'deleted', 'archived', 'unarchived'].map(action => (
+                    <label key={action} style={{
+                      display:'flex',
+                      alignItems:'center',
+                      gap:4,
+                      padding:'4px 8px',
+                      background: auditActionFilter.includes(action) ? '#dbeafe' : 'white',
+                      border:'1px solid #d1d5db',
+                      borderRadius:4,
+                      fontSize:12,
+                      cursor:'pointer',
+                      userSelect:'none'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={auditActionFilter.includes(action)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAuditActionFilter([...auditActionFilter, action])
+                          } else {
+                            setAuditActionFilter(auditActionFilter.filter(a => a !== action))
+                          }
+                          setAuditPage(1)
+                        }}
+                        style={{margin:0}}
+                      />
+                      {action}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Entity Type Multi-Select */}
+              <div style={{flex:'0 1 auto'}}>
+                <label style={{display:'block',fontSize:12,color:'#6b7280',marginBottom:4}}>Entity Type</label>
+                <div style={{display:'flex',gap:6}}>
+                  {['container', 'sample'].map(entity => (
+                    <label key={entity} style={{
+                      display:'flex',
+                      alignItems:'center',
+                      gap:4,
+                      padding:'4px 8px',
+                      background: auditEntityFilter.includes(entity) ? '#dbeafe' : 'white',
+                      border:'1px solid #d1d5db',
+                      borderRadius:4,
+                      fontSize:12,
+                      cursor:'pointer',
+                      userSelect:'none'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={auditEntityFilter.includes(entity)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAuditEntityFilter([...auditEntityFilter, entity])
+                          } else {
+                            setAuditEntityFilter(auditEntityFilter.filter(t => t !== entity))
+                          }
+                          setAuditPage(1)
+                        }}
+                        style={{margin:0}}
+                      />
+                      {entity}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Clear Filters Button */}
+              {(auditDateStart || auditDateEnd || auditUserFilter !== 'all' || 
+                auditActionFilter.length > 0 || auditEntityFilter.length > 0) && (
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    setAuditDateStart('')
+                    setAuditDateEnd('')
+                    setAuditUserFilter('all')
+                    setAuditActionFilter([])
+                    setAuditEntityFilter([])
+                    setAuditPage(1)
+                  }}
+                  style={{fontSize:12}}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+          
           {/* Pagination controls */}
           {!audits.loading && audits.data && audits.data.length > 0 && (() => {
-            // Filter audit logs based on search query
-            const filteredAudits = auditSearchQuery.trim() === '' 
-              ? audits.data 
-              : audits.data.filter((a: any) => {
-                  const query = auditSearchQuery.toLowerCase().trim()
-                  
-                  // Search in entity name (sample ID or container name)
-                  if (a.entity_name?.toLowerCase().includes(query)) return true
-                  
-                  // Search in description
-                  if (a.description?.toLowerCase().includes(query)) return true
-                  
-                  // Search in container names from metadata
-                  if (a.metadata?.container_id && containerNames.get(a.metadata.container_id)?.toLowerCase().includes(query)) return true
-                  if (a.metadata?.from_container && containerNames.get(a.metadata.from_container)?.toLowerCase().includes(query)) return true
-                  if (a.metadata?.to_container && containerNames.get(a.metadata.to_container)?.toLowerCase().includes(query)) return true
-                  
-                  // Search in entity_id if it's a container
-                  if (a.entity_type === 'container' && a.entity_id && containerNames.get(a.entity_id)?.toLowerCase().includes(query)) return true
-                  
-                  return false
-                })
+            // Filter audit logs based on search query and filters
+            let filteredAudits = audits.data
+            
+            // Apply search query filter
+            if (auditSearchQuery.trim() !== '') {
+              const query = auditSearchQuery.toLowerCase().trim()
+              filteredAudits = filteredAudits.filter((a: any) => {
+                // Search in entity name (sample ID or container name)
+                if (a.entity_name?.toLowerCase().includes(query)) return true
+                
+                // Search in description
+                if (a.description?.toLowerCase().includes(query)) return true
+                
+                // Search in container names from metadata
+                if (a.metadata?.container_id && containerNames.get(a.metadata.container_id)?.toLowerCase().includes(query)) return true
+                if (a.metadata?.from_container && containerNames.get(a.metadata.from_container)?.toLowerCase().includes(query)) return true
+                if (a.metadata?.to_container && containerNames.get(a.metadata.to_container)?.toLowerCase().includes(query)) return true
+                
+                // Search in entity_id if it's a container
+                if (a.entity_type === 'container' && a.entity_id && containerNames.get(a.entity_id)?.toLowerCase().includes(query)) return true
+                
+                return false
+              })
+            }
+            
+            // Apply date range filter
+            if (auditDateStart) {
+              const startDate = new Date(auditDateStart)
+              startDate.setHours(0, 0, 0, 0)
+              filteredAudits = filteredAudits.filter((a: any) => {
+                const auditDate = new Date(a.created_at)
+                return auditDate >= startDate
+              })
+            }
+            
+            if (auditDateEnd) {
+              const endDate = new Date(auditDateEnd)
+              endDate.setHours(23, 59, 59, 999)
+              filteredAudits = filteredAudits.filter((a: any) => {
+                const auditDate = new Date(a.created_at)
+                return auditDate <= endDate
+              })
+            }
+            
+            // Apply user filter
+            if (auditUserFilter !== 'all') {
+              filteredAudits = filteredAudits.filter((a: any) => a.user_initials === auditUserFilter)
+            }
+            
+            // Apply action filter
+            if (auditActionFilter.length > 0) {
+              filteredAudits = filteredAudits.filter((a: any) => auditActionFilter.includes(a.action))
+            }
+            
+            // Apply entity type filter
+            if (auditEntityFilter.length > 0) {
+              filteredAudits = filteredAudits.filter((a: any) => auditEntityFilter.includes(a.entity_type))
+            }
             
             const totalPages = Math.ceil(filteredAudits.length / auditPerPage)
             
