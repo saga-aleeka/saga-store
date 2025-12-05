@@ -11,6 +11,43 @@ async function createAuditLog(supabaseAdmin: any, params: {
   description?: string | null
 }) {
   try {
+    // Fetch container names for any container IDs in metadata
+    let enhancedMetadata = params.metadata ? { ...params.metadata } : {}
+    
+    if (params.metadata) {
+      const containerIds = new Set<string>()
+      
+      // Collect all container IDs from metadata
+      if (params.metadata.container_id) containerIds.add(params.metadata.container_id)
+      if (params.metadata.previous_container_id) containerIds.add(params.metadata.previous_container_id)
+      if (params.metadata.from_container) containerIds.add(params.metadata.from_container)
+      if (params.metadata.to_container) containerIds.add(params.metadata.to_container)
+      
+      // Fetch container names in batch
+      if (containerIds.size > 0) {
+        const { data: containers } = await supabaseAdmin
+          .from('containers')
+          .select('id, name')
+          .in('id', Array.from(containerIds))
+        
+        const containerMap = new Map(containers?.map((c: any) => [c.id, c.name]) || [])
+        
+        // Add container names to metadata
+        if (params.metadata.container_id) {
+          enhancedMetadata.container_name = containerMap.get(params.metadata.container_id) || params.metadata.container_id
+        }
+        if (params.metadata.previous_container_id) {
+          enhancedMetadata.previous_container_name = containerMap.get(params.metadata.previous_container_id) || params.metadata.previous_container_id
+        }
+        if (params.metadata.from_container) {
+          enhancedMetadata.from_container_name = containerMap.get(params.metadata.from_container) || params.metadata.from_container
+        }
+        if (params.metadata.to_container) {
+          enhancedMetadata.to_container_name = containerMap.get(params.metadata.to_container) || params.metadata.to_container
+        }
+      }
+    }
+
     const insert = {
       user_initials: params.userInitials ?? null,
       user_name: params.userName ?? null,
@@ -19,7 +56,7 @@ async function createAuditLog(supabaseAdmin: any, params: {
       action: params.action,
       entity_name: params.entityName ?? null,
       changes: params.changes ?? null,
-      metadata: params.metadata ?? null,
+      metadata: enhancedMetadata,
       description: params.description ?? null
     }
 

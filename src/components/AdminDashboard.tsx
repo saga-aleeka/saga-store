@@ -3,6 +3,49 @@ import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 
+// Helper to format audit log descriptions with container names and positions
+function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
+  const metadata = audit.metadata || {}
+  
+  // If there's already a description with placeholders, replace them
+  if (audit.description) {
+    let desc = audit.description
+    
+    // Replace container placeholders
+    if (metadata.container_id && metadata.container_name) {
+      desc = desc.replace('{container}', metadata.container_name)
+    }
+    if (metadata.previous_container_id && metadata.previous_container_name) {
+      desc = desc.replace('{container}', metadata.previous_container_name)
+    }
+    if (metadata.from_container && metadata.from_container_name) {
+      desc = desc.replace('{from_container}', metadata.from_container_name)
+    }
+    if (metadata.to_container && metadata.to_container_name) {
+      desc = desc.replace('{to_container}', metadata.to_container_name)
+    }
+    
+    // Replace position placeholders
+    if (metadata.position) {
+      desc = desc.replace('{position}', metadata.position)
+    }
+    if (metadata.previous_position) {
+      desc = desc.replace('{position}', metadata.previous_position)
+    }
+    if (metadata.from_position) {
+      desc = desc.replace('{from_position}', metadata.from_position)
+    }
+    if (metadata.to_position) {
+      desc = desc.replace('{to_position}', metadata.to_position)
+    }
+    
+    return desc
+  }
+  
+  // Fallback to entity name if no description
+  return audit.entity_name || 'Unknown action'
+}
+
 // parser helpers
 function parseGridText(raw: string){
   if (!raw || !raw.trim()) return { boxes: [], items: [] }
@@ -812,7 +855,9 @@ export default function AdminDashboard(){
                       </span>
                     )}
                   </div>
-                  <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.description || a.entity_name}</div>
+                  <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>
+                    {formatAuditDescription(a, containerNames)}
+                  </div>
                   {a.entity_name && a.description && a.entity_type === 'container' && (
                     <div className="muted" style={{fontSize:12}}>Container: {containerNames.get(a.entity_id) || a.entity_name}</div>
                   )}
