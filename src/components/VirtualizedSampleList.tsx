@@ -69,6 +69,7 @@ export default function VirtualizedSampleList({
                   ? s.previous_containers.type
                   : (s.containers?.type || 'Sample Type')
                 const typeColor = sampleTypeColors[containerType] || '#6b7280'
+                const isCheckedOutByMe = s.is_checked_out && user && s.checked_out_by === user.initials
                 
                 return (
                   <tr
@@ -89,12 +90,26 @@ export default function VirtualizedSampleList({
                   >
                     <td style={{padding: 12, width: '15%', fontWeight: s.is_checked_out ? 600 : 400}}>
                       {s.sample_id}
-                      {s.is_checked_out && (
+                      {isCheckedOutByMe && (
                         <span style={{
                           marginLeft: 8,
-                          padding: '2px 6px',
+                          padding: '3px 8px',
                           fontSize: 11,
-                          borderRadius: 4,
+                          borderRadius: 12,
+                          background: '#f3e8ff',
+                          color: '#7c3aed',
+                          fontWeight: 600,
+                          border: '1px solid #e9d5ff'
+                        }}>
+                          ✓ MY CHECKOUT
+                        </span>
+                      )}
+                      {s.is_checked_out && !isCheckedOutByMe && (
+                        <span style={{
+                          marginLeft: 8,
+                          padding: '3px 8px',
+                          fontSize: 11,
+                          borderRadius: 12,
                           background: '#fee2e2',
                           color: '#991b1b',
                           fontWeight: 600
@@ -105,9 +120,9 @@ export default function VirtualizedSampleList({
                       {s.is_archived && (
                         <span style={{
                           marginLeft: 8,
-                          padding: '2px 6px',
+                          padding: '3px 8px',
                           fontSize: 11,
-                          borderRadius: 4,
+                          borderRadius: 12,
                           background: '#fef3c7',
                           color: '#92400e',
                           fontWeight: 600

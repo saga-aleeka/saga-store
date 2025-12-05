@@ -862,6 +862,7 @@ export default function App() {
                         ? s.previous_containers.type
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
+                      const isCheckedOutByMe = s.is_checked_out && user && s.checked_out_by === user.initials
                       
                       return (
                         <tr 
@@ -871,7 +872,49 @@ export default function App() {
                             background: 'white'
                           }}
                         >
-                          <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
+                          <td style={{padding: 12, fontWeight: 600}}>
+                            {s.sample_id}
+                            {isCheckedOutByMe && (
+                              <span style={{
+                                marginLeft: 8,
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                borderRadius: 12,
+                                background: '#f3e8ff',
+                                color: '#7c3aed',
+                                fontWeight: 600,
+                                border: '1px solid #e9d5ff'
+                              }}>
+                                ✓ MY CHECKOUT
+                              </span>
+                            )}
+                            {s.is_checked_out && !isCheckedOutByMe && (
+                              <span style={{
+                                marginLeft: 8,
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                borderRadius: 12,
+                                background: '#fee2e2',
+                                color: '#991b1b',
+                                fontWeight: 600
+                              }}>
+                                CHECKED OUT
+                              </span>
+                            )}
+                            {s.is_archived && (
+                              <span style={{
+                                marginLeft: 8,
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                borderRadius: 12,
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                fontWeight: 600
+                              }}>
+                                ARCHIVED
+                              </span>
+                            )}
+                          </td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '4px 10px',
