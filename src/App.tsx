@@ -101,6 +101,9 @@ export default function App() {
   // Command palette state
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   
+  // Grid keyboard navigation state
+  const [focusedContainerIndex, setFocusedContainerIndex] = useState<number>(-1)
+  
   // Cmd+K keyboard shortcut for command palette
   useKeyboardShortcut({
     key: 'k',
@@ -236,6 +239,75 @@ export default function App() {
     if (route === '#/containers') load()
     return () => { mounted = false }
   }, [route])
+  
+  // Keyboard navigation for container grid
+  useEffect(() => {
+    if (route !== '#/containers' || commandPaletteOpen) return
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't interfere with input fields
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      
+      const currentPageContainers = filteredContainers.slice(
+        (containersCurrentPage - 1) * containersPerPage,
+        containersCurrentPage * containersPerPage
+      )
+      
+      if (currentPageContainers.length === 0) return
+      
+      // Calculate grid columns (same logic as CSS)
+      const width = window.innerWidth
+      let columns = Math.floor(width / 280) // minmax(280px, 1fr)
+      if (width >= 1024) columns = Math.floor(width / 320)
+      if (width <= 768) columns = Math.floor(width / 240)
+      if (width <= 640) columns = 1
+      columns = Math.max(1, columns)
+      
+      let newIndex = focusedContainerIndex
+      
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        newIndex = focusedContainerIndex === -1 ? 0 : Math.min(focusedContainerIndex + 1, currentPageContainers.length - 1)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        newIndex = focusedContainerIndex === -1 ? 0 : Math.max(focusedContainerIndex - 1, 0)
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (focusedContainerIndex === -1) {
+          newIndex = 0
+        } else {
+          const nextRow = focusedContainerIndex + columns
+          newIndex = Math.min(nextRow, currentPageContainers.length - 1)
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (focusedContainerIndex === -1) {
+          newIndex = 0
+        } else {
+          const prevRow = focusedContainerIndex - columns
+          newIndex = Math.max(prevRow, 0)
+        }
+      } else if (e.key === 'Enter' && focusedContainerIndex >= 0 && focusedContainerIndex < currentPageContainers.length) {
+        e.preventDefault()
+        const container = currentPageContainers[focusedContainerIndex]
+        window.location.hash = `#/containers/${container.id}`
+        return
+      }
+      
+      setFocusedContainerIndex(newIndex)
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [route, focusedContainerIndex, filteredContainers, containersCurrentPage, containersPerPage, commandPaletteOpen])
+  
+  // Reset focused index when page changes
+  useEffect(() => {
+    setFocusedContainerIndex(-1)
+  }, [containersCurrentPage, route])
 
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
@@ -666,19 +738,31 @@ export default function App() {
                     : 'No active containers'}
                 </div>
               )}
-              {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
-                <ContainerCard 
-                  key={c.id} 
-                  id={c.id} 
-                  name={c.name} 
-                  type={c.type} 
-                  temperature={c.temperature} 
-                  layout={c.layout} 
-                  occupancy={{used:c.used,total:c.total}} 
-                  updatedAt={c.updated_at} 
-                  location={c.location} 
-                  training={c.training}
-                />
+              {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c, idx) => (
+                <div
+                  key={c.id}
+                  style={{
+                    outline: focusedContainerIndex === idx ? '3px solid #3b82f6' : 'none',
+                    outlineOffset: '-3px',
+                    borderRadius: 12,
+                    transition: 'outline 0.15s'
+                  }}
+                  tabIndex={0}
+                  onClick={() => setFocusedContainerIndex(idx)}
+                  onFocus={() => setFocusedContainerIndex(idx)}
+                >
+                  <ContainerCard 
+                    id={c.id} 
+                    name={c.name} 
+                    type={c.type} 
+                    temperature={c.temperature} 
+                    layout={c.layout} 
+                    occupancy={{used:c.used,total:c.total}} 
+                    updatedAt={c.updated_at} 
+                    location={c.location} 
+                    training={c.training}
+                  />
+                </div>
               ))}
             </div>
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
