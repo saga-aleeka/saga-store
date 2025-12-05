@@ -196,11 +196,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
               onChange={(e) => {
                 const selectedType = e.target.value
                 if (selectedType !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[selectedType]) {
-                  if (window.confirm(`Apply ${selectedType} template? This will update dimension and temperature settings.`)) {
-                    applyTemplate(selectedType)
-                  } else {
-                    updateField('type', selectedType)
-                  }
+                  applyTemplate(selectedType)
                 } else {
                   updateField('type', selectedType)
                 }
