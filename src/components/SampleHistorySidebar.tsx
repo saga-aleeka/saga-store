@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getToken, getUser } from '../lib/auth'
+import { getToken } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 
@@ -155,32 +155,31 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setCheckingOut(true)
     try {
-      const user = getUser()
-      const token = getToken()
+      const token = localStorage.getItem('token')
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      const username = user.username || 'Unknown'
 
-      if (!user || !token) {
-        alert('You must be signed in to checkout samples')
-        return
-      }
-
-      const { error } = await supabase
-        .from('samples')
-        .update({
-          is_checked_out: true,
-          checked_out_at: new Date().toISOString(),
-          checked_out_by: user.initials,
-          previous_container_id: sample.container_id,
-          previous_position: sample.position,
-          container_id: null,
-          position: null
+      const res = await fetch('/api/samples', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          samples: [{
+            sample_id: sample.sample_id,
+            is_checked_out: true,
+            previous_container_id: sample.container_id,
+            previous_position: sample.position,
+            checked_out_at: new Date().toISOString(),
+            checked_out_by: username,
+            container_id: null,
+            position: null
+          }]
         })
-        .eq('id', sample.id)
+      })
 
-      if (error) {
-        console.error('Checkout error:', error)
-        alert(`Failed to checkout sample: ${error.message}`)
-        return
-      }
+      if (!res.ok) throw new Error('Failed to checkout sample')
       
       onUpdate?.()
       onClose()

@@ -21,26 +21,26 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   // First try to detect from container name (more reliable)
   if (containerName) {
     const name = containerName.toUpperCase()
-    if (name.includes('CFDNA') || name.includes('CF DNA') || name.includes('CF_DNA')) return 'cfDNA Tubes'
-    if (name.includes('DTC')) return 'DTC Tubes'
-    if (name.includes('PAP_POOL') || name.includes('PA_POOL') || name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
-    if (name.includes('DP_POOL') || name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE') || name.includes('DP_TUBE')) return 'DP Pools'
-    if (name.includes('MNC')) return 'MNC Tubes'
-    if (name.includes('IDT')) return 'IDT Plates'
-    if (name.includes('BC_TUBE') || name.includes('BC TUBE') || name.includes('BCTUBE') || name.includes('BC_BOX') || name.includes('BC BOX')) return 'BC Tubes'
-    if (name.includes('PLASMA')) return 'Plasma Tubes'
+    if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
+    if (name.includes('DTC')) return 'DTC'
+    if (name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
+    if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
+    if (name.includes('MNC')) return 'MNC'
+    if (name.includes('IDT')) return 'IDT'
+    if (name.includes('BC TUBE') || name.includes('BCTUBE')) return 'BC Tubes'
+    if (name.includes('PLASMA')) return 'Plasma'
   }
   
   // Fallback to sample ID pattern matching
   const id = sampleId.toUpperCase()
-  if (/CD\d+$/i.test(id)) return 'cfDNA Tubes'
-  if (/TC\d+$/i.test(id)) return 'DTC Tubes'
-  if (/PAP\d+[A-Z]*$/i.test(id)) return 'PA Pools'
+  if (/CD\d+$/i.test(id)) return 'cfDNA'
+  if (/TC\d+$/i.test(id)) return 'DTC'
+  if (/PAP\d+$/i.test(id)) return 'PA Pools'
   if (/DPP\d+[A-D]$/i.test(id)) return 'DP Pools'
-  if (/NC\d+$/i.test(id)) return 'MNC Tubes'
-  if (/PP\d+$/i.test(id)) return 'IDT Plates'
+  if (/NC\d+$/i.test(id)) return 'MNC'
+  if (/PP\d+$/i.test(id)) return 'IDT'
   if (/BC\d+$/i.test(id)) return 'BC Tubes'
-  if (/PL\d+$/i.test(id)) return 'Plasma Tubes'
+  if (/PL\d+$/i.test(id)) return 'Plasma'
   
   return 'Unknown'
 }

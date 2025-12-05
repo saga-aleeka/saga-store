@@ -11,35 +11,6 @@ import WorklistContainerView from './components/WorklistContainerView'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
-import { SAMPLE_TYPES } from './constants'
-
-// Sample type color mapping (same as ContainerFilters)
-const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
-  'PA Pools': '#fb923c',
-  'DP Pools': '#10b981',
-  'cfDNA Tubes': '#9ca3af',
-  'DTC Tubes': '#7c3aed',
-  'MNC Tubes': '#ef4444',
-  'Plasma Tubes': '#f59e0b',
-  'BC Tubes': '#3b82f6',
-  'IDT Plates': '#06b6d4',
-  'Sample Type': '#6b7280'
-}
-
-// Compute readable text color (white or black) based on background hex
-function readableTextColor(hex: string){
-  try{
-    const h = hex.replace('#','')
-    const r = parseInt(h.substring(0,2),16)/255
-    const g = parseInt(h.substring(2,4),16)/255
-    const b = parseInt(h.substring(4,6),16)/255
-    const Rs = r <= 0.03928 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)
-    const Gs = g <= 0.03928 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4)
-    const Bs = b <= 0.03928 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4)
-    const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
-    return lum > 0.6 ? '#111827' : '#ffffff'
-  }catch(e){ return '#ffffff' }
-}
 
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
 const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
@@ -80,8 +51,6 @@ export default function App() {
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
   // search
   const [searchQuery, setSearchQuery] = useState('')
-  // sample type filters for samples page
-  const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
 
   // Reset to page 1 when search changes
   useEffect(() => {
@@ -326,11 +295,7 @@ export default function App() {
         const isArchiveRoute = route === '#/archive'
         const { data, error } = await supabase
           .from('samples')
-          .select(`
-            *, 
-            containers!samples_container_id_fkey(id, name, location, type),
-            previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
-          `, { count: 'exact' })
+          .select('*, containers!samples_container_id_fkey(id, name, location)', { count: 'exact' })
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
           .range(0, 999999)
@@ -349,34 +314,18 @@ export default function App() {
     return () => { mounted = false }
   }, [route])
 
-  // Apply search filter and type filter to samples
+  // Apply search filter to samples
   const filteredSamples = React.useMemo(() => {
     if (!samples) return []
-    let filtered = samples
+    if (!searchQuery.trim()) return samples
     
-    // Apply type filter
-    if (sampleTypeFilters.length > 0) {
-      filtered = filtered.filter((s: any) => {
-        // For checked out samples, use previous container type; otherwise use current container type
-        const containerType = s.is_checked_out && s.previous_containers?.type
-          ? s.previous_containers.type
-          : (s.containers?.type || 'Sample Type')
-        return sampleTypeFilters.includes(containerType)
-      })
-    }
-    
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
-      filtered = filtered.filter((s: any) => {
-        const checkedOutText = s.is_checked_out ? 'checked out' : ''
-        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
-        return terms.some(term => searchText.includes(term))
-      })
-    }
-    
-    return filtered
-  }, [samples, searchQuery, sampleTypeFilters])
+    const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    return samples.filter((s: any) => {
+      const checkedOutText = s.is_checked_out ? 'checked out' : ''
+      const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
+      return terms.some(term => searchText.includes(term))
+    })
+  }, [samples, searchQuery])
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -668,7 +617,7 @@ export default function App() {
 
         {route === '#/samples' && (
           <div>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
               <div className="muted">
                 Showing {filteredSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredSamples.length)} of ${filteredSamples.length}` : '...'} samples
               </div>
@@ -697,63 +646,6 @@ export default function App() {
                 ))}
               </div>
             </div>
-            
-            {/* Sample Type Filters */}
-            {(() => {
-              const availableSampleTypes = samples ? Array.from(new Set(samples.map((s: any) => {
-                // For checked out samples, use previous container type; otherwise use current container type
-                return s.is_checked_out && s.previous_containers?.type
-                  ? s.previous_containers.type
-                  : (s.containers?.type || 'Sample Type')
-              }))).filter(type => type !== 'Sample Type').sort() : []
-              
-              if (availableSampleTypes.length > 0) {
-                return (
-                  <div style={{marginTop: 12, marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
-                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center'}}>
-                      {availableSampleTypes.map(type => {
-                        const active = sampleTypeFilters.includes(type)
-                        const color = SAMPLE_TYPE_COLORS[type] || '#6b7280'
-                        const inactiveBg = `${color}22`
-                        const activeBg = color
-                        const style = active 
-                          ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${color}33`, border: 'none' } 
-                          : { background: inactiveBg, color: color, border: 'none' }
-                        
-                        return (
-                          <button
-                            key={type}
-                            onClick={() => {
-                              if (active) {
-                                setSampleTypeFilters(sampleTypeFilters.filter(t => t !== type))
-                              } else {
-                                setSampleTypeFilters([...sampleTypeFilters, type])
-                              }
-                              setCurrentPage(1)
-                            }}
-                            style={{
-                              ...style,
-                              padding: '6px 12px',
-                              borderRadius: 9999,
-                              fontSize: 14,
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              outline: 'none'
-                            }}
-                          >
-                            {type}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              }
-              return null
-            })()}
-            
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
@@ -762,7 +654,6 @@ export default function App() {
                   <thead style={{background: '#f3f4f6'}}>
                     <tr>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
@@ -779,11 +670,6 @@ export default function App() {
                       
                       const containerName = s.containers?.name || s.container_id || '-'
                       const containerLocation = s.containers?.location || '-'
-                      // For checked out samples, use previous container type; otherwise use current container type
-                      const containerType = s.is_checked_out && s.previous_containers?.type
-                        ? s.previous_containers.type
-                        : (s.containers?.type || 'Sample Type')
-                      const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
                       return (
                         <tr 
@@ -794,18 +680,6 @@ export default function App() {
                           }}
                         >
                           <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
-                          <td style={{padding: 12}}>
-                            <span style={{
-                              padding: '4px 10px',
-                              background: `${typeColor}22`,
-                              color: typeColor,
-                              borderRadius: 9999,
-                              fontSize: 13,
-                              fontWeight: 500
-                            }}>
-                              {containerType}
-                            </span>
-                          </td>
                           <td style={{padding: 12}}>{containerLocation}</td>
                           <td style={{padding: 12}}>{containerName}</td>
                           <td style={{padding: 12}}>
