@@ -73,6 +73,7 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
         .from('containers')
         .select('name')
         .eq('type', sampleType)
+        .eq('archived', false)
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
