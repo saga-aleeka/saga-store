@@ -489,25 +489,46 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                   background: '#f9fafb',
                   borderRadius: '8px',
                   borderLeft: '3px solid #3b82f6',
-                  fontSize: '13px'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
                 }}
               >
-                <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    padding: '3px 8px',
+                    background: event.action === 'moved' ? '#e0e7ff' : 
+                               event.action === 'inserted' ? '#dcfce7' : 
+                               event.action === 'archived' ? '#fed7aa' : '#e5e7eb',
+                    color: event.action === 'moved' ? '#3730a3' : 
+                          event.action === 'inserted' ? '#166534' : 
+                          event.action === 'archived' ? '#9a3412' : '#374151',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase'
+                  }}>
+                    {getActionLabel(event.action)}
+                  </span>
+                  {event.user && (
+                    <span style={{
+                      padding: '3px 8px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600
+                    }}>
+                      {event.user}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: 'auto' }}>
+                    {formatDateTime(event.when)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
                   {formatHistoryDescription(event)}
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '8px' }}>
-                  {formatDateTime(event.when)}
-                </div>
-                {event.user && (
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                    By: {event.user}
-                  </div>
-                )}
-                {event.source && (
-                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-                    Source: {event.source}
-                  </div>
-                )}
               </div>
             ))}
           </div>

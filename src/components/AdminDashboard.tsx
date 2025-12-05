@@ -820,52 +820,54 @@ export default function AdminDashboard(){
                   {filteredAudits
                     .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
                     .map((a:any) => (
-              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6}}>
-                <div style={{flex:1}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6,display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{
+                    padding:'3px 8px',
+                    background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
+                    color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
+                    borderRadius:4,
+                    fontSize:11,
+                    fontWeight:600,
+                    textTransform:'uppercase'
+                  }}>
+                    {a.entity_type}
+                  </span>
+                  <span style={{
+                    padding:'3px 8px',
+                    background: a.action === 'deleted' ? '#fee2e2' : 
+                               a.action === 'created' ? '#dcfce7' : 
+                               a.action === 'archived' ? '#fed7aa' : 
+                               a.action === 'moved' ? '#e0e7ff' : '#e5e7eb',
+                    color: a.action === 'deleted' ? '#991b1b' : 
+                          a.action === 'created' ? '#166534' : 
+                          a.action === 'archived' ? '#9a3412' : 
+                          a.action === 'moved' ? '#3730a3' : '#374151',
+                    borderRadius:4,
+                    fontSize:11,
+                    fontWeight:600,
+                    textTransform:'uppercase'
+                  }}>
+                    {a.action}
+                  </span>
+                  {a.user_initials && (
                     <span style={{
-                      padding:'2px 8px',
-                      background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
-                      color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
+                      padding:'3px 8px',
+                      background:'#f3f4f6',
+                      color:'#374151',
                       borderRadius:4,
                       fontSize:11,
-                      fontWeight:600,
-                      textTransform:'uppercase'
+                      fontWeight:600
                     }}>
-                      {a.entity_type}
+                      {a.user_initials}
                     </span>
-                    <span style={{
-                      padding:'2px 8px',
-                      background: a.action === 'deleted' ? '#fee2e2' : 
-                                 a.action === 'created' ? '#dcfce7' : 
-                                 a.action === 'archived' ? '#fed7aa' : '#e5e7eb',
-                      color: a.action === 'deleted' ? '#991b1b' : 
-                            a.action === 'created' ? '#166534' : 
-                            a.action === 'archived' ? '#9a3412' : '#374151',
-                      borderRadius:4,
-                      fontSize:11,
-                      fontWeight:600,
-                      textTransform:'uppercase'
-                    }}>
-                      {a.action}
-                    </span>
-                    {a.user_initials && (
-                      <span style={{fontSize:12,color:'#6b7280'}}>
-                        by <strong>{a.user_initials}</strong>{a.user_name ? ` (${a.user_name})` : ''}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>
-                    {formatAuditDescription(a, containerNames)}
-                  </div>
-                  {a.metadata && a.metadata.source && (
-                    <div className="muted" style={{fontSize:12,marginTop:4}}>
-                      Source: {a.metadata.source}
-                    </div>
                   )}
+                  <span className="muted" style={{fontSize:11,marginLeft:'auto'}}>
+                    {formatDateTime(a.created_at)}
+                  </span>
                 </div>
-                <div className="muted" style={{fontSize:11,whiteSpace:'nowrap',alignSelf:'flex-start'}}>
-                  {formatDateTime(a.created_at)}
+                <div style={{fontSize:14,color:'#374151',lineHeight:1.5}}>
+                  {formatAuditDescription(a, containerNames)}
                 </div>
               </div>
             ))}
