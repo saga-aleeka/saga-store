@@ -863,54 +863,56 @@ export default function AdminDashboard(){
                   {filteredAudits
                     .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
                     .map((a:any) => (
-              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6,display:'flex',flexDirection:'column',gap:8}}>
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{
-                    padding:'3px 8px',
-                    background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
-                    color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
-                    borderRadius:4,
-                    fontSize:11,
-                    fontWeight:600,
-                    textTransform:'uppercase'
-                  }}>
-                    {a.entity_type}
-                  </span>
-                  <span style={{
-                    padding:'3px 8px',
-                    background: a.action === 'deleted' ? '#fee2e2' : 
-                               a.action === 'created' ? '#dcfce7' : 
-                               a.action === 'archived' ? '#fed7aa' : 
-                               a.action === 'moved' ? '#e0e7ff' : '#e5e7eb',
-                    color: a.action === 'deleted' ? '#991b1b' : 
-                          a.action === 'created' ? '#166534' : 
-                          a.action === 'archived' ? '#9a3412' : 
-                          a.action === 'moved' ? '#3730a3' : '#374151',
-                    borderRadius:4,
-                    fontSize:11,
-                    fontWeight:600,
-                    textTransform:'uppercase'
-                  }}>
-                    {a.action}
-                  </span>
-                  {a.user_initials && (
+              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6,display:'flex',gap:12,alignItems:'flex-start'}}>
+                <div style={{flex:1,display:'flex',flexDirection:'column',gap:8}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
                     <span style={{
                       padding:'3px 8px',
-                      background:'#f3f4f6',
-                      color:'#374151',
+                      background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
+                      color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
                       borderRadius:4,
                       fontSize:11,
-                      fontWeight:600
+                      fontWeight:600,
+                      textTransform:'uppercase'
                     }}>
-                      {a.user_initials}
+                      {a.entity_type}
                     </span>
-                  )}
-                  <span className="muted" style={{fontSize:11,marginLeft:'auto'}}>
-                    {formatDateTime(a.created_at)}
-                  </span>
+                    <span style={{
+                      padding:'3px 8px',
+                      background: a.action === 'deleted' ? '#fee2e2' : 
+                                 a.action === 'created' ? '#dcfce7' : 
+                                 a.action === 'archived' ? '#fed7aa' : 
+                                 a.action === 'moved' ? '#e0e7ff' : '#e5e7eb',
+                      color: a.action === 'deleted' ? '#991b1b' : 
+                            a.action === 'created' ? '#166534' : 
+                            a.action === 'archived' ? '#9a3412' : 
+                            a.action === 'moved' ? '#3730a3' : '#374151',
+                      borderRadius:4,
+                      fontSize:11,
+                      fontWeight:600,
+                      textTransform:'uppercase'
+                    }}>
+                      {a.action}
+                    </span>
+                    {a.user_initials && (
+                      <span style={{
+                        padding:'3px 8px',
+                        background:'#f3f4f6',
+                        color:'#374151',
+                        borderRadius:4,
+                        fontSize:11,
+                        fontWeight:600
+                      }}>
+                        {a.user_initials}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{fontSize:14,color:'#374151',lineHeight:1.5}}>
+                    {formatAuditDescription(a, containerNames)}
+                  </div>
                 </div>
-                <div style={{fontSize:14,color:'#374151',lineHeight:1.5}}>
-                  {formatAuditDescription(a, containerNames)}
+                <div className="muted" style={{fontSize:11,whiteSpace:'nowrap'}}>
+                  {formatDateTime(a.created_at)}
                 </div>
               </div>
             ))}
