@@ -36,7 +36,7 @@ module.exports = async function handler(req: any, res: any){
     let body: any = req.body
     try{ if (!body && req.json) body = await req.json() }catch(e){}
 
-    const { sample_id, container_id, position, data: sampleData } = body
+    const { sample_id, container_id, position, data: sampleData, force } = body
     
     if (!sample_id) {
       return res.status(400).json({ error: 'sample_id_required' })
@@ -53,7 +53,7 @@ module.exports = async function handler(req: any, res: any){
       return res.status(400).json({ error: 'sample_id_required' })
     }
 
-    console.log(`[UPSERT] Attempting to upsert sample: "${normalizedSampleId}" to container ${container_id} at position ${position}`)
+    console.log(`[UPSERT] Attempting to upsert sample: "${normalizedSampleId}" to container ${container_id} at position ${position}${force ? ' (forced)' : ''}`)
 
     const now = new Date().toISOString()
 
@@ -77,47 +77,67 @@ module.exports = async function handler(req: any, res: any){
       !s.is_archived
     )
 
-    // If position is occupied by a DIFFERENT sample, check it out
+    // If position is occupied by a DIFFERENT sample
     if (occupyingSample && String(occupyingSample.sample_id).trim().toUpperCase() !== normalizedSampleId) {
-      console.log(`[UPSERT] Position ${position} is occupied by "${occupyingSample.sample_id}" - checking it out`)
-      
-      const { error: checkoutError } = await supabaseAdmin
-        .from('samples')
-        .update({
-          is_checked_out: true,
-          checked_out_at: now,
-          checked_out_by: user || 'system',
-          previous_container_id: occupyingSample.container_id,
-          previous_position: occupyingSample.position,
-          container_id: null,
-          position: null,
-          updated_at: now
-        })
-        .eq('id', occupyingSample.id)
+      // If force=true, check out the displaced sample
+      if (force) {
+        console.log(`[UPSERT] Position ${position} is occupied by "${occupyingSample.sample_id}" - checking it out (forced)`)
+        
+        const { error: checkoutError } = await supabaseAdmin
+          .from('samples')
+          .update({
+            is_checked_out: true,
+            checked_out_at: now,
+            checked_out_by: user || 'system',
+            previous_container_id: occupyingSample.container_id,
+            previous_position: occupyingSample.position,
+            container_id: null,
+            position: null,
+            updated_at: now
+          })
+          .eq('id', occupyingSample.id)
 
-      if (checkoutError) {
-        console.error('Error checking out displaced sample:', checkoutError)
-        return res.status(500).json({ error: 'checkout_failed', message: checkoutError.message })
-      }
-
-      // Log audit for the checked out sample
-      await createAuditLog(supabaseAdmin, {
-        userInitials: user,
-        entityType: 'sample',
-        entityId: occupyingSample.id,
-        action: 'checked_out',
-        entityName: occupyingSample.sample_id,
-        description: `Sample ${occupyingSample.sample_id} checked out (displaced by ${normalizedSampleId})`,
-        metadata: {
-          sample_id: occupyingSample.sample_id,
-          previous_container_id: occupyingSample.container_id,
-          previous_position: occupyingSample.position,
-          displaced_by: normalizedSampleId,
-          reason: 'overwritten'
+        if (checkoutError) {
+          console.error('Error checking out displaced sample:', checkoutError)
+          return res.status(500).json({ error: 'checkout_failed', message: checkoutError.message })
         }
-      })
 
-      console.log(`[UPSERT] Successfully checked out displaced sample "${occupyingSample.sample_id}"`)
+        // Log audit for the checked out sample
+        await createAuditLog(supabaseAdmin, {
+          userInitials: user,
+          entityType: 'sample',
+          entityId: occupyingSample.id,
+          action: 'checked_out',
+          entityName: occupyingSample.sample_id,
+          description: `Sample ${occupyingSample.sample_id} checked out (displaced by ${normalizedSampleId})`,
+          metadata: {
+            sample_id: occupyingSample.sample_id,
+            previous_container_id: occupyingSample.container_id,
+            previous_position: occupyingSample.position,
+            displaced_by: normalizedSampleId,
+            reason: 'overwritten'
+          }
+        })
+
+        console.log(`[UPSERT] Successfully checked out displaced sample "${occupyingSample.sample_id}"`)
+      } else {
+        // Return conflict info for user confirmation
+        console.log(`[UPSERT] Position ${position} is occupied by "${occupyingSample.sample_id}" - returning conflict info`)
+        return res.status(409).json({
+          error: 'position_occupied',
+          conflict: {
+            occupying_sample: {
+              id: occupyingSample.id,
+              sample_id: occupyingSample.sample_id,
+              position: occupyingSample.position
+            },
+            new_sample: {
+              sample_id: normalizedSampleId,
+              position: position
+            }
+          }
+        })
+      }
     }
 
     // Check if sample already exists (active, non-archived) in ANY container
