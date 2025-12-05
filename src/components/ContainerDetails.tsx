@@ -1,11 +1,8 @@
 import React, {useEffect, useState} from 'react'
-import { toast } from 'sonner'
 import ContainerGridView from './ContainerGridView'
 import SampleHistorySidebar from './SampleHistorySidebar'
-import ConfirmOverwriteDialog from './ConfirmOverwriteDialog'
 import { supabase } from '../lib/api'
 import { getToken } from '../lib/auth'
-import { formatErrorMessage, retryWithBackoff } from '../lib/utils'
 
 export default function ContainerDetails({ id }: { id: string | number }){
   const [data, setData] = useState<any | null>(null)
@@ -13,15 +10,6 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [editMode, setEditMode] = useState(false)
   const [selectedSample, setSelectedSample] = useState<any | null>(null)
   const [showSidebar, setShowSidebar] = useState(false)
-  
-  // Confirmation dialog state
-  const [showOverwriteDialog, setShowOverwriteDialog] = useState(false)
-  const [pendingOverwrite, setPendingOverwrite] = useState<{
-    sample_id: string
-    container_id: string | number
-    position: string
-    conflict: any
-  } | null>(null)
   
   // Scanning state
   const [scanningMode, setScanningMode] = useState(false)
@@ -144,7 +132,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
     // Check if position is unavailable for DP Pools
     const isUnavailable = position === 'I9' && data?.type === 'DP Pools' && data?.layout === '9x9'
     if (isUnavailable) {
-      toast.warning('Position I9 is unavailable for DP Pools containers (DP sets come in groups of 4)')
+      alert('Position I9 is unavailable for DP Pools containers (DP sets come in groups of 4)')
       return
     }
     
@@ -172,100 +160,88 @@ export default function ContainerDetails({ id }: { id: string | number }){
     }
   }
 
-  const handleAddSample = async (sampleId: string, position: string, force = false) => {
+  const handleAddSample = async (sampleId: string, position: string) => {
     try {
       const token = getToken()
       
       // Create or move sample to this position
-      const addSampleWithRetry = async () => {
-        const res = await fetch('/api/samples/upsert', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            sample_id: sampleId,
-            container_id: data.id,
-            position: position,
-            force: force,
-            data: {
-              added_via: 'grid_edit',
-              added_at: new Date().toISOString()
-            }
-          })
+      const res = await fetch('/api/samples/upsert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sample_id: sampleId,
+          container_id: data.id,
+          position: position,
+          data: {
+            added_via: 'grid_edit',
+            added_at: new Date().toISOString()
+          }
         })
-        
-        if (res.status === 409 && !force) {
-          // Position occupied - get conflict info
-          const conflictData = await res.json()
-          setPendingOverwrite({
-            sample_id: sampleId,
-            container_id: data.id,
-            position: position,
-            conflict: conflictData.conflict
-          })
-          setShowOverwriteDialog(true)
-          return { conflict: true }
-        }
+      })
 
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}))
-          throw new Error(errorData.message || 'Failed to add sample')
-        }
-        
-        return await res.json()
-      }
-
-      const result = await retryWithBackoff(addSampleWithRetry, 3, 1000)
+      if (!res.ok) throw new Error('Failed to add sample')
       
-      if (result && !result.conflict) {
-        // Success - reload container
-        await loadContainer()
-        toast.success(`Sample ${sampleId} added successfully`)
-      }
+      // Reload container
+      await loadContainer()
     } catch (error) {
       console.error('Add sample error:', error)
-      toast.error(formatErrorMessage(error, 'Add sample'))
+      alert('Failed to add sample')
     }
-  }
-  
-  const handleConfirmOverwrite = async () => {
-    if (!pendingOverwrite) return
-    
-    setShowOverwriteDialog(false)
-    
-    // Retry the operation with force=true
-    await handleAddSample(
-      pendingOverwrite.sample_id,
-      pendingOverwrite.position,
-      true
-    )
-    
-    setPendingOverwrite(null)
-  }
-  
-  const handleCancelOverwrite = () => {
-    setShowOverwriteDialog(false)
-    setPendingOverwrite(null)
-    toast.info('Operation cancelled')
   }
   
   const handleScanSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!scanInput.trim() || !currentPosition || scanning) return
     
-    const sampleId = scanInput.trim()
+    // Check if position is already occupied
+    const samples = data.samples || []
+    const existingSample = samples.find(
+      (s: any) => !s.is_archived && s.position?.toUpperCase() === currentPosition.toUpperCase()
+    )
+    
+    if (existingSample) {
+      const confirmOverwrite = window.confirm(
+        `Position ${currentPosition} already contains sample "${existingSample.sample_id}".\n\nDo you want to overwrite it?`
+      )
+      if (!confirmOverwrite) {
+        setScanInput('')
+        scanInputRef.current?.focus()
+        return
+      }
+    }
     
     setScanning(true)
     setLastScannedId(null)
     
     try {
-      await handleAddSample(sampleId, currentPosition, false)
+      const token = getToken()
+      const sampleId = scanInput.trim()
+      
+      // Create or move sample to this position
+      const res = await fetch('/api/samples/upsert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sample_id: sampleId,
+          container_id: data.id,
+          position: currentPosition,
+          data: {
+            added_via: 'scan',
+            added_at: new Date().toISOString()
+          }
+        })
+      })
+
+      if (!res.ok) throw new Error('Failed to add sample')
       
       // Clear input first
       setScanInput('')
-      setLastScannedId(sampleId)
       
       // Reload container to get updated sample list (skip loading state to avoid blip)
       const updatedData = await loadContainer(true)
@@ -281,11 +257,12 @@ export default function ContainerDetails({ id }: { id: string | number }){
       }
       
       // Always refocus
+      setLastScannedId(null)
       setTimeout(() => scanInputRef.current?.focus(), 50)
       
     } catch (error) {
       console.error('Scan error:', error)
-      toast.error(formatErrorMessage(error, 'Add sample via scan'))
+      alert('Failed to add sample')
       scanInputRef.current?.focus()
     } finally {
       setScanning(false)
@@ -360,7 +337,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     setScanInput('')
                     setLastScannedId(null)
                   } else {
-                    toast.warning('Container is full!')
+                    alert('Container is full!')
                   }
                 }}
                 style={{
@@ -524,22 +501,6 @@ export default function ContainerDetails({ id }: { id: string | number }){
           onUpdate={handleSidebarUpdate}
           onArchive={handleSidebarUpdate}
           onDelete={handleSidebarUpdate}
-        />
-      )}
-      
-      {showOverwriteDialog && pendingOverwrite && (
-        <ConfirmOverwriteDialog
-          occupyingSample={{
-            sample_id: pendingOverwrite.conflict.occupying_sample.sample_id,
-            position: pendingOverwrite.conflict.occupying_sample.position
-          }}
-          newSample={{
-            sample_id: pendingOverwrite.sample_id,
-            position: pendingOverwrite.position
-          }}
-          containerName={data.name}
-          onConfirm={handleConfirmOverwrite}
-          onCancel={handleCancelOverwrite}
         />
       )}
     </div>

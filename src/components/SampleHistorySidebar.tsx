@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { toast } from 'sonner'
 import { getToken } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
-import { formatErrorMessage } from '../lib/utils'
 
 interface HistoryEvent {
   when: string
@@ -115,7 +113,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onUpdate?.()
     } catch (error) {
       console.error('Archive toggle error:', error)
-      toast.error(formatErrorMessage(error, 'Archive'))
+      alert('Failed to update archive status')
     } finally {
       setArchiving(false)
     }
@@ -144,7 +142,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onUpdate?.()
     } catch (error) {
       console.error('Training toggle error:', error)
-      toast.error(formatErrorMessage(error, 'Training status'))
+      alert('Failed to update training status')
     } finally {
       setArchiving(false)
     }
@@ -175,16 +173,15 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
       if (error) {
         console.error('Checkout error:', error)
-        toast.error(`Failed to checkout: ${formatErrorMessage(error)}`)
+        alert(`Failed to checkout sample: ${error.message}`)
         return
       }
       
-      toast.success(`Sample ${sample.sample_id} checked out`)
       onUpdate?.()
       onClose()
     } catch (error) {
       console.error('Checkout error:', error)
-      toast.error(formatErrorMessage(error, 'Checkout'))
+      alert('Failed to checkout sample')
     } finally {
       setCheckingOut(false)
     }
@@ -211,7 +208,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onClose()
     } catch (error) {
       console.error('Delete error:', error)
-      toast.error(formatErrorMessage(error, 'Delete'))
+      alert('Failed to delete sample')
     } finally {
       setDeleting(false)
     }

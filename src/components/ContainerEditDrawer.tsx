@@ -1,8 +1,6 @@
 import React, {useState, useEffect, useRef} from 'react'
-import { toast } from 'sonner'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
 import { apiFetch } from '../lib/api'
-import { formatErrorMessage, retryWithBackoff } from '../lib/utils'
 
 export default function ContainerEditDrawer({ container, onClose }: { container: any, onClose: ()=>void }){
   const defaultForm = {
@@ -64,27 +62,23 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
     setSaving(true)
     try {
-      await retryWithBackoff(async () => {
-        const res = await apiFetch(`/api/containers/${container.id}`, { 
-          method: 'PUT', 
-          headers: {'Content-Type':'application/json'}, 
-          body: JSON.stringify(form) 
-        })
-        
-        if (!res.ok) {
-          throw new Error('Failed to update container')
-        }
-        
-        const j = await res.json()
-        // notify app that container updated
-        window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
-        toast.success('Container updated successfully')
+      const res = await apiFetch(`/api/containers/${container.id}`, { 
+        method: 'PUT', 
+        headers: {'Content-Type':'application/json'}, 
+        body: JSON.stringify(form) 
       })
       
+      if (!res.ok) {
+        throw new Error('Failed to update container')
+      }
+      
+      const j = await res.json()
+      // notify app that container updated
+      window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
       onClose()
     } catch(e) {
       console.error('Save failed:', e)
-      toast.error(formatErrorMessage(e, 'Save container'))
+      alert('Failed to save changes. Please try again.')
       setSaving(false)
     }
   }
@@ -96,26 +90,23 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
     setDeleting(true)
     try {
-      await retryWithBackoff(async () => {
-        const res = await apiFetch(`/api/containers/${container.id}`, { 
-          method: 'DELETE', 
-          headers: {'Content-Type':'application/json'} 
-        })
-      
-        if (!res.ok) {
-          throw new Error('Failed to delete container')
-        }
+      const res = await apiFetch(`/api/containers/${container.id}`, { 
+        method: 'DELETE', 
+        headers: {'Content-Type':'application/json'} 
       })
+      
+      if (!res.ok) {
+        throw new Error('Failed to delete container')
+      }
       
       // notify app that container was deleted
       window.dispatchEvent(new CustomEvent('container-updated'))
-      toast.success('Container deleted successfully')
       // redirect to containers list
       window.location.hash = '#/containers'
       onClose()
     } catch(e) {
       console.error('Delete failed:', e)
-      toast.error(formatErrorMessage(e, 'Delete container'))
+      alert('Failed to delete container. Please try again.')
       setDeleting(false)
     }
   }

@@ -30,7 +30,6 @@ type Props = {
   layout?: string
   occupancy?: { used:number; total:number }
   updatedAt?: string
-  training?: boolean
 }
 
 export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, ...rest}: Props & any){
@@ -43,7 +42,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
   const pct = Math.round((occupancy.used / Math.max(1, effectiveTotal)) * 100)
   const available = Math.max(0, (effectiveTotal - occupancy.used))
   const [openEdit, setOpenEdit] = useState(false)
-  
   return (
     <>
     <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}` }}>
@@ -56,9 +54,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
             </div>
             <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium whitespace-nowrap">{temperature}</span>
             <span className="px-2 py-1 text-xs bg-gray-100 rounded whitespace-nowrap">{layout}</span>
-            {rest.training && (
-              <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded font-medium whitespace-nowrap">🎓 Training</span>
-            )}
           </div>
           <div className="text-sm text-gray-600 mt-1">{rest.location ?? ''}</div>
         </div>
@@ -73,33 +68,19 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       <div className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm flex-shrink-0">
-            <span 
-              className="px-2 py-0.5 rounded text-sm font-medium whitespace-nowrap"
-              style={{
-                background: pct >= 100 ? '#fee2e2' : pct >= 80 ? '#fef3c7' : '#dbeafe',
-                color: pct >= 100 ? '#991b1b' : pct >= 80 ? '#92400e' : '#1e40af'
-              }}
-            >
-              {occupancy.used}/{effectiveTotal}
-            </span>
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-sm font-medium whitespace-nowrap">{occupancy.used}/{effectiveTotal}</span>
             <span className="ml-2 text-sm text-gray-500 whitespace-nowrap">{available} available</span>
           </div>
         </div>
 
         <div className="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-hidden">
-          <div 
-            className="h-2"
-            style={{
-              width: `${Math.min(pct, 100)}%`,
-              background: pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#3b82f6'
-            }} 
-          />
+          <div className="h-2 bg-blue-500" style={{width: `${pct}%`}} />
         </div>
       </div>
 
-      <div className="mt-3 text-xs text-gray-400">Updated {formatDateTime(updatedAt)}</div>
+      <div className="mt-3 text-sm text-gray-500">Last updated: {formatDateTime(updatedAt)}</div>
     </div>
-    {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt,archived:rest.archived,location:rest.location,training:rest.training}} onClose={() => setOpenEdit(false)} />}
+    {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt,archived:rest.archived,location:rest.location}} onClose={() => setOpenEdit(false)} />}
     </>
   )
 }

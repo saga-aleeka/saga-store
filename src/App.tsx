@@ -1,5 +1,4 @@
 import React, {useEffect, useState} from 'react'
-import { Toaster } from 'sonner'
 import Header from './components/HeaderBar'
 import ContainerFilters from './components/ContainerFilters'
 import ContainerCard from './components/ContainerCard'
@@ -9,14 +8,10 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
-import CommandPalette from './components/CommandPalette'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
-import { useDebounce, useRecentItems, useKeyboardShortcut } from './lib/hooks'
-import { GridSkeleton } from './components/Skeletons'
-import { formatErrorMessage } from './lib/utils'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -85,49 +80,14 @@ export default function App() {
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
   // search
   const [searchQuery, setSearchQuery] = useState('')
-  const debouncedSearchQuery = useDebounce(searchQuery, 300)
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
-  // bulk selection for samples
-  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
-  const [bulkActionInProgress, setBulkActionInProgress] = useState(false)
-  
-  // Recent items tracking
-  const { recentItems: recentContainers, addRecentItem: addRecentContainer } = useRecentItems<{ id: string; name: string }>(
-    'saga_recent_containers',
-    10
-  )
-  
-  // Command palette state
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
-  
-  // Grid keyboard navigation state
-  const [focusedContainerIndex, setFocusedContainerIndex] = useState<number>(-1)
-  
-  // Cmd+K keyboard shortcut for command palette
-  useKeyboardShortcut({
-    key: 'k',
-    meta: true,
-    handler: (e) => {
-      e.preventDefault()
-      setCommandPaletteOpen(true)
-    }
-  })
-
-  // Clear all filters function
-  const clearAllFilters = () => {
-    setSelectedTypes([])
-    setAvailableOnly(false)
-    setTrainingOnly(false)
-    setSampleTypeFilters([])
-    setSearchQuery('')
-  }
 
   // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1)
     setContainersCurrentPage(1)
-  }, [debouncedSearchQuery])
+  }, [searchQuery])
 
   // Reset containers page when filters change
   useEffect(() => {
@@ -239,75 +199,6 @@ export default function App() {
     if (route === '#/containers') load()
     return () => { mounted = false }
   }, [route])
-  
-  // Keyboard navigation for container grid
-  useEffect(() => {
-    if (route !== '#/containers' || commandPaletteOpen) return
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't interfere with input fields
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-      
-      const currentPageContainers = filteredContainers.slice(
-        (containersCurrentPage - 1) * containersPerPage,
-        containersCurrentPage * containersPerPage
-      )
-      
-      if (currentPageContainers.length === 0) return
-      
-      // Calculate grid columns (same logic as CSS)
-      const width = window.innerWidth
-      let columns = Math.floor(width / 280) // minmax(280px, 1fr)
-      if (width >= 1024) columns = Math.floor(width / 320)
-      if (width <= 768) columns = Math.floor(width / 240)
-      if (width <= 640) columns = 1
-      columns = Math.max(1, columns)
-      
-      let newIndex = focusedContainerIndex
-      
-      if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        newIndex = focusedContainerIndex === -1 ? 0 : Math.min(focusedContainerIndex + 1, currentPageContainers.length - 1)
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        newIndex = focusedContainerIndex === -1 ? 0 : Math.max(focusedContainerIndex - 1, 0)
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        if (focusedContainerIndex === -1) {
-          newIndex = 0
-        } else {
-          const nextRow = focusedContainerIndex + columns
-          newIndex = Math.min(nextRow, currentPageContainers.length - 1)
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (focusedContainerIndex === -1) {
-          newIndex = 0
-        } else {
-          const prevRow = focusedContainerIndex - columns
-          newIndex = Math.max(prevRow, 0)
-        }
-      } else if (e.key === 'Enter' && focusedContainerIndex >= 0 && focusedContainerIndex < currentPageContainers.length) {
-        e.preventDefault()
-        const container = currentPageContainers[focusedContainerIndex]
-        window.location.hash = `#/containers/${container.id}`
-        return
-      }
-      
-      setFocusedContainerIndex(newIndex)
-    }
-    
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [route, focusedContainerIndex, filteredContainers, containersCurrentPage, containersPerPage, commandPaletteOpen])
-  
-  // Reset focused index when page changes
-  useEffect(() => {
-    setFocusedContainerIndex(-1)
-  }, [containersCurrentPage, route])
 
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
@@ -337,9 +228,9 @@ export default function App() {
       return true
     })
     
-    // Apply search filter with debounced value
-    if (debouncedSearchQuery.trim()) {
-      const terms = debouncedSearchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((c: any) => {
         const searchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
         return terms.some(term => searchText.includes(term))
@@ -347,7 +238,7 @@ export default function App() {
     }
     
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, debouncedSearchQuery])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
 
   useEffect(() => {
     async function onUpdated(e: any){
@@ -474,135 +365,18 @@ export default function App() {
       })
     }
     
-    // Apply search filter with debounced value
-    if (debouncedSearchQuery.trim()) {
-      const terms = debouncedSearchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
-        const checkedOutByMe = s.is_checked_out && user && s.checked_out_by === user.initials ? 'mine' : ''
-        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText} ${checkedOutByMe}`.toLowerCase()
+        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
         return terms.some(term => searchText.includes(term))
       })
     }
     
     return filtered
-  }, [samples, debouncedSearchQuery, sampleTypeFilters, user])
-
-  // Bulk action handlers
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const currentPageSampleIds = filteredSamples
-        ?.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
-        .map(s => s.id) || []
-      setSelectedSampleIds(new Set(currentPageSampleIds))
-    } else {
-      setSelectedSampleIds(new Set())
-    }
-  }
-
-  const handleSelectSample = (sampleId: string, checked: boolean) => {
-    const newSelected = new Set(selectedSampleIds)
-    if (checked) {
-      newSelected.add(sampleId)
-    } else {
-      newSelected.delete(sampleId)
-    }
-    setSelectedSampleIds(newSelected)
-  }
-
-  const handleBulkArchive = async (archive: boolean) => {
-    if (selectedSampleIds.size === 0) return
-    
-    const action = archive ? 'archive' : 'unarchive'
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} ${selectedSampleIds.size} sample(s)?`
-    )
-    
-    if (!confirmed) return
-    
-    setBulkActionInProgress(true)
-    
-    try {
-      const sampleIds = Array.from(selectedSampleIds)
-      let successCount = 0
-      let failCount = 0
-      
-      for (const sampleId of sampleIds) {
-        try {
-          const { error } = await supabase
-            .from('samples')
-            .update({ is_archived: archive })
-            .eq('id', sampleId)
-          
-          if (error) throw error
-          successCount++
-        } catch (e) {
-          console.error(`Failed to ${action} sample:`, e)
-          failCount++
-        }
-      }
-      
-      // Reload samples
-      await loadSamples()
-      
-      // Clear selection
-      setSelectedSampleIds(new Set())
-      
-      if (failCount === 0) {
-        toast.success(`Successfully ${archive ? 'archived' : 'unarchived'} ${successCount} sample(s)`)
-      } else {
-        toast.warning(`${action} completed: ${successCount} succeeded, ${failCount} failed`)
-      }
-    } catch (error) {
-      console.error('Bulk action error:', error)
-      toast.error(formatErrorMessage(error, `Bulk ${action}`))
-    } finally {
-      setBulkActionInProgress(false)
-    }
-  }
-  
-  // Command palette navigation handler
-  const handleCommandPaletteNavigate = async (type: 'container' | 'sample', id: string) => {
-    if (type === 'container') {
-      // Add to recent containers
-      try {
-        const { data } = await supabase
-          .from('containers')
-          .select('id, name')
-          .eq('id', id)
-          .single()
-        
-        if (data) {
-          addRecentContainer({ id: data.id, name: data.name })
-        }
-      } catch (e) {
-        console.error('Failed to fetch container for recent items:', e)
-      }
-      
-      // Navigate to container
-      window.location.hash = `#/containers/${id}`
-    } else if (type === 'sample') {
-      // Navigate to the sample's container
-      try {
-        const { data } = await supabase
-          .from('samples')
-          .select('container_id, containers(id, name)')
-          .eq('id', id)
-          .single()
-        
-        if (data && data.container_id) {
-          const container = data.containers as any
-          if (container) {
-            addRecentContainer({ id: container.id, name: container.name })
-          }
-          window.location.hash = `#/containers/${data.container_id}`
-        }
-      } catch (e) {
-        console.error('Failed to navigate to sample:', e)
-        toast.error(formatErrorMessage(e, 'Navigate to sample'))
-      }
-    }
-  }
+  }, [samples, searchQuery, sampleTypeFilters])
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -658,21 +432,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Toaster 
-        position="top-right" 
-        expand={false}
-        richColors
-        closeButton
-      />
-      
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        recentContainers={recentContainers}
-        onNavigate={handleCommandPaletteNavigate}
-      />
-      
-      <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />
@@ -711,58 +471,14 @@ export default function App() {
               </div>
             </div>
             {/* Filters */}
-            <div style={{marginTop:8, display: 'flex', gap: 12, alignItems: 'flex-start'}}>
-              <div style={{flex: 1}}>
-                <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
-              </div>
-              {(selectedTypes.length > 0 || availableOnly || trainingOnly || searchQuery.trim()) && (
-                <button
-                  onClick={clearAllFilters}
-                  className="btn ghost"
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: 14,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  ✕ Clear Filters
-                </button>
-              )}
+            <div style={{marginTop:8}}>
+              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
             </div>
             <div className="container-list">
-              {loadingContainers && <GridSkeleton count={containersPerPage} />}
-              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && (
-                <div className="muted">
-                  {searchQuery.trim() || selectedTypes.length > 0 || availableOnly || trainingOnly
-                    ? 'No containers match your filters'
-                    : 'No active containers'}
-                </div>
-              )}
-              {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c, idx) => (
-                <div
-                  key={c.id}
-                  style={{
-                    outline: focusedContainerIndex === idx ? '3px solid #3b82f6' : 'none',
-                    outlineOffset: '-3px',
-                    borderRadius: 12,
-                    transition: 'outline 0.15s'
-                  }}
-                  tabIndex={0}
-                  onClick={() => setFocusedContainerIndex(idx)}
-                  onFocus={() => setFocusedContainerIndex(idx)}
-                >
-                  <ContainerCard 
-                    id={c.id} 
-                    name={c.name} 
-                    type={c.type} 
-                    temperature={c.temperature} 
-                    layout={c.layout} 
-                    occupancy={{used:c.used,total:c.total}} 
-                    updatedAt={c.updated_at} 
-                    location={c.location} 
-                    training={c.training}
-                  />
-                </div>
+              {loadingContainers && <div className="muted">Loading containers...</div>}
+              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
+              {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
               ))}
             </div>
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
@@ -1040,153 +756,19 @@ export default function App() {
             
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
-            
-            {/* Sample count and pagination info */}
-            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
-              <div style={{
-                marginBottom: 12,
-                padding: 12,
-                background: '#f9fafb',
-                border: '1px solid #e5e7eb',
-                borderRadius: 8,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <div style={{fontSize: 14, color: '#6b7280'}}>
-                  Showing {((currentPage - 1) * samplesPerPage) + 1}–{Math.min(currentPage * samplesPerPage, filteredSamples.length)} of {filteredSamples.length} samples
-                </div>
-                {filteredSamples.length > samplesPerPage && (
-                  <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="btn ghost"
-                      style={{
-                        fontSize: 13,
-                        padding: '4px 12px',
-                        opacity: currentPage === 1 ? 0.5 : 1,
-                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      ← Previous
-                    </button>
-                    <span style={{fontSize: 13, color: '#6b7280', fontWeight: 500}}>
-                      Page {currentPage} of {Math.ceil(filteredSamples.length / samplesPerPage)}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredSamples.length / samplesPerPage), p + 1))}
-                      disabled={currentPage >= Math.ceil(filteredSamples.length / samplesPerPage)}
-                      className="btn ghost"
-                      style={{
-                        fontSize: 13,
-                        padding: '4px 12px',
-                        opacity: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 0.5 : 1,
-                        cursor: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      Next →
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* Bulk action toolbar */}
-            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
-              <div style={{
-                marginBottom: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: 12,
-                background: selectedSampleIds.size > 0 ? '#f0f9ff' : '#f9fafb',
-                border: '1px solid #e5e7eb',
-                borderRadius: 8
-              }}>
-                <div style={{fontSize: 14, color: '#374151', fontWeight: 500}}>
-                  {selectedSampleIds.size > 0 
-                    ? `${selectedSampleIds.size} sample(s) selected` 
-                    : 'Select samples for bulk actions'}
-                </div>
-                {selectedSampleIds.size > 0 && (
-                  <>
-                    <button
-                      onClick={() => handleBulkArchive(true)}
-                      disabled={bulkActionInProgress}
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: 6,
-                        background: '#fbbf24',
-                        color: 'white',
-                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
-                        opacity: bulkActionInProgress ? 0.6 : 1
-                      }}
-                    >
-                      Archive Selected
-                    </button>
-                    <button
-                      onClick={() => handleBulkArchive(false)}
-                      disabled={bulkActionInProgress}
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: 6,
-                        background: '#10b981',
-                        color: 'white',
-                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
-                        opacity: bulkActionInProgress ? 0.6 : 1
-                      }}
-                    >
-                      Unarchive Selected
-                    </button>
-                    <button
-                      onClick={() => setSelectedSampleIds(new Set())}
-                      disabled={bulkActionInProgress}
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        border: '1px solid #d1d5db',
-                        borderRadius: 6,
-                        background: 'white',
-                        color: '#374151',
-                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
-                        opacity: bulkActionInProgress ? 0.6 : 1
-                      }}
-                    >
-                      Clear Selection
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-            
-            {/* Paginated samples table */}
             {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
                     <tr>
-                      <th style={{padding: 12, width: 40}}>
-                        <input
-                          type="checkbox"
-                          checked={selectedSampleIds.size > 0 && selectedSampleIds.size === Math.min(samplesPerPage, filteredSamples.length - (currentPage - 1) * samplesPerPage)}
-                          onChange={(e) => handleSelectAll(e.target.checked)}
-                          style={{cursor: 'pointer', width: 16, height: 16}}
-                        />
-                      </th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '25%'}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '15%'}}>Container Type</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '25%'}}>Container</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '15%'}}>Location</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '10%'}}>Position</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '10%'}}>Actions</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Owner</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Collected</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1202,67 +784,16 @@ export default function App() {
                         ? s.previous_containers.type
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
-                      const isCheckedOutByMe = s.is_checked_out && user && s.checked_out_by === user.initials
                       
                       return (
                         <tr 
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
+                            background: 'white'
                           }}
                         >
-                          <td style={{padding: 12}} onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={selectedSampleIds.has(s.id)}
-                              onChange={(e) => handleSelectSample(s.id, e.target.checked)}
-                              style={{cursor: 'pointer', width: 16, height: 16}}
-                            />
-                          </td>
-                          <td style={{padding: 12, fontWeight: 600}}>
-                            {s.sample_id}
-                            {isCheckedOutByMe && (
-                              <span style={{
-                                marginLeft: 8,
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                borderRadius: 12,
-                                background: '#f3e8ff',
-                                color: '#7c3aed',
-                                fontWeight: 600,
-                                border: '1px solid #e9d5ff'
-                              }}>
-                                ✓ MY CHECKOUT
-                              </span>
-                            )}
-                            {s.is_checked_out && !isCheckedOutByMe && (
-                              <span style={{
-                                marginLeft: 8,
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                borderRadius: 12,
-                                background: '#fee2e2',
-                                color: '#991b1b',
-                                fontWeight: 600
-                              }}>
-                                CHECKED OUT
-                              </span>
-                            )}
-                            {s.is_archived && (
-                              <span style={{
-                                marginLeft: 8,
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                borderRadius: 12,
-                                background: '#fef3c7',
-                                color: '#92400e',
-                                fontWeight: 600
-                              }}>
-                                ARCHIVED
-                              </span>
-                            )}
-                          </td>
+                          <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '4px 10px',
@@ -1275,8 +806,8 @@ export default function App() {
                               {containerType}
                             </span>
                           </td>
-                          <td style={{padding: 12}}>{containerName}</td>
                           <td style={{padding: 12}}>{containerLocation}</td>
+                          <td style={{padding: 12}}>{containerName}</td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '2px 8px',
@@ -1289,6 +820,8 @@ export default function App() {
                               {s.position || '-'}
                             </span>
                           </td>
+                          <td style={{padding: 12}}>{s.owner || '-'}</td>
+                          <td style={{padding: 12}} className="muted">{formatDate(s.collected_at)}</td>
                           <td style={{padding: 12}}>
                             {s.container_id && (
                               <button
@@ -1296,7 +829,7 @@ export default function App() {
                                 onClick={handleSampleClick}
                                 style={{fontSize: 12, padding: '4px 8px'}}
                               >
-                                View
+                                View in Container
                               </button>
                             )}
                           </td>

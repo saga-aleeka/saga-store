@@ -1,8 +1,6 @@
 import React, {useState, useRef} from 'react'
-import { toast } from 'sonner'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
 import { supabase } from '../lib/api'
-import { formatErrorMessage } from '../lib/utils'
 
 export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }){
   const defaultForm = {
@@ -74,11 +72,9 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
 
     if (error) {
       console.error('Failed to create container:', error)
-      toast.error(formatErrorMessage(error, 'Create container'))
+      alert('Failed to create container: ' + error.message)
       return
     }
-
-    toast.success(`Container "${form.name}" created successfully`)
 
     // Dispatch event to refresh container list
     window.dispatchEvent(new CustomEvent('container-updated', { detail: data }))
