@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import { Toaster } from 'sonner'
 import Header from './components/HeaderBar'
 import ContainerFilters from './components/ContainerFilters'
 import ContainerCard from './components/ContainerCard'
@@ -12,6 +13,8 @@ import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
+import { useDebounce, useRecentItems, useFavorites } from './lib/hooks'
+import { GridSkeleton } from './components/Skeletons'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -80,14 +83,31 @@ export default function App() {
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
   // search
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
+  
+  // Favorites and recent items
+  const { favorites, toggleFavorite, isFavorite } = useFavorites('saga_favorite_containers')
+  const { recentItems: recentContainers, addRecentItem: addRecentContainer } = useRecentItems<{ id: string; name: string }>(
+    'saga_recent_containers',
+    10
+  )
+
+  // Clear all filters function
+  const clearAllFilters = () => {
+    setSelectedTypes([])
+    setAvailableOnly(false)
+    setTrainingOnly(false)
+    setSampleTypeFilters([])
+    setSearchQuery('')
+  }
 
   // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1)
     setContainersCurrentPage(1)
-  }, [searchQuery])
+  }, [debouncedSearchQuery])
 
   // Reset containers page when filters change
   useEffect(() => {
@@ -228,17 +248,25 @@ export default function App() {
       return true
     })
     
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    // Apply search filter with debounced value
+    if (debouncedSearchQuery.trim()) {
+      const terms = debouncedSearchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((c: any) => {
         const searchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
         return terms.some(term => searchText.includes(term))
       })
     }
     
+    // Sort: favorites first, then by updated_at
+    filtered.sort((a: any, b: any) => {
+      const aFav = isFavorite(a.id) ? 1 : 0
+      const bFav = isFavorite(b.id) ? 1 : 0
+      if (aFav !== bFav) return bFav - aFav
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    })
+    
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, debouncedSearchQuery, favorites])
 
   useEffect(() => {
     async function onUpdated(e: any){
@@ -365,18 +393,19 @@ export default function App() {
       })
     }
     
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    // Apply search filter with debounced value
+    if (debouncedSearchQuery.trim()) {
+      const terms = debouncedSearchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
-        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
+        const checkedOutByMe = s.is_checked_out && user && s.checked_out_by === user.initials ? 'mine' : ''
+        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText} ${checkedOutByMe}`.toLowerCase()
         return terms.some(term => searchText.includes(term))
       })
     }
     
     return filtered
-  }, [samples, searchQuery, sampleTypeFilters])
+  }, [samples, debouncedSearchQuery, sampleTypeFilters, user])
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -432,7 +461,13 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <Toaster 
+        position="top-right" 
+        expand={false}
+        richColors
+        closeButton
+      />
+      <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />
@@ -471,14 +506,48 @@ export default function App() {
               </div>
             </div>
             {/* Filters */}
-            <div style={{marginTop:8}}>
-              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+            <div style={{marginTop:8, display: 'flex', gap: 12, alignItems: 'flex-start'}}>
+              <div style={{flex: 1}}>
+                <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+              </div>
+              {(selectedTypes.length > 0 || availableOnly || trainingOnly || searchQuery.trim()) && (
+                <button
+                  onClick={clearAllFilters}
+                  className="btn ghost"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 14,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  ✕ Clear Filters
+                </button>
+              )}
             </div>
             <div className="container-list">
-              {loadingContainers && <div className="muted">Loading containers...</div>}
-              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
+              {loadingContainers && <GridSkeleton count={containersPerPage} />}
+              {!loadingContainers && filteredContainers && filteredContainers.length === 0 && (
+                <div className="muted">
+                  {searchQuery.trim() || selectedTypes.length > 0 || availableOnly || trainingOnly
+                    ? 'No containers match your filters'
+                    : 'No active containers'}
+                </div>
+              )}
               {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
+                <ContainerCard 
+                  key={c.id} 
+                  id={c.id} 
+                  name={c.name} 
+                  type={c.type} 
+                  temperature={c.temperature} 
+                  layout={c.layout} 
+                  occupancy={{used:c.used,total:c.total}} 
+                  updatedAt={c.updated_at} 
+                  location={c.location} 
+                  training={c.training}
+                  isFavorite={isFavorite(c.id)}
+                  onToggleFavorite={() => toggleFavorite(c.id)}
+                />
               ))}
             </div>
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
