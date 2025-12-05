@@ -6,13 +6,13 @@ import { supabase } from '../lib/api'
 const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: string, description: string }> = {
   'cfDNA Tubes': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'Cell-free DNA samples stored in 9×9 grid at -80°C'
+    temperature: '-20°C',
+    description: 'Cell-free DNA samples stored in 9×9 grid at -20°C'
   },
   'DP Pools': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'DNA Pool samples in 9×9 grid (80 positions, I9 unavailable) at -80°C'
+    temperature: '-20°C',
+    description: 'DNA Pool samples in 9×9 grid (80 positions, I9 unavailable) at -20°C'
   },
   'DTC Tubes': {
     layout: '9x9',
@@ -21,8 +21,8 @@ const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: strin
   },
   'PA Pools': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'Plasma pool samples in 9×9 grid at -80°C'
+    temperature: '-20°C',
+    description: 'Plasma pool samples in 9×9 grid at -20°C'
   },
   'MNC Tubes': {
     layout: '9x9',
@@ -63,6 +63,42 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
   const [errors, setErrors] = useState<{name?:string, location?:string}>({})
   const nameRef = useRef<HTMLInputElement | null>(null)
   const locationRef = useRef<HTMLInputElement | null>(null)
+  const [loadingPrediction, setLoadingPrediction] = useState(true)
+
+  // Load last container to predict next name
+  useEffect(() => {
+    async function predictNextName() {
+      try {
+        const { data, error } = await supabase
+          .from('containers')
+          .select('name')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        
+        if (!error && data && data.name) {
+          // Extract number from end of container name
+          const match = data.name.match(/(\d+)$/)
+          if (match) {
+            const lastNumber = parseInt(match[1])
+            const prefix = data.name.substring(0, data.name.length - match[1].length)
+            const nextNumber = lastNumber + 1
+            // Pad with zeros to match original length
+            const paddedNumber = String(nextNumber).padStart(match[1].length, '0')
+            const predictedName = prefix + paddedNumber
+            
+            setForm((prev: any) => ({ ...prev, name: predictedName }))
+          }
+        }
+      } catch (e) {
+        console.warn('Could not predict container name:', e)
+      } finally {
+        setLoadingPrediction(false)
+      }
+    }
+    
+    predictNextName()
+  }, [])
   
   const applyTemplate = (sampleType: string) => {
     const template = SAMPLE_TYPE_TEMPLATES[sampleType]

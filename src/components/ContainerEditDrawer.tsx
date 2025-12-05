@@ -6,13 +6,13 @@ import { apiFetch } from '../lib/api'
 const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: string, description: string }> = {
   'cfDNA Tubes': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'Cell-free DNA samples stored in 9×9 grid at -80°C'
+    temperature: '-20°C',
+    description: 'Cell-free DNA samples stored in 9×9 grid at -20°C'
   },
   'DP Pools': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'DNA Pool samples in 9×9 grid (80 positions, I9 unavailable) at -80°C'
+    temperature: '-20°C',
+    description: 'DNA Pool samples in 9×9 grid (80 positions, I9 unavailable) at -20°C'
   },
   'DTC Tubes': {
     layout: '9x9',
@@ -21,8 +21,8 @@ const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: strin
   },
   'PA Pools': {
     layout: '9x9',
-    temperature: '-80°C',
-    description: 'Plasma pool samples in 9×9 grid at -80°C'
+    temperature: '-20°C',
+    description: 'Plasma pool samples in 9×9 grid at -20°C'
   },
   'MNC Tubes': {
     layout: '9x9',
