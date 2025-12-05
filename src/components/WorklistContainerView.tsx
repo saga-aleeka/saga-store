@@ -71,33 +71,26 @@ export default function WorklistContainerView({ containerId, highlightPositions,
 
     setProcessing(true)
     try {
-      const user_data = JSON.parse(localStorage.getItem('user') || '{}')
-      const username = user_data.username || user.initials || 'Unknown'
-
-      // Use the samples API endpoint to checkout
-      const res = await fetch('/api/samples', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          samples: samplesToCheckout.map(sample => ({
-            sample_id: sample.sample_id,
+      // Checkout each sample using Supabase directly
+      for (const sample of samplesToCheckout) {
+        const { error } = await supabase
+          .from('samples')
+          .update({
             is_checked_out: true,
+            checked_out_at: new Date().toISOString(),
+            checked_out_by: user.initials,
             previous_container_id: sample.container_id,
             previous_position: sample.position,
-            checked_out_at: new Date().toISOString(),
-            checked_out_by: username,
             container_id: null,
             position: null
-          }))
-        })
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to checkout samples')
+          })
+          .eq('id', sample.id)
+        
+        if (error) {
+          console.error('Error checking out sample:', error)
+          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+          return
+        }
       }
 
       alert(`Checked out ${samplesToCheckout.length} sample(s)`)
