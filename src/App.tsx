@@ -16,6 +16,7 @@ import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
 import { useDebounce, useRecentItems } from './lib/hooks'
 import { GridSkeleton } from './components/Skeletons'
+import { formatErrorMessage } from './lib/utils'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -87,6 +88,9 @@ export default function App() {
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
+  // bulk selection for samples
+  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
+  const [bulkActionInProgress, setBulkActionInProgress] = useState(false)
   
   // Recent items tracking
   const { recentItems: recentContainers, addRecentItem: addRecentContainer } = useRecentItems<{ id: string; name: string }>(
@@ -398,6 +402,79 @@ export default function App() {
     
     return filtered
   }, [samples, debouncedSearchQuery, sampleTypeFilters, user])
+
+  // Bulk action handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const currentPageSampleIds = filteredSamples
+        ?.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
+        .map(s => s.id) || []
+      setSelectedSampleIds(new Set(currentPageSampleIds))
+    } else {
+      setSelectedSampleIds(new Set())
+    }
+  }
+
+  const handleSelectSample = (sampleId: string, checked: boolean) => {
+    const newSelected = new Set(selectedSampleIds)
+    if (checked) {
+      newSelected.add(sampleId)
+    } else {
+      newSelected.delete(sampleId)
+    }
+    setSelectedSampleIds(newSelected)
+  }
+
+  const handleBulkArchive = async (archive: boolean) => {
+    if (selectedSampleIds.size === 0) return
+    
+    const action = archive ? 'archive' : 'unarchive'
+    const confirmed = window.confirm(
+      `Are you sure you want to ${action} ${selectedSampleIds.size} sample(s)?`
+    )
+    
+    if (!confirmed) return
+    
+    setBulkActionInProgress(true)
+    
+    try {
+      const sampleIds = Array.from(selectedSampleIds)
+      let successCount = 0
+      let failCount = 0
+      
+      for (const sampleId of sampleIds) {
+        try {
+          const { error } = await supabase
+            .from('samples')
+            .update({ is_archived: archive })
+            .eq('id', sampleId)
+          
+          if (error) throw error
+          successCount++
+        } catch (e) {
+          console.error(`Failed to ${action} sample:`, e)
+          failCount++
+        }
+      }
+      
+      // Reload samples
+      await loadSamples()
+      
+      // Clear selection
+      setSelectedSampleIds(new Set())
+      
+      if (failCount === 0) {
+        toast.success(`Successfully ${archive ? 'archived' : 'unarchived'} ${successCount} sample(s)`)
+      } else {
+        toast.warning(`${action} completed: ${successCount} succeeded, ${failCount} failed`)
+      }
+    } catch (error) {
+      console.error('Bulk action error:', error)
+      toast.error(formatErrorMessage(error, `Bulk ${action}`))
+    } finally {
+      setBulkActionInProgress(false)
+    }
+  }
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -816,6 +893,81 @@ export default function App() {
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             
+            {/* Bulk action toolbar */}
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && filteredSamples.length < 1000 && (
+              <div style={{
+                marginBottom: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: 12,
+                background: selectedSampleIds.size > 0 ? '#f0f9ff' : '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8
+              }}>
+                <div style={{fontSize: 14, color: '#374151', fontWeight: 500}}>
+                  {selectedSampleIds.size > 0 
+                    ? `${selectedSampleIds.size} sample(s) selected` 
+                    : 'Select samples for bulk actions'}
+                </div>
+                {selectedSampleIds.size > 0 && (
+                  <>
+                    <button
+                      onClick={() => handleBulkArchive(true)}
+                      disabled={bulkActionInProgress}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: 6,
+                        background: '#fbbf24',
+                        color: 'white',
+                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
+                        opacity: bulkActionInProgress ? 0.6 : 1
+                      }}
+                    >
+                      Archive Selected
+                    </button>
+                    <button
+                      onClick={() => handleBulkArchive(false)}
+                      disabled={bulkActionInProgress}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: 6,
+                        background: '#10b981',
+                        color: 'white',
+                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
+                        opacity: bulkActionInProgress ? 0.6 : 1
+                      }}
+                    >
+                      Unarchive Selected
+                    </button>
+                    <button
+                      onClick={() => setSelectedSampleIds(new Set())}
+                      disabled={bulkActionInProgress}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        background: 'white',
+                        color: '#374151',
+                        cursor: bulkActionInProgress ? 'not-allowed' : 'pointer',
+                        opacity: bulkActionInProgress ? 0.6 : 1
+                      }}
+                    >
+                      Clear Selection
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            
             {/* Use virtual scrolling for large datasets (1000+ samples) */}
             {!loadingSamples && filteredSamples && filteredSamples.length >= 1000 && (
               <>
@@ -839,6 +991,14 @@ export default function App() {
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
                     <tr>
+                      <th style={{padding: 12, width: 40}}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSampleIds.size > 0 && selectedSampleIds.size === Math.min(samplesPerPage, filteredSamples.length - (currentPage - 1) * samplesPerPage)}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                          style={{cursor: 'pointer', width: 16, height: 16}}
+                        />
+                      </th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
@@ -869,9 +1029,17 @@ export default function App() {
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: 'white'
+                            background: selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
                           }}
                         >
+                          <td style={{padding: 12}} onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSampleIds.has(s.id)}
+                              onChange={(e) => handleSelectSample(s.id, e.target.checked)}
+                              style={{cursor: 'pointer', width: 16, height: 16}}
+                            />
+                          </td>
                           <td style={{padding: 12, fontWeight: 600}}>
                             {s.sample_id}
                             {isCheckedOutByMe && (
