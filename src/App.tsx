@@ -694,7 +694,7 @@ export default function App() {
                   >
                     {size}
                   </button>
-                )}
+                ))}
               </div>
             </div>
             
