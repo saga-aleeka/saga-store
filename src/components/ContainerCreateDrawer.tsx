@@ -2,6 +2,50 @@ import React, {useState, useRef} from 'react'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
 import { supabase } from '../lib/api'
 
+// Template configurations for each sample type
+const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: string, description: string }> = {
+  'cfDNA Tubes': {
+    layout: '9x9',
+    temperature: '-80°C',
+    description: 'Cell-free DNA samples stored in 9×9 grid at -80°C'
+  },
+  'DP Pools': {
+    layout: '9x9',
+    temperature: '-80°C',
+    description: 'DNA Pool samples in 9×9 grid (80 positions, I9 unavailable) at -80°C'
+  },
+  'DTC Tubes': {
+    layout: '9x9',
+    temperature: '4°C',
+    description: 'Direct-to-consumer samples in 9×9 grid at 4°C'
+  },
+  'PA Pools': {
+    layout: '9x9',
+    temperature: '-80°C',
+    description: 'Plasma pool samples in 9×9 grid at -80°C'
+  },
+  'MNC Tubes': {
+    layout: '9x9',
+    temperature: '-20°C',
+    description: 'Mononuclear cell samples in 9×9 grid at -20°C'
+  },
+  'Plasma Tubes': {
+    layout: '9x9',
+    temperature: '-80°C',
+    description: 'Plasma samples in 9×9 grid at -80°C'
+  },
+  'BC Tubes': {
+    layout: '9x9',
+    temperature: '-80°C',
+    description: 'Buffy coat samples in 9×9 grid at -80°C'
+  },
+  'IDT Plates': {
+    layout: '14x7',
+    temperature: '-20°C',
+    description: 'IDT plates with 14 rows × 7 columns at -20°C'
+  }
+}
+
 export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }){
   const defaultForm = {
     name: '',
@@ -19,6 +63,31 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
   const [errors, setErrors] = useState<{name?:string, location?:string}>({})
   const nameRef = useRef<HTMLInputElement | null>(null)
   const locationRef = useRef<HTMLInputElement | null>(null)
+  
+  const applyTemplate = (sampleType: string) => {
+    const template = SAMPLE_TYPE_TEMPLATES[sampleType]
+    if (!template) return
+
+    const newForm = {
+      ...form,
+      type: sampleType,
+      layout: template.layout,
+      temperature: template.temperature
+    }
+
+    // Calculate total capacity
+    const [rows, cols] = template.layout.split('x').map((n: string) => parseInt(n))
+    const maxPositions = rows * cols
+    
+    // DP Pools always have 80 capacity (I9 is unavailable)
+    if (sampleType === 'DP Pools' && template.layout === '9x9') {
+      newForm.total = 80
+    } else {
+      newForm.total = maxPositions
+    }
+
+    setForm(newForm)
+  }
   
   const updateField = (k: string, v: any) => {
     const newForm = {...form, [k]: v}
@@ -96,6 +165,49 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
         </div>
 
         <div style={{marginTop:12,display:'grid',gap:10}}>
+          {/* Sample Type - First field with template selector */}
+          <div style={{
+            padding: '12px',
+            background: '#f0f9ff',
+            border: '2px solid #3b82f6',
+            borderRadius: '8px',
+            marginBottom: '8px'
+          }}>
+            <label style={{fontWeight: 600, color: '#1e40af'}}>
+              Sample type (Select to apply template)
+              <select 
+                value={form.type} 
+                onChange={(e) => {
+                  const selectedType = e.target.value
+                  if (selectedType !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[selectedType]) {
+                    applyTemplate(selectedType)
+                  } else {
+                    updateField('type', selectedType)
+                  }
+                }}
+                style={{
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  border: '2px solid #3b82f6'
+                }}
+              >
+                {SAMPLE_TYPES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+            {form.type && form.type !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[form.type] && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: '#475569'
+              }}>
+                <strong>✓ Template applied:</strong> {SAMPLE_TYPE_TEMPLATES[form.type].description}
+              </div>
+            )}
+          </div>
+
           <label>
             Container Name
             <input 
@@ -104,6 +216,7 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
               aria-describedby={errors.name ? 'error-name' : undefined} 
               value={form.name} 
               onChange={(e) => { updateField('name', e.target.value); setErrors((s)=> ({...s, name: undefined})) }} 
+              placeholder="e.g., cfDNA_BOX_001"
             />
             {errors.name ? <div id="error-name" style={{color:'var(--danger)',fontSize:12,marginTop:4}}>{errors.name}</div> : null}
           </label>
@@ -116,15 +229,9 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
               aria-describedby={errors.location ? 'error-location' : undefined} 
               value={form.location} 
               onChange={(e) => { updateField('location', e.target.value); setErrors((s)=> ({...s, location: undefined})) }} 
+              placeholder="e.g., Freezer A / Shelf 3"
             />
             {errors.location ? <div id="error-location" style={{color:'var(--danger)',fontSize:12,marginTop:4}}>{errors.location}</div> : null}
-          </label>
-
-          <label>
-            Sample Type
-            <select value={form.type} onChange={(e)=> updateField('type', e.target.value)}>
-              {SAMPLE_TYPES.map(s => <option key={s}>{s}</option>)}
-            </select>
           </label>
 
           <label>
