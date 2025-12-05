@@ -11,32 +11,32 @@ function formatAuditDescription(audit: any, containerNames: Map<string, string>)
   if (audit.description) {
     let desc = audit.description
     
-    // Replace container placeholders
-    if (metadata.container_id && metadata.container_name) {
-      desc = desc.replace('{container}', metadata.container_name)
+    // Replace container placeholders with stored names
+    if (metadata.container_name) {
+      desc = desc.replace(/\{container\}/g, metadata.container_name)
     }
-    if (metadata.previous_container_id && metadata.previous_container_name) {
-      desc = desc.replace('{container}', metadata.previous_container_name)
+    if (metadata.previous_container_name) {
+      desc = desc.replace(/\{container\}/g, metadata.previous_container_name)
     }
-    if (metadata.from_container && metadata.from_container_name) {
-      desc = desc.replace('{from_container}', metadata.from_container_name)
+    if (metadata.from_container_name) {
+      desc = desc.replace(/\{from_container\}/g, metadata.from_container_name)
     }
-    if (metadata.to_container && metadata.to_container_name) {
-      desc = desc.replace('{to_container}', metadata.to_container_name)
+    if (metadata.to_container_name) {
+      desc = desc.replace(/\{to_container\}/g, metadata.to_container_name)
     }
     
     // Replace position placeholders
     if (metadata.position) {
-      desc = desc.replace('{position}', metadata.position)
+      desc = desc.replace(/\{position\}/g, metadata.position)
     }
     if (metadata.previous_position) {
-      desc = desc.replace('{position}', metadata.previous_position)
+      desc = desc.replace(/\{position\}/g, metadata.previous_position)
     }
     if (metadata.from_position) {
-      desc = desc.replace('{from_position}', metadata.from_position)
+      desc = desc.replace(/\{from_position\}/g, metadata.from_position)
     }
     if (metadata.to_position) {
-      desc = desc.replace('{to_position}', metadata.to_position)
+      desc = desc.replace(/\{to_position\}/g, metadata.to_position)
     }
     
     return desc
@@ -858,39 +858,9 @@ export default function AdminDashboard(){
                   <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>
                     {formatAuditDescription(a, containerNames)}
                   </div>
-                  {a.entity_name && a.description && a.entity_type === 'container' && (
-                    <div className="muted" style={{fontSize:12}}>Container: {containerNames.get(a.entity_id) || a.entity_name}</div>
-                  )}
-                  {a.entity_name && a.description && a.entity_type === 'sample' && (
-                    <div className="muted" style={{fontSize:12}}>Sample: {a.entity_name}</div>
-                  )}
-                  {a.metadata && (
+                  {a.metadata && a.metadata.source && (
                     <div className="muted" style={{fontSize:12,marginTop:4}}>
-                      {/* Sample metadata */}
-                      {a.entity_type === 'sample' && a.metadata.sample_id && `Sample: ${a.metadata.sample_id} • `}
-                      {a.metadata.position && !a.metadata.from_position && `Position: ${a.metadata.position} • `}
-                      
-                      {/* Container info for samples */}
-                      {a.entity_type === 'sample' && a.metadata.container_id && !a.metadata.from_container && 
-                        `Container: ${containerNames.get(a.metadata.container_id) || a.metadata.container_id.substring(0,8) + '...'} • `}
-                      
-                      {/* Movement info */}
-                      {a.metadata.from_container && a.metadata.to_container && 
-                        `Moved: ${containerNames.get(a.metadata.from_container) || a.metadata.from_container.substring(0,8) + '...'} (${a.metadata.from_position}) → ${containerNames.get(a.metadata.to_container) || a.metadata.to_container.substring(0,8) + '...'} (${a.metadata.to_position}) • `}
-                      
-                      {/* Checkout status */}
-                      {a.metadata.is_checked_out && `Checked Out • `}
-                      {a.metadata.checked_out_by && `By: ${a.metadata.checked_out_by} • `}
-                      
-                      {/* Previous location for deleted samples */}
-                      {a.action === 'deleted' && a.metadata.previous_container_id && 
-                        `Previous: ${containerNames.get(a.metadata.previous_container_id) || a.metadata.previous_container_id.substring(0,8) + '...'} (${a.metadata.previous_position}) • `}
-                      
-                      {/* Container metadata */}
-                      {a.entity_type === 'container' && a.metadata.location && `Location: ${a.metadata.location} • `}
-                      {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
-                      {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted} • `}
-                      {a.metadata.source && `Source: ${a.metadata.source}`}
+                      Source: {a.metadata.source}
                     </div>
                   )}
                 </div>

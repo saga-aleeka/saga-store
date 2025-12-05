@@ -226,6 +226,24 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
   }
 
   const formatHistoryDescription = (event: HistoryEvent): string => {
+    const fromContainer = getContainerDisplay(event.from_container)
+    const toContainer = getContainerDisplay(event.to_container)
+    
+    if (event.action === 'moved' && event.from_container && event.to_container) {
+      if (event.from_container === event.to_container) {
+        return `Moved within ${toContainer} (${event.from_position} > ${event.to_position})`
+      }
+      return `Moved from ${fromContainer} (${event.from_position}) > ${toContainer} (${event.to_position})`
+    }
+    
+    if (event.action === 'inserted' && event.to_container) {
+      return `Scanned into ${toContainer} (${event.to_position})`
+    }
+    
+    return getActionLabel(event.action)
+  }
+
+  const formatHistoryDescription = (event: HistoryEvent): string => {
     const fromContainer = event.from_container ? containerNames.get(event.from_container) || event.from_container : null
     const toContainer = event.to_container ? containerNames.get(event.to_container) || event.to_container : null
     
