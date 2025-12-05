@@ -1,7 +1,9 @@
 import React, {useEffect, useState} from 'react'
+import { toast } from 'sonner'
 import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
+import { formatErrorMessage } from '../lib/utils'
 
 // parser helpers
 function parseGridText(raw: string){
@@ -643,13 +645,13 @@ export default function AdminDashboard(){
                       }
                     }
                     
-                    alert('Imported ' + done + ' items' + (failed ? ('; failed: ' + failed) : ''))
+                    toast.success(`Imported ${done} item(s)` + (failed ? ` (${failed} failed)` : ''))
                     setParsed(null)
                     setPasteText('')
                     
                     // Dispatch event to refresh container list
                     window.dispatchEvent(new Event('container-updated'))
-                  }catch(e){ console.error('Import error:', e); alert('Import failed: ' + (e as Error).message) }
+                  }catch(e){ console.error('Import error:', e); toast.error(formatErrorMessage(e, 'Import items')) }
                   setImporting(false)
                 }}>{importing ? 'Importing…' : 'Import parsed items'}</button>
 
@@ -896,13 +898,13 @@ export default function AdminDashboard(){
                   document.body.removeChild(a)
                   window.URL.revokeObjectURL(url)
                   
-                  alert('Backup downloaded successfully!')
+                  toast.success('Backup downloaded successfully!')
                   
                   // Refresh the backups list by reloading the component
                   window.location.reload()
                 } catch(e) {
                   console.error('Backup failed:', e)
-                  alert('Failed to create backup. Please try again.')
+                  toast.error(formatErrorMessage(e, 'Create backup'))
                 }
               }}
             >
@@ -946,7 +948,7 @@ export default function AdminDashboard(){
                   window.URL.revokeObjectURL(url)
                 } catch(e) {
                   console.error('Download failed:', e)
-                  alert('Failed to download backup. Please try again.')
+                  toast.error(formatErrorMessage(e, 'Download backup'))
                 }
               }}
               title="Click to download"

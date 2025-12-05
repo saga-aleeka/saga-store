@@ -1,8 +1,10 @@
 import React, {useEffect, useState} from 'react'
+import { toast } from 'sonner'
 import ContainerGridView from './ContainerGridView'
 import SampleHistorySidebar from './SampleHistorySidebar'
 import { supabase } from '../lib/api'
 import { getToken } from '../lib/auth'
+import { formatErrorMessage } from '../lib/utils'
 
 export default function ContainerDetails({ id }: { id: string | number }){
   const [data, setData] = useState<any | null>(null)
@@ -132,7 +134,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
     // Check if position is unavailable for DP Pools
     const isUnavailable = position === 'I9' && data?.type === 'DP Pools' && data?.layout === '9x9'
     if (isUnavailable) {
-      alert('Position I9 is unavailable for DP Pools containers (DP sets come in groups of 4)')
+      toast.warning('Position I9 is unavailable for DP Pools containers (DP sets come in groups of 4)')
       return
     }
     
@@ -188,7 +190,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       await loadContainer()
     } catch (error) {
       console.error('Add sample error:', error)
-      alert('Failed to add sample')
+      toast.error(formatErrorMessage(error, 'Add sample'))
     }
   }
   
@@ -262,7 +264,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       
     } catch (error) {
       console.error('Scan error:', error)
-      alert('Failed to add sample')
+      toast.error(formatErrorMessage(error, 'Add sample via scan'))
       scanInputRef.current?.focus()
     } finally {
       setScanning(false)
@@ -337,7 +339,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     setScanInput('')
                     setLastScannedId(null)
                   } else {
-                    alert('Container is full!')
+                    toast.warning('Container is full!')
                   }
                 }}
                 style={{

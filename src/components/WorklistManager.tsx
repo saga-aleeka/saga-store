@@ -160,7 +160,7 @@ export default function WorklistManager() {
       const sampleIds = parseCSV(text)
       
       if (sampleIds.length === 0) {
-        alert('No sample IDs found in file')
+        toast.warning('No sample IDs found in file')
         return
       }
 
@@ -177,7 +177,7 @@ export default function WorklistManager() {
       
       if (error) {
         console.error('Database error:', error)
-        alert(`Database error: ${error.message}\n\nPlease make sure the database migration has been run. See db/migrations/2025-11-13-add-checkout-fields.sql`)
+        toast.error(formatErrorMessage(error, 'Fetch worklist samples'))
         return
       }
 
@@ -221,7 +221,7 @@ export default function WorklistManager() {
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error processing worklist:', err)
-      alert(`Failed to process worklist file: ${err?.message || 'Unknown error'}\n\nCheck console for details.`)
+      toast.error(formatErrorMessage(err, 'Process worklist file'))
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -253,7 +253,7 @@ export default function WorklistManager() {
     const token = getToken()
     
     if (!user || !token) {
-      alert('You must be signed in to checkout samples')
+      toast.error('You must be signed in to checkout samples')
       return
     }
 
@@ -267,7 +267,7 @@ export default function WorklistManager() {
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
-        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
+        toast.error(formatErrorMessage(fetchError, 'Fetch samples for checkout'))
         return
       }
       
@@ -279,7 +279,7 @@ export default function WorklistManager() {
       ) || []
       
       if (!availableSamples || availableSamples.length === 0) {
-        alert('No samples available to checkout (they may already be checked out)')
+        toast.info('No samples available to checkout (they may already be checked out)')
         return
       }
 
@@ -312,7 +312,7 @@ export default function WorklistManager() {
         
         if (updateError) {
           console.error('Error updating sample:', updateError)
-          alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+          toast.error(formatErrorMessage(updateError, 'Checkout sample'))
           return
         }
       }
@@ -344,11 +344,11 @@ export default function WorklistManager() {
         return item
       }))
 
-      alert(`Checked out ${availableSamples.length} sample(s)`)
+      toast.success(`Checked out ${availableSamples.length} sample(s)`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error checking out samples:', err)
-      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
+      toast.error(formatErrorMessage(err, 'Checkout samples'))
     } finally {
       setLoading(false)
     }
@@ -367,14 +367,14 @@ export default function WorklistManager() {
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
-        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
+        toast.error(formatErrorMessage(fetchError, 'Fetch samples for undo'))
         return
       }
       
       const checkedOutSamples = samples?.filter((s: any) => s.is_checked_out) || []
       
       if (!checkedOutSamples || checkedOutSamples.length === 0) {
-        alert('No checked out samples to undo')
+        toast.info('No checked out samples to undo')
         return
       }
 
@@ -393,7 +393,7 @@ export default function WorklistManager() {
         }))
 
       if (updates.length === 0) {
-        alert('No samples have previous position data to restore')
+        toast.info('No samples have previous position data to restore')
         return
       }
 
@@ -414,7 +414,7 @@ export default function WorklistManager() {
         
         if (updateError) {
           console.error('Error restoring sample:', updateError)
-          alert(`Failed to undo checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+          toast.error(formatErrorMessage(updateError, 'Restore sample'))
           return
         }
       }
@@ -445,11 +445,11 @@ export default function WorklistManager() {
         return item
       }))
 
-      alert(`Restored ${updates.length} sample(s) to original positions`)
+      toast.success(`Restored ${updates.length} sample(s) to original positions`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error undoing checkout:', err)
-      alert(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
+      toast.error(formatErrorMessage(err, 'Undo checkout'))
     } finally {
       setLoading(false)
     }
@@ -457,7 +457,7 @@ export default function WorklistManager() {
 
   const viewSampleContainer = async (sample: WorklistSample) => {
     if (!sample.container_id) {
-      alert('Sample is not currently in a container')
+      toast.info('Sample is not currently in a container')
       return
     }
 

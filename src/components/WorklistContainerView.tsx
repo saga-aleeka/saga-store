@@ -110,7 +110,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
     const user = getUser()
     
     if (!user) {
-      alert('You must be signed in to undo checkout')
+      toast.error('You must be signed in to undo checkout')
       return
     }
 
@@ -126,12 +126,12 @@ export default function WorklistContainerView({ containerId, highlightPositions,
       
       if (fetchError) {
         console.error('Error fetching checked out samples:', fetchError)
-        alert(`Error: ${fetchError.message}`)
+        toast.error(formatErrorMessage(fetchError, 'Fetch checked out samples'))
         return
       }
 
       if (!checkedOutSamples || checkedOutSamples.length === 0) {
-        alert('No samples from this container to restore')
+        toast.info('No samples from this container to restore')
         return
       }
 
