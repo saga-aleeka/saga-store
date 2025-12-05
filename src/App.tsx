@@ -1041,6 +1041,57 @@ export default function App() {
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             
+            {/* Sample count and pagination info */}
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
+              <div style={{
+                marginBottom: 12,
+                padding: 12,
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div style={{fontSize: 14, color: '#6b7280'}}>
+                  Showing {((currentPage - 1) * samplesPerPage) + 1}–{Math.min(currentPage * samplesPerPage, filteredSamples.length)} of {filteredSamples.length} samples
+                </div>
+                {filteredSamples.length > samplesPerPage && (
+                  <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="btn ghost"
+                      style={{
+                        fontSize: 13,
+                        padding: '4px 12px',
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ← Previous
+                    </button>
+                    <span style={{fontSize: 13, color: '#6b7280', fontWeight: 500}}>
+                      Page {currentPage} of {Math.ceil(filteredSamples.length / samplesPerPage)}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredSamples.length / samplesPerPage), p + 1))}
+                      disabled={currentPage >= Math.ceil(filteredSamples.length / samplesPerPage)}
+                      className="btn ghost"
+                      style={{
+                        fontSize: 13,
+                        padding: '4px 12px',
+                        opacity: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 0.5 : 1,
+                        cursor: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
             {/* Bulk action toolbar */}
             {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{
