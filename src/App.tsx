@@ -9,6 +9,7 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
+import VirtualizedSampleList from './components/VirtualizedSampleList'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -814,7 +815,26 @@ export default function App() {
             
             {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
-            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
+            
+            {/* Use virtual scrolling for large datasets (1000+ samples) */}
+            {!loadingSamples && filteredSamples && filteredSamples.length >= 1000 && (
+              <>
+                <div style={{marginBottom: 12, fontSize: 13, color: '#6b7280'}}>
+                  Showing {filteredSamples.length} samples with virtual scrolling for optimal performance
+                </div>
+                <VirtualizedSampleList
+                  samples={filteredSamples}
+                  onSampleClick={(s) => {
+                    window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
+                  }}
+                  sampleTypeColors={SAMPLE_TYPE_COLORS}
+                  user={user}
+                />
+              </>
+            )}
+            
+            {/* Use regular paginated table for smaller datasets (< 1000 samples) */}
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && filteredSamples.length < 1000 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
@@ -898,7 +918,7 @@ export default function App() {
                 </table>
               </div>
             )}
-            {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && (
+            {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && filteredSamples.length < 1000 && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
