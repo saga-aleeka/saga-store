@@ -99,7 +99,7 @@ module.exports = async function handler(req: any, res: any){
           entityId: sampleId,
           action: body.is_archived ? 'archived' : 'unarchived',
           entityName: current.sample_id,
-          description: `Sample ${current.sample_id} ${body.is_archived ? 'archived' : 'unarchived'}`,
+          description: `Sample ${current.sample_id} ${body.is_archived ? 'archived' : 'unarchived'} from {container} ({position})`,
           metadata: {
             sample_id: current.sample_id,
             container_id: current.container_id || null,
@@ -121,7 +121,7 @@ module.exports = async function handler(req: any, res: any){
           entityId: sampleId,
           action: body.is_training ? 'marked_training' : 'unmarked_training',
           entityName: current.sample_id,
-          description: `Sample ${current.sample_id} ${body.is_training ? 'marked as training' : 'unmarked as training'}`,
+          description: `Sample ${current.sample_id} ${body.is_training ? 'marked as training' : 'unmarked as training'} in {container} ({position})`,
           metadata: {
             sample_id: current.sample_id,
             container_id: current.container_id || null,
@@ -165,7 +165,7 @@ module.exports = async function handler(req: any, res: any){
           entityId: sampleId,
           action: 'moved',
           entityName: current.sample_id,
-          description: `Sample ${current.sample_id} moved`,
+          description: `Sample ${current.sample_id} moved from {from_container} ({from_position}) > {to_container} ({to_position})`,
           metadata: {
             sample_id: current.sample_id,
             from_container: current.container_id || null,
@@ -227,7 +227,7 @@ module.exports = async function handler(req: any, res: any){
           entityId: sampleId,
           action: 'deleted',
           entityName: sample.sample_id,
-          description: `Sample ${sample.sample_id} permanently deleted`,
+          description: `Sample ${sample.sample_id} permanently deleted from {container} ({position})`,
           metadata: {
             sample_id: sample.sample_id,
             container_id: sample.container_id || null,
