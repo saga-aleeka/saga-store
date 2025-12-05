@@ -9,7 +9,6 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
-import VirtualizedSampleList from './components/VirtualizedSampleList'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -894,7 +893,7 @@ export default function App() {
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             
             {/* Bulk action toolbar */}
-            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && filteredSamples.length < 1000 && (
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{
                 marginBottom: 12,
                 display: 'flex',
@@ -968,25 +967,8 @@ export default function App() {
               </div>
             )}
             
-            {/* Use virtual scrolling for large datasets (1000+ samples) */}
-            {!loadingSamples && filteredSamples && filteredSamples.length >= 1000 && (
-              <>
-                <div style={{marginBottom: 12, fontSize: 13, color: '#6b7280'}}>
-                  Showing {filteredSamples.length} samples with virtual scrolling for optimal performance
-                </div>
-                <VirtualizedSampleList
-                  samples={filteredSamples}
-                  onSampleClick={(s) => {
-                    window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
-                  }}
-                  sampleTypeColors={SAMPLE_TYPE_COLORS}
-                  user={user}
-                />
-              </>
-            )}
-            
-            {/* Use regular paginated table for smaller datasets (< 1000 samples) */}
-            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && filteredSamples.length < 1000 && (
+            {/* Paginated samples table */}
+            {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
@@ -999,14 +981,12 @@ export default function App() {
                           style={{cursor: 'pointer', width: 16, height: 16}}
                         />
                       </th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Owner</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Collected</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '25%'}}>Sample ID</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '15%'}}>Container Type</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '25%'}}>Container</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '15%'}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '10%'}}>Position</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: '10%'}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1095,8 +1075,8 @@ export default function App() {
                               {containerType}
                             </span>
                           </td>
-                          <td style={{padding: 12}}>{containerLocation}</td>
                           <td style={{padding: 12}}>{containerName}</td>
+                          <td style={{padding: 12}}>{containerLocation}</td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '2px 8px',
@@ -1109,8 +1089,6 @@ export default function App() {
                               {s.position || '-'}
                             </span>
                           </td>
-                          <td style={{padding: 12}}>{s.owner || '-'}</td>
-                          <td style={{padding: 12}} className="muted">{formatDate(s.collected_at)}</td>
                           <td style={{padding: 12}}>
                             {s.container_id && (
                               <button
@@ -1118,7 +1096,7 @@ export default function App() {
                                 onClick={handleSampleClick}
                                 style={{fontSize: 12, padding: '4px 8px'}}
                               >
-                                View in Container
+                                View
                               </button>
                             )}
                           </td>
@@ -1129,7 +1107,7 @@ export default function App() {
                 </table>
               </div>
             )}
-            {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && filteredSamples.length < 1000 && (
+            {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
