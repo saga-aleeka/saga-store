@@ -57,6 +57,69 @@ module.exports = async function handler(req: any, res: any){
 
     const now = new Date().toISOString()
 
+    // FIRST: Check if target position is occupied by a DIFFERENT sample
+    const { data: occupyingSamples, error: occupyError } = await supabaseAdmin
+      .from('samples')
+      .select('*')
+      .eq('container_id', container_id)
+      .eq('position', position)
+      .eq('is_archived', false)
+
+    if (occupyError) {
+      console.error('Error checking occupying samples:', occupyError)
+      return res.status(500).json({ error: 'database_error' })
+    }
+
+    // Filter to get the exact sample at this position (case-insensitive)
+    const occupyingSample = (occupyingSamples || []).find(s => 
+      s.container_id === container_id && 
+      String(s.position).trim().toUpperCase() === String(position).trim().toUpperCase() &&
+      !s.is_archived
+    )
+
+    // If position is occupied by a DIFFERENT sample, check it out
+    if (occupyingSample && String(occupyingSample.sample_id).trim().toUpperCase() !== normalizedSampleId) {
+      console.log(`[UPSERT] Position ${position} is occupied by "${occupyingSample.sample_id}" - checking it out`)
+      
+      const { error: checkoutError } = await supabaseAdmin
+        .from('samples')
+        .update({
+          is_checked_out: true,
+          checked_out_at: now,
+          checked_out_by: user || 'system',
+          previous_container_id: occupyingSample.container_id,
+          previous_position: occupyingSample.position,
+          container_id: null,
+          position: null,
+          updated_at: now
+        })
+        .eq('id', occupyingSample.id)
+
+      if (checkoutError) {
+        console.error('Error checking out displaced sample:', checkoutError)
+        return res.status(500).json({ error: 'checkout_failed', message: checkoutError.message })
+      }
+
+      // Log audit for the checked out sample
+      await createAuditLog(supabaseAdmin, {
+        userInitials: user,
+        entityType: 'sample',
+        entityId: occupyingSample.id,
+        action: 'checked_out',
+        entityName: occupyingSample.sample_id,
+        description: `Sample ${occupyingSample.sample_id} checked out (displaced by ${normalizedSampleId})`,
+        metadata: {
+          sample_id: occupyingSample.sample_id,
+          previous_container_id: occupyingSample.container_id,
+          previous_position: occupyingSample.position,
+          displaced_by: normalizedSampleId,
+          reason: 'overwritten'
+        }
+      })
+
+      console.log(`[UPSERT] Successfully checked out displaced sample "${occupyingSample.sample_id}"`)
+    }
+
     // Check if sample already exists (active, non-archived) in ANY container
     // Use exact match with explicit trim to ensure no false positives
     const { data: existingActive, error: fetchError } = await supabaseAdmin
