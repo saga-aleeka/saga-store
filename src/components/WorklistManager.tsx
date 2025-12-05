@@ -1,9 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { toast } from 'sonner'
 import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
-import { formatErrorMessage, retryWithBackoff } from '../lib/utils'
+
+// Sample type color mapping (matches ContainerFilters)
+const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
+  'PA Pools': '#fb923c',
+  'DP Pools': '#10b981',
+  'cfDNA Tubes': '#9ca3af',
+  'cfDNA': '#9ca3af',
+  'DTC Tubes': '#7c3aed',
+  'DTC': '#7c3aed',
+  'MNC Tubes': '#ef4444',
+  'MNC': '#ef4444',
+  'Plasma Tubes': '#f59e0b',
+  'Plasma': '#f59e0b',
+  'BC Tubes': '#3b82f6',
+  'IDT Plates': '#06b6d4',
+  'IDT': '#06b6d4'
+}
 
 interface WorklistSample {
   sample_id: string
@@ -25,7 +40,7 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
     const name = containerName.toUpperCase()
     if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
     if (name.includes('DTC')) return 'DTC'
-    if (name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
+    if (name.includes('PA POOL') || name.includes('PAPOOL') || name.includes('PA TUBE') || name.includes('PATUBE')) return 'PA Pools'
     if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
     if (name.includes('MNC')) return 'MNC'
     if (name.includes('IDT')) return 'IDT'
@@ -40,7 +55,8 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   if (/PAP\d+$/i.test(id)) return 'PA Pools'
   if (/DPP\d+[A-D]$/i.test(id)) return 'DP Pools'
   if (/NC\d+$/i.test(id)) return 'MNC'
-  if (/PP\d+$/i.test(id)) return 'IDT'
+  // Match PP followed by 2 or 3 digits at the end (PP## or PP###)
+  if (/PP\d{2,3}$/i.test(id)) return 'IDT'
   if (/BC\d+$/i.test(id)) return 'BC Tubes'
   if (/PL\d+$/i.test(id)) return 'Plasma'
   
@@ -160,7 +176,7 @@ export default function WorklistManager() {
       const sampleIds = parseCSV(text)
       
       if (sampleIds.length === 0) {
-        toast.warning('No sample IDs found in file')
+        alert('No sample IDs found in file')
         return
       }
 
@@ -177,7 +193,7 @@ export default function WorklistManager() {
       
       if (error) {
         console.error('Database error:', error)
-        toast.error(formatErrorMessage(error, 'Fetch worklist samples'))
+        alert(`Database error: ${error.message}\n\nPlease make sure the database migration has been run. See db/migrations/2025-11-13-add-checkout-fields.sql`)
         return
       }
 
@@ -221,7 +237,7 @@ export default function WorklistManager() {
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error processing worklist:', err)
-      toast.error(formatErrorMessage(err, 'Process worklist file'))
+      alert(`Failed to process worklist file: ${err?.message || 'Unknown error'}\n\nCheck console for details.`)
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -253,26 +269,21 @@ export default function WorklistManager() {
     const token = getToken()
     
     if (!user || !token) {
-      toast.error('You must be signed in to checkout samples')
+      alert('You must be signed in to checkout samples')
       return
     }
 
     setLoading(true)
     try {
       // Get current sample data to save previous positions (case-insensitive)
-      const { data: currentSamples, error: fetchError } = await retryWithBackoff(async () => {
-        const result = await supabase
-          .from('samples')
-          .select('id, sample_id, container_id, position, is_checked_out')
-          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
-        
-        if (result.error) throw result.error
-        return result
-      })
+      const { data: currentSamples, error: fetchError } = await supabase
+        .from('samples')
+        .select('id, sample_id, container_id, position, is_checked_out')
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
-        toast.error(formatErrorMessage(fetchError, 'Fetch samples for checkout'))
+        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
         return
       }
       
@@ -284,7 +295,7 @@ export default function WorklistManager() {
       ) || []
       
       if (!availableSamples || availableSamples.length === 0) {
-        toast.info('No samples available to checkout (they may already be checked out)')
+        alert('No samples available to checkout (they may already be checked out)')
         return
       }
 
@@ -302,41 +313,31 @@ export default function WorklistManager() {
 
       // Update each sample individually to avoid upsert issues
       for (const update of updates) {
-        const { error: updateError } = await retryWithBackoff(async () => {
-          const result = await supabase
-            .from('samples')
-            .update({
-              is_checked_out: update.is_checked_out,
-              checked_out_at: update.checked_out_at,
-              checked_out_by: update.checked_out_by,
-              previous_container_id: update.previous_container_id,
-              previous_position: update.previous_position,
-              container_id: update.container_id,
-              position: update.position
-            })
-            .eq('id', update.id)
-          
-          if (result.error) throw result.error
-          return result
-        })
+        const { error: updateError } = await supabase
+          .from('samples')
+          .update({
+            is_checked_out: update.is_checked_out,
+            checked_out_at: update.checked_out_at,
+            checked_out_by: update.checked_out_by,
+            previous_container_id: update.previous_container_id,
+            previous_position: update.previous_position,
+            container_id: update.container_id,
+            position: update.position
+          })
+          .eq('id', update.id)
         
         if (updateError) {
           console.error('Error updating sample:', updateError)
-          toast.error(formatErrorMessage(updateError, 'Checkout sample'))
+          alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
           return
         }
       }
 
       // Refresh worklist with case-insensitive query
-      const { data: refreshed } = await retryWithBackoff(async () => {
-        const result = await supabase
-          .from('samples')
-          .select('*, containers!samples_container_id_fkey(id, name, location)')
-          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
-        
-        if (result.error) throw result.error
-        return result
-      })
+      const { data: refreshed } = await supabase
+        .from('samples')
+        .select('*, containers!samples_container_id_fkey(id, name, location)')
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       // Update worklist state with case-insensitive matching
       setWorklist(prev => prev.map(item => {
@@ -359,11 +360,11 @@ export default function WorklistManager() {
         return item
       }))
 
-      toast.success(`Checked out ${availableSamples.length} sample(s)`)
+      alert(`Checked out ${availableSamples.length} sample(s)`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error checking out samples:', err)
-      toast.error(formatErrorMessage(err, 'Checkout samples'))
+      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -375,26 +376,21 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get samples with previous position data (case-insensitive)
-      const { data: samples, error: fetchError } = await retryWithBackoff(async () => {
-        const result = await supabase
-          .from('samples')
-          .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
-          .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
-        
-        if (result.error) throw result.error
-        return result
-      })
+      const { data: samples, error: fetchError } = await supabase
+        .from('samples')
+        .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
+        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (fetchError) {
         console.error('Error fetching samples:', fetchError)
-        toast.error(formatErrorMessage(fetchError, 'Fetch samples for undo'))
+        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
         return
       }
       
       const checkedOutSamples = samples?.filter((s: any) => s.is_checked_out) || []
       
       if (!checkedOutSamples || checkedOutSamples.length === 0) {
-        toast.info('No checked out samples to undo')
+        alert('No checked out samples to undo')
         return
       }
 
@@ -413,33 +409,28 @@ export default function WorklistManager() {
         }))
 
       if (updates.length === 0) {
-        toast.info('No samples have previous position data to restore')
+        alert('No samples have previous position data to restore')
         return
       }
 
       // Update each sample individually to avoid upsert issues
       for (const update of updates) {
-        const { error: updateError } = await retryWithBackoff(async () => {
-          const result = await supabase
-            .from('samples')
-            .update({
-              container_id: update.container_id,
-              position: update.position,
-              is_checked_out: update.is_checked_out,
-              checked_out_at: update.checked_out_at,
-              checked_out_by: update.checked_out_by,
-              previous_container_id: update.previous_container_id,
-              previous_position: update.previous_position
-            })
-            .eq('id', update.id)
-          
-          if (result.error) throw result.error
-          return result
-        })
+        const { error: updateError } = await supabase
+          .from('samples')
+          .update({
+            container_id: update.container_id,
+            position: update.position,
+            is_checked_out: update.is_checked_out,
+            checked_out_at: update.checked_out_at,
+            checked_out_by: update.checked_out_by,
+            previous_container_id: update.previous_container_id,
+            previous_position: update.previous_position
+          })
+          .eq('id', update.id)
         
         if (updateError) {
           console.error('Error restoring sample:', updateError)
-          toast.error(formatErrorMessage(updateError, 'Restore sample'))
+          alert(`Failed to undo checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
           return
         }
       }
@@ -470,11 +461,11 @@ export default function WorklistManager() {
         return item
       }))
 
-      toast.success(`Restored ${updates.length} sample(s) to original positions`)
+      alert(`Restored ${updates.length} sample(s) to original positions`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error undoing checkout:', err)
-      toast.error(formatErrorMessage(err, 'Undo checkout'))
+      alert(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -482,7 +473,7 @@ export default function WorklistManager() {
 
   const viewSampleContainer = async (sample: WorklistSample) => {
     if (!sample.container_id) {
-      toast.info('Sample is not currently in a container')
+      alert('Sample is not currently in a container')
       return
     }
 
@@ -566,22 +557,32 @@ export default function WorklistManager() {
             <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
               <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
               <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {availableTypes.map(type => (
-                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-                    <input
-                      type="checkbox"
-                      checked={selectedTypes.includes(type)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTypes([...selectedTypes, type])
-                        } else {
-                          setSelectedTypes(selectedTypes.filter(t => t !== type))
-                        }
-                      }}
-                    />
-                    <span style={{fontSize: 13}}>{type}</span>
-                  </label>
-                ))}
+                {availableTypes.map(type => {
+                  const typeColor = SAMPLE_TYPE_COLORS[type] || '#6b7280'
+                  return (
+                    <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTypes.includes(type)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTypes([...selectedTypes, type])
+                          } else {
+                            setSelectedTypes(selectedTypes.filter(t => t !== type))
+                          }
+                        }}
+                      />
+                      <span style={{
+                        fontSize: 13,
+                        padding: '4px 10px',
+                        background: `${typeColor}22`,
+                        color: typeColor,
+                        borderRadius: 9999,
+                        fontWeight: 500
+                      }}>{type}</span>
+                    </label>
+                  )
+                })}
                 {selectedTypes.length > 0 && (
                   <button 
                     className="btn ghost" 
@@ -730,11 +731,11 @@ export default function WorklistManager() {
                     <td style={{padding: 12, fontWeight: 600}}>{sample.sample_id}</td>
                     <td style={{padding: 12}}>
                       <span style={{
-                        padding: '2px 8px',
-                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : '#dbeafe',
-                        color: sample.sample_type === 'Unknown' ? '#6b7280' : '#1e40af',
-                        borderRadius: 4,
-                        fontSize: 12,
+                        padding: '4px 10px',
+                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : `${SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'}22`,
+                        color: sample.sample_type === 'Unknown' ? '#6b7280' : (SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'),
+                        borderRadius: 9999,
+                        fontSize: 13,
                         fontWeight: 500
                       }}>
                         {sample.sample_type}
