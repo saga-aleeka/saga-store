@@ -9,11 +9,12 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
+import CommandPalette from './components/CommandPalette'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
-import { useDebounce, useRecentItems } from './lib/hooks'
+import { useDebounce, useRecentItems, useKeyboardShortcut } from './lib/hooks'
 import { GridSkeleton } from './components/Skeletons'
 import { formatErrorMessage } from './lib/utils'
 
@@ -96,6 +97,19 @@ export default function App() {
     'saga_recent_containers',
     10
   )
+  
+  // Command palette state
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  
+  // Cmd+K keyboard shortcut for command palette
+  useKeyboardShortcut({
+    key: 'k',
+    meta: true,
+    handler: (e) => {
+      e.preventDefault()
+      setCommandPaletteOpen(true)
+    }
+  })
 
   // Clear all filters function
   const clearAllFilters = () => {
@@ -474,6 +488,49 @@ export default function App() {
       setBulkActionInProgress(false)
     }
   }
+  
+  // Command palette navigation handler
+  const handleCommandPaletteNavigate = async (type: 'container' | 'sample', id: string) => {
+    if (type === 'container') {
+      // Add to recent containers
+      try {
+        const { data } = await supabase
+          .from('containers')
+          .select('id, name')
+          .eq('id', id)
+          .single()
+        
+        if (data) {
+          addRecentContainer({ id: data.id, name: data.name })
+        }
+      } catch (e) {
+        console.error('Failed to fetch container for recent items:', e)
+      }
+      
+      // Navigate to container
+      window.location.hash = `#/containers/${id}`
+    } else if (type === 'sample') {
+      // Navigate to the sample's container
+      try {
+        const { data } = await supabase
+          .from('samples')
+          .select('container_id, containers(id, name)')
+          .eq('id', id)
+          .single()
+        
+        if (data && data.container_id) {
+          const container = data.containers as any
+          if (container) {
+            addRecentContainer({ id: container.id, name: container.name })
+          }
+          window.location.hash = `#/containers/${data.container_id}`
+        }
+      } catch (e) {
+        console.error('Failed to navigate to sample:', e)
+        toast.error(formatErrorMessage(e, 'Navigate to sample'))
+      }
+    }
+  }
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -535,6 +592,14 @@ export default function App() {
         richColors
         closeButton
       />
+      
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        recentContainers={recentContainers}
+        onNavigate={handleCommandPaletteNavigate}
+      />
+      
       <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
