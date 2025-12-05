@@ -1,6 +1,8 @@
 import React, {useState, useEffect, useRef} from 'react'
+import { toast } from 'sonner'
 import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
 import { apiFetch } from '../lib/api'
+import { formatErrorMessage } from '../lib/utils'
 
 export default function ContainerEditDrawer({ container, onClose }: { container: any, onClose: ()=>void }){
   const defaultForm = {
@@ -75,10 +77,11 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
       const j = await res.json()
       // notify app that container updated
       window.dispatchEvent(new CustomEvent('container-updated', { detail: j.data }))
+      toast.success('Container updated successfully')
       onClose()
     } catch(e) {
       console.error('Save failed:', e)
-      alert('Failed to save changes. Please try again.')
+      toast.error(formatErrorMessage(e, 'Save container'))
       setSaving(false)
     }
   }
@@ -101,12 +104,13 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
       
       // notify app that container was deleted
       window.dispatchEvent(new CustomEvent('container-updated'))
+      toast.success('Container deleted successfully')
       // redirect to containers list
       window.location.hash = '#/containers'
       onClose()
     } catch(e) {
       console.error('Delete failed:', e)
-      alert('Failed to delete container. Please try again.')
+      toast.error(formatErrorMessage(e, 'Delete container'))
       setDeleting(false)
     }
   }

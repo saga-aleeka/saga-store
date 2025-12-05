@@ -1,7 +1,9 @@
 import React, {useEffect, useState} from 'react'
+import { toast } from 'sonner'
 import ContainerGridView from './ContainerGridView'
 import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
+import { formatErrorMessage } from '../lib/utils'
 
 interface Props {
   containerId: string
@@ -65,7 +67,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
     const token = getToken()
     
     if (!user || !token) {
-      alert('You must be signed in to checkout samples')
+      toast.error('Please sign in to undo checkout')
       return
     }
 
@@ -88,17 +90,17 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         
         if (error) {
           console.error('Error checking out sample:', error)
-          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+          toast.error(`Failed to checkout ${sample.sample_id}: ${formatErrorMessage(error)}`)
           return
         }
       }
 
-      alert(`Checked out ${samplesToCheckout.length} sample(s)`)
+      toast.success(`Checked out ${samplesToCheckout.length} sample(s)`)
       setSelectedPositions(new Set())
       await loadContainer()
     } catch (err: any) {
-      console.error('Error checking out samples:', err)
-      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
+      console.error('Checkout error:', err)
+      toast.error(formatErrorMessage(err, 'Checkout'))
     } finally {
       setProcessing(false)
     }
@@ -150,16 +152,16 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         
         if (error) {
           console.error('Error restoring sample:', error)
-          alert(`Failed to restore ${sample.sample_id}: ${error.message}`)
+          toast.error(`Failed to restore ${sample.sample_id}: ${formatErrorMessage(error)}`)
           return
         }
       }
 
-      alert(`Restored ${checkedOutSamples.length} sample(s) to this container`)
+      toast.success(`Restored ${checkedOutSamples.length} sample(s) to this container`)
       await loadContainer()
     } catch (err: any) {
-      console.error('Error undoing checkout:', err)
-      alert(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
+      console.error('Undo checkout error:', err)
+      toast.error(formatErrorMessage(err, 'Undo checkout'))
     } finally {
       setProcessing(false)
     }

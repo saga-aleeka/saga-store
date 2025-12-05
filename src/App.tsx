@@ -13,7 +13,7 @@ import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
-import { useDebounce, useRecentItems, useFavorites } from './lib/hooks'
+import { useDebounce, useRecentItems } from './lib/hooks'
 import { GridSkeleton } from './components/Skeletons'
 
 // Sample type color mapping (same as ContainerFilters)
@@ -87,8 +87,7 @@ export default function App() {
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
   
-  // Favorites and recent items
-  const { favorites, toggleFavorite, isFavorite } = useFavorites('saga_favorite_containers')
+  // Recent items tracking
   const { recentItems: recentContainers, addRecentItem: addRecentContainer } = useRecentItems<{ id: string; name: string }>(
     'saga_recent_containers',
     10
@@ -257,16 +256,8 @@ export default function App() {
       })
     }
     
-    // Sort: favorites first, then by updated_at
-    filtered.sort((a: any, b: any) => {
-      const aFav = isFavorite(a.id) ? 1 : 0
-      const bFav = isFavorite(b.id) ? 1 : 0
-      if (aFav !== bFav) return bFav - aFav
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    })
-    
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, debouncedSearchQuery, favorites])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, debouncedSearchQuery])
 
   useEffect(() => {
     async function onUpdated(e: any){
@@ -545,8 +536,6 @@ export default function App() {
                   updatedAt={c.updated_at} 
                   location={c.location} 
                   training={c.training}
-                  isFavorite={isFavorite(c.id)}
-                  onToggleFavorite={() => toggleFavorite(c.id)}
                 />
               ))}
             </div>

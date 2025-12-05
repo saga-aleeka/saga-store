@@ -30,12 +30,10 @@ type Props = {
   layout?: string
   occupancy?: { used:number; total:number }
   updatedAt?: string
-  isFavorite?: boolean
-  onToggleFavorite?: () => void
   training?: boolean
 }
 
-export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, isFavorite = false, onToggleFavorite, ...rest}: Props & any){
+export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, ...rest}: Props & any){
   // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
   let effectiveTotal = occupancy.total
   if (type === 'DP Pools' && layout === '9x9' && occupancy.total === 81) {
@@ -52,9 +50,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            {isFavorite && (
-              <span style={{fontSize: 18, lineHeight: 1}} title="Favorited">⭐</span>
-            )}
             <div className="text-base font-semibold whitespace-nowrap">{name ?? 'Unnamed Container'}</div>
             <div className="flex-shrink-0">
               <TypeBadge type={type} />
@@ -70,19 +65,6 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
 
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <div className="flex items-center gap-2" onClick={(e)=> e.stopPropagation()}>
-            {onToggleFavorite && (
-              <button 
-                className="card-menu" 
-                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleFavorite()
-                }}
-                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                {isFavorite ? '★' : '☆'}
-              </button>
-            )}
             <button className="card-menu" aria-label="open menu" onClick={() => setOpenEdit(true)}>⋮</button>
           </div>
         </div>
