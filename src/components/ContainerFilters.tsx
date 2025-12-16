@@ -1,17 +1,42 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { apiFetch } from '../lib/api'
 
-const SAMPLE_TYPES: { key: string, label: string, color: string }[] = [
-  { key: 'PA Pools', label: 'PA Pools', color: '#fb923c' }, // orange
-  { key: 'DP Pools', label: 'DP Pools', color: '#10b981' }, // green
-  { key: 'cfDNA Tubes', label: 'cfDNA Tubes', color: '#9ca3af' }, // gray
-  { key: 'DTC Tubes', label: 'DTC Tubes', color: '#7c3aed' }, // purple
-  { key: 'MNC Tubes', label: 'MNC Tubes', color: '#ef4444' }, // red
-  { key: 'Plasma Tubes', label: 'Plasma Tubes', color: '#f59e0b' }, // yellow
-  { key: 'BC Tubes', label: 'BC Tubes', color: '#3b82f6' }, // blue
-  { key: 'IDT Plates', label: 'IDT Plates', color: '#06b6d4' } // teal chosen
-]
+interface SampleType {
+  key: string
+  label: string
+  color: string
+}
 
 export default function ContainerFilters({ selected, onChange, availableOnly, onAvailableChange, trainingOnly, onTrainingChange }: any){
+  const [sampleTypes, setSampleTypes] = useState<SampleType[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // Load sample types from database
+  useEffect(() => {
+    loadSampleTypes()
+    
+    // Listen for updates
+    const handleUpdate = () => loadSampleTypes()
+    window.addEventListener('sample_types_updated', handleUpdate)
+    return () => window.removeEventListener('sample_types_updated', handleUpdate)
+  }, [])
+  
+  async function loadSampleTypes() {
+    try {
+      const data = await apiFetch('/api/sample_types').then(r => r.json())
+      const types = data.map((st: any) => ({
+        key: st.name,
+        label: st.name,
+        color: st.color
+      }))
+      setSampleTypes(types)
+    } catch (e) {
+      console.error('Failed to load sample types:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
   const toggle = (key: string) => {
     const next = new Set(selected || [])
     if (next.has(key)) next.delete(key)
@@ -38,24 +63,28 @@ export default function ContainerFilters({ selected, onChange, availableOnly, on
   return (
     <div className="filters flex flex-col gap-3">
       <div className="flex items-center gap-3 flex-wrap">
-        {SAMPLE_TYPES.map(st => {
-          const active = (selected || []).includes(st.key)
-          const textColor = readableTextColor(st.color)
-          // inactive: pastel background (20% alpha), text uses full color for contrast; active: fully saturated background with readable text
-          const inactiveBg = `${st.color}22`
-          const activeBg = st.color
-          const style = active ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${st.color}33` } : { background: inactiveBg, color: st.color }
-          return (
-            <button
-              key={st.key}
-              onClick={() => toggle(st.key)}
-              className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 focus:outline-none transition-shadow`}
-              style={style}
-            >
-              <span>{st.label}</span>
-            </button>
-          )
-        })}
+        {loading ? (
+          <div className="muted">Loading sample types...</div>
+        ) : (
+          sampleTypes.map(st => {
+            const active = (selected || []).includes(st.key)
+            const textColor = readableTextColor(st.color)
+            // inactive: pastel background (20% alpha), text uses full color for contrast; active: fully saturated background with readable text
+            const inactiveBg = `${st.color}22`
+            const activeBg = st.color
+            const style = active ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${st.color}33` } : { background: inactiveBg, color: st.color }
+            return (
+              <button
+                key={st.key}
+                onClick={() => toggle(st.key)}
+                className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 focus:outline-none transition-shadow`}
+                style={style}
+              >
+                <span>{st.label}</span>
+              </button>
+            )
+          })
+        )}
       </div>
 
       <div className="flex items-center gap-4">

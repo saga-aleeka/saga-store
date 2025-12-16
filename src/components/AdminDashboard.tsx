@@ -3,6 +3,7 @@ import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 import { AuditLogSkeleton, TableSkeleton } from './LoadingSkeleton'
+import TypesManager from './TypesManager'
 
 // Helper to format audit log descriptions with container names and positions
 function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
@@ -334,7 +335,7 @@ function useFetch<T>(url: string){
 
 export default function AdminDashboard(){
 
-  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'>('import')
+  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'|'create'>('import')
 
   // Pagination state for audit logs
   const [auditPage, setAuditPage] = useState(1)
@@ -438,6 +439,7 @@ export default function AdminDashboard(){
         <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
         <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
         <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
+        <button className={tab==='create'? 'btn':'btn ghost'} onClick={() => setTab('create')}>Create</button>
       </div>
 
       {tab === 'import' && (
@@ -1048,6 +1050,11 @@ export default function AdminDashboard(){
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {tab === 'create' && (
+        <div>
+          <TypesManager />
         </div>
       )}
 
