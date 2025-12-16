@@ -1,6 +1,6 @@
 import React, {useState, useRef, useEffect} from 'react'
-import { apiFetch, supabase } from '../lib/api'
-import { TEMPS } from '../constants'
+import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
+import { supabase } from '../lib/api'
 
 // Template configurations for each sample type
 const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: string, description: string }> = {
@@ -47,41 +47,6 @@ const SAMPLE_TYPE_TEMPLATES: Record<string, { layout: string, temperature: strin
 }
 
 export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }){
-  const [sampleTypes, setSampleTypes] = useState<string[]>([])
-  const [containerTypes, setContainerTypes] = useState<any[]>([])
-  const [loadingTypes, setLoadingTypes] = useState(true)
-  
-  // Load dynamic types
-  useEffect(() => {
-    loadTypes()
-    
-    // Listen for updates
-    const handleSampleUpdate = () => loadTypes()
-    const handleContainerUpdate = () => loadTypes()
-    window.addEventListener('sample_types_updated', handleSampleUpdate)
-    window.addEventListener('container_types_updated', handleContainerUpdate)
-    return () => {
-      window.removeEventListener('sample_types_updated', handleSampleUpdate)
-      window.removeEventListener('container_types_updated', handleContainerUpdate)
-    }
-  }, [])
-  
-  async function loadTypes() {
-    try {
-      const [sampleData, containerData] = await Promise.all([
-        apiFetch('/api/sample_types').then(r => r.json()),
-        apiFetch('/api/container_types').then(r => r.json())
-      ])
-      
-      // Add "Sample Type" as first option for sample types
-      setSampleTypes(['Sample Type', ...sampleData.map((st: any) => st.name)])
-      setContainerTypes(containerData)
-    } catch (e) {
-      console.error('Failed to load types:', e)
-    } finally {
-      setLoadingTypes(false)
-    }
-  }
   const defaultForm = {
     name: '',
     location: '',
@@ -143,27 +108,15 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
       temperature: template.temperature
     }
 
-    // Calculate total capacity based on layout
-    const containerType = containerTypes.find(ct => ct.name === template.layout)
-    if (containerType) {
-      const maxPositions = containerType.rows * containerType.columns
-      
-      // DP Pools always have 80 capacity (I9 is unavailable)
-      if (sampleType === 'DP Pools' && template.layout === '9x9') {
-        newForm.total = 80
-      } else {
-        newForm.total = maxPositions
-      }
+    // Calculate total capacity
+    const [rows, cols] = template.layout.split('x').map((n: string) => parseInt(n))
+    const maxPositions = rows * cols
+    
+    // DP Pools always have 80 capacity (I9 is unavailable)
+    if (sampleType === 'DP Pools' && template.layout === '9x9') {
+      newForm.total = 80
     } else {
-      // Fallback to parsing layout string
-      const [rows, cols] = template.layout.split('x').map((n: string) => parseInt(n))
-      const maxPositions = rows * cols
-      
-      if (sampleType === 'DP Pools' && template.layout === '9x9') {
-        newForm.total = 80
-      } else {
-        newForm.total = maxPositions
-      }
+      newForm.total = maxPositions
     }
 
     setForm(newForm)
@@ -179,28 +132,14 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
     if (k === 'layout' || k === 'type') {
       const layout = k === 'layout' ? v : form.layout
       const type = k === 'type' ? v : form.type
+      const [rows, cols] = layout.split('x').map((n: string) => parseInt(n))
+      const maxPositions = rows * cols
       
-      // Find container type to get dimensions
-      const containerType = containerTypes.find(ct => ct.name === layout)
-      if (containerType) {
-        const maxPositions = containerType.rows * containerType.columns
-        
-        // DP Pools always have 80 capacity (I9 is unavailable)
-        if (type === 'DP Pools' && layout === '9x9') {
-          newForm.total = 80
-        } else {
-          newForm.total = maxPositions
-        }
+      // DP Pools always have 80 capacity (I9 is unavailable)
+      if (type === 'DP Pools' && layout === '9x9') {
+        newForm.total = 80
       } else {
-        // Fallback to parsing layout string
-        const [rows, cols] = layout.split('x').map((n: string) => parseInt(n))
-        const maxPositions = rows * cols
-        
-        if (type === 'DP Pools' && layout === '9x9') {
-          newForm.total = 80
-        } else {
-          newForm.total = maxPositions
-        }
+        newForm.total = maxPositions
       }
     }
     
@@ -275,7 +214,7 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
                 }
               }}
             >
-              {sampleTypes.map(s => <option key={s}>{s}</option>)}
+              {SAMPLE_TYPES.map(s => <option key={s}>{s}</option>)}
             </select>
           </label>
 
@@ -308,11 +247,7 @@ export default function ContainerCreateDrawer({ onClose }: { onClose: ()=>void }
           <label>
             Dimension
             <select value={form.layout} onChange={(e)=> updateField('layout', e.target.value)}>
-              {containerTypes.map(ct => (
-                <option key={ct.id} value={ct.name}>
-                  {ct.name} ({ct.rows}×{ct.columns} = {ct.rows * ct.columns} positions)
-                </option>
-              ))}
+              {LAYOUTS.map(l => <option key={l}>{l}</option>)}
             </select>
           </label>
 
