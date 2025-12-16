@@ -8,7 +8,8 @@ const SAMPLE_TYPES: { key: string, label: string, color: string }[] = [
   { key: 'MNC Tubes', label: 'MNC Tubes', color: '#ef4444' }, // red
   { key: 'Plasma Tubes', label: 'Plasma Tubes', color: '#f59e0b' }, // yellow
   { key: 'BC Tubes', label: 'BC Tubes', color: '#3b82f6' }, // blue
-  { key: 'IDT Plates', label: 'IDT Plates', color: '#06b6d4' } // teal chosen
+  { key: 'IDT Plates', label: 'IDT Plates', color: '#06b6d4' }, // teal chosen
+  { key: 'Other', label: 'Other', color: '#8b5cf6' } // violet
 ]
 
 export default function ContainerFilters({ selected, onChange, availableOnly, onAvailableChange, trainingOnly, onTrainingChange }: any){
