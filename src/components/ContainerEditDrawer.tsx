@@ -254,7 +254,7 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
           <label>
             Sample Type
             <select 
-              value={form.type ?? SAMPLE_TYPES[0]} 
+              value={form.type ?? sampleTypes[0] ?? ''} 
               onChange={(e) => {
                 const selectedType = e.target.value
                 if (selectedType !== 'Sample Type' && SAMPLE_TYPE_TEMPLATES[selectedType]) {

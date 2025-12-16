@@ -648,7 +648,7 @@ export default function AdminDashboard(){
                         const meta = (parsed.boxes || []).find((bb:any) => String(bb.boxName) === String(boxName)) || {}
                         const location = meta.location ?? 'Imported'
                         const layout = meta.layout ?? '9x9'
-                        const sampleType = extractSampleType(boxName)
+                        const sampleType = extractSampleType(String(boxName))
                         
                         const { data: newContainer, error: createError } = await supabase
                           .from('containers')
