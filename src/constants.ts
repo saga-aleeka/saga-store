@@ -8,6 +8,7 @@ export const SAMPLE_TYPES = [
   'Plasma Tubes',
   'BC Tubes',
   'IDT Plates',
+  'Other',
 ]
 
 export const LAYOUTS = ['9x9','5x5','14x7']
