@@ -448,6 +448,12 @@ export default function ContainerDetails({ id }: { id: string | number }){
               type="text"
               value={scanInput}
               onChange={(e) => setScanInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleScanSubmit(e as any)
+                }
+              }}
               placeholder="Scan or type sample ID..."
               disabled={!currentPosition || scanning}
               style={{
