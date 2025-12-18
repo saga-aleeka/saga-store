@@ -228,12 +228,21 @@ export default function App() {
       return true
     })
     
-    // Apply search filter
+    // Apply search filter (includes cross-search: searching for sample IDs will show their containers)
     if (searchQuery.trim()) {
       const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((c: any) => {
-        const searchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
-        return terms.some(term => searchText.includes(term))
+        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
+        
+        // Check if container info matches
+        const containerMatches = terms.some(term => containerSearchText.includes(term))
+        
+        // Cross-search: Check if any sample IDs in this container match
+        const sampleMatches = (c.samples || []).some((s: any) => 
+          terms.some(term => (s.sample_id || '').toLowerCase().includes(term))
+        )
+        
+        return containerMatches || sampleMatches
       })
     }
     
