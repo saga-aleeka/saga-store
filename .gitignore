@@ -7,3 +7,12 @@ dist/
 .swp
 *.log
 .vercel
+
+# Python backend
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+backend/venv/
+backend/.venv/
+*.egg-info/
+.pytest_cache/
