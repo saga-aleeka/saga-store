@@ -757,12 +757,17 @@ export default function App() {
             
             {/* Sample Type Filters */}
             {(() => {
-              const availableSampleTypes = samples ? Array.from(new Set(samples.map((s: any) => {
+              // Use the same order as ContainerFilters
+              const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
+              const allTypesInSamples = samples ? Array.from(new Set(samples.map((s: any) => {
                 // For checked out samples, use previous container type; otherwise use current container type
                 return s.is_checked_out && s.previous_containers?.type
                   ? s.previous_containers.type
                   : (s.containers?.type || 'Sample Type')
-              }))).filter(type => type !== 'Sample Type').sort() : []
+              }))).filter(type => type !== 'Sample Type') : []
+              
+              // Filter to only types present in the samples, but maintain the defined order
+              const availableSampleTypes = typeOrder.filter(type => allTypesInSamples.includes(type))
               
               if (availableSampleTypes.length > 0) {
                 return (
