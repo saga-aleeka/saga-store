@@ -82,6 +82,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
+  // sample selection for checkout
+  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
+  const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
 
   // Reset to page 1 when search changes
   useEffect(() => {
@@ -97,6 +100,14 @@ export default function App() {
   // Reset containers page when route changes
   useEffect(() => {
     setContainersCurrentPage(1)
+  }, [route])
+
+  // Clear sample selection and checkout history when navigating away from samples page
+  useEffect(() => {
+    if (route !== '#/samples') {
+      setSelectedSampleIds(new Set())
+      setCheckoutHistory([])
+    }
   }, [route])
 
   useEffect(() => {
@@ -725,6 +736,170 @@ export default function App() {
 
         {route === '#/samples' && (
           <div>
+            {/* Action buttons */}
+            {filteredSamples && filteredSamples.length > 0 && (
+              <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
+                <button 
+                  className="btn ghost"
+                  onClick={() => {
+                    const pageIds = filteredSamples
+                      .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
+                      .filter((s: any) => s.id && !s.is_checked_out && s.container_id)
+                      .map((s: any) => s.id)
+                    setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
+                  }}
+                  disabled={loadingSamples}
+                  style={{fontSize: 13}}
+                >
+                  Select All on Page
+                </button>
+                <button 
+                  className="btn ghost"
+                  onClick={() => setSelectedSampleIds(new Set())}
+                  disabled={loadingSamples || selectedSampleIds.size === 0}
+                  style={{fontSize: 13}}
+                >
+                  Deselect All
+                </button>
+                <div style={{flex: 1}} />
+                <button 
+                  className="btn"
+                  onClick={async () => {
+                    const selectedSamples = filteredSamples.filter((s: any) => selectedSampleIds.has(s.id))
+                    if (selectedSamples.length === 0) {
+                      alert('No samples selected')
+                      return
+                    }
+                    
+                    const user = getUser()
+                    if (!user) {
+                      alert('You must be signed in to checkout samples')
+                      return
+                    }
+                    
+                    setLoadingSamples(true)
+                    try {
+                      const history: Array<{sample_id: string, container_id: string, position: string}> = []
+                      
+                      for (const sample of selectedSamples) {
+                        if (sample.is_checked_out || !sample.container_id) continue
+                        
+                        // Save to history before checkout
+                        history.push({
+                          sample_id: sample.sample_id,
+                          container_id: sample.container_id,
+                          position: sample.position
+                        })
+                        
+                        const { error } = await supabase
+                          .from('samples')
+                          .update({
+                            is_checked_out: true,
+                            checked_out_at: new Date().toISOString(),
+                            checked_out_by: user.initials,
+                            previous_container_id: sample.container_id,
+                            previous_position: sample.position,
+                            container_id: null,
+                            position: null
+                          })
+                          .eq('id', sample.id)
+                        
+                        if (error) {
+                          console.error('Checkout error:', error)
+                          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+                          return
+                        }
+                      }
+                      
+                      setCheckoutHistory([...checkoutHistory, ...history])
+                      setSelectedSampleIds(new Set())
+                      
+                      // Reload samples
+                      const isArchiveRoute = route === '#/archive'
+                      const { data } = await supabase
+                        .from('samples')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .eq('is_archived', isArchiveRoute)
+                        .order('updated_at', { ascending: false })
+                      
+                      if (data) setSamples(data)
+                      
+                      alert(`Checked out ${history.length} sample(s)`)
+                    } catch (err: any) {
+                      console.error('Checkout error:', err)
+                      alert(`Failed to checkout samples: ${err.message}`)
+                    } finally {
+                      setLoadingSamples(false)
+                    }
+                  }}
+                  disabled={loadingSamples || selectedSampleIds.size === 0}
+                  style={{background: '#10b981', color: 'white', fontSize: 13}}
+                >
+                  Checkout Selected ({selectedSampleIds.size})
+                </button>
+                <button 
+                  className="btn"
+                  onClick={async () => {
+                    if (checkoutHistory.length === 0) {
+                      alert('No checkout history to undo')
+                      return
+                    }
+                    
+                    setLoadingSamples(true)
+                    try {
+                      for (const item of checkoutHistory) {
+                        // Find sample by sample_id
+                        const sample = samples?.find((s: any) => s.sample_id === item.sample_id)
+                        if (!sample) continue
+                        
+                        const { error } = await supabase
+                          .from('samples')
+                          .update({
+                            container_id: item.container_id,
+                            position: item.position,
+                            is_checked_out: false,
+                            checked_out_at: null,
+                            checked_out_by: null,
+                            previous_container_id: null,
+                            previous_position: null
+                          })
+                          .eq('id', sample.id)
+                        
+                        if (error) {
+                          console.error('Undo checkout error:', error)
+                          alert(`Failed to undo checkout for ${item.sample_id}: ${error.message}`)
+                          return
+                        }
+                      }
+                      
+                      setCheckoutHistory([])
+                      
+                      // Reload samples
+                      const isArchiveRoute = route === '#/archive'
+                      const { data } = await supabase
+                        .from('samples')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .eq('is_archived', isArchiveRoute)
+                        .order('updated_at', { ascending: false })
+                      
+                      if (data) setSamples(data)
+                      
+                      alert('Checkout undone successfully')
+                    } catch (err: any) {
+                      console.error('Undo checkout error:', err)
+                      alert(`Failed to undo checkout: ${err.message}`)
+                    } finally {
+                      setLoadingSamples(false)
+                    }
+                  }}
+                  disabled={loadingSamples || checkoutHistory.length === 0}
+                  style={{background: '#f59e0b', color: 'white', fontSize: 13}}
+                >
+                  Undo Checkout ({checkoutHistory.length})
+                </button>
+              </div>
+            )}
+            
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
               <div className="muted">
                 Showing {filteredSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredSamples.length)} of ${filteredSamples.length}` : '...'} samples
@@ -823,13 +998,32 @@ export default function App() {
                 <table style={{width: '100%', borderCollapse: 'collapse'}}>
                   <thead style={{background: '#f3f4f6'}}>
                     <tr>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: 40}}>
+                        <input
+                          type="checkbox"
+                          checked={filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).length > 0 && 
+                                   filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).every((s: any) => selectedSampleIds.has(s.id))}
+                          onChange={(e) => {
+                            const pageIds = filteredSamples
+                              .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
+                              .filter((s: any) => !s.is_checked_out && s.container_id)
+                              .map((s: any) => s.id)
+                            if (e.target.checked) {
+                              setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
+                            } else {
+                              const newSelected = new Set(selectedSampleIds)
+                              pageIds.forEach(id => newSelected.delete(id))
+                              setSelectedSampleIds(newSelected)
+                            }
+                          }}
+                        />
+                      </th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Owner</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Collected</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
                     </tr>
                   </thead>
@@ -852,9 +1046,25 @@ export default function App() {
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: 'white'
+                            background: selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
                           }}
                         >
+                          <td style={{padding: 12}}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSampleIds.has(s.id)}
+                              disabled={s.is_checked_out || !s.container_id}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedSampleIds)
+                                if (e.target.checked) {
+                                  newSelected.add(s.id)
+                                } else {
+                                  newSelected.delete(s.id)
+                                }
+                                setSelectedSampleIds(newSelected)
+                              }}
+                            />
+                          </td>
                           <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
                           <td style={{padding: 12}}>
                             <span style={{
@@ -882,8 +1092,35 @@ export default function App() {
                               {s.position || '-'}
                             </span>
                           </td>
-                          <td style={{padding: 12}}>{s.owner || '-'}</td>
-                          <td style={{padding: 12}} className="muted">{formatDate(s.collected_at)}</td>
+                          <td style={{padding: 12}}>
+                            {s.is_checked_out ? (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}>
+                                Checked Out
+                              </span>
+                            ) : s.container_id ? (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                background: '#d1fae5',
+                                color: '#065f46',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}>
+                                In Container
+                              </span>
+                            ) : (
+                              <span className="muted">-</span>
+                            )}
+                          </td>
                           <td style={{padding: 12}}>
                             {s.container_id && (
                               <button
