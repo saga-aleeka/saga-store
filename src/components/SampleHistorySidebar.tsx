@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getToken } from '../lib/auth'
+import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 
@@ -155,15 +155,20 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setCheckingOut(true)
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      const userInitials = user.initials || 'Unknown'
+      const user = getUser()
+      const token = getToken()
+
+      if (!user || !token) {
+        alert('You must be signed in to checkout samples')
+        return
+      }
 
       const { error } = await supabase
         .from('samples')
         .update({
           is_checked_out: true,
           checked_out_at: new Date().toISOString(),
-          checked_out_by: userInitials,
+          checked_out_by: user.initials,
           previous_container_id: sample.container_id,
           previous_position: sample.position,
           container_id: null,
@@ -223,24 +228,6 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       'inserted_archived': 'Created (Archived)'
     }
     return labels[action] || action
-  }
-
-  const formatHistoryDescription = (event: HistoryEvent): string => {
-    const fromContainer = getContainerDisplay(event.from_container)
-    const toContainer = getContainerDisplay(event.to_container)
-    
-    if (event.action === 'moved' && event.from_container && event.to_container) {
-      if (event.from_container === event.to_container) {
-        return `Moved within ${toContainer} (${event.from_position} > ${event.to_position})`
-      }
-      return `Moved from ${fromContainer} (${event.from_position}) > ${toContainer} (${event.to_position})`
-    }
-    
-    if (event.action === 'inserted' && event.to_container) {
-      return `Scanned into ${toContainer} (${event.to_position})`
-    }
-    
-    return getActionLabel(event.action)
   }
 
   return (
@@ -489,46 +476,36 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                   background: '#f9fafb',
                   borderRadius: '8px',
                   borderLeft: '3px solid #3b82f6',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
+                  fontSize: '13px'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{
-                    padding: '3px 8px',
-                    background: event.action === 'moved' ? '#e0e7ff' : 
-                               event.action === 'inserted' ? '#dcfce7' : 
-                               event.action === 'archived' ? '#fed7aa' : '#e5e7eb',
-                    color: event.action === 'moved' ? '#3730a3' : 
-                          event.action === 'inserted' ? '#166534' : 
-                          event.action === 'archived' ? '#9a3412' : '#374151',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase'
-                  }}>
-                    {getActionLabel(event.action)}
-                  </span>
-                  {event.user && (
-                    <span style={{
-                      padding: '3px 8px',
-                      background: '#f3f4f6',
-                      color: '#374151',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 600
-                    }}>
-                      {event.user}
-                    </span>
-                  )}
-                  <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: 'auto' }}>
-                    {formatDateTime(event.when)}
-                  </span>
+                <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
+                  {getActionLabel(event.action)}
                 </div>
-                <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
-                  {formatHistoryDescription(event)}
+                <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '8px' }}>
+                  {formatDateTime(event.when)}
                 </div>
+                {event.from_container && event.to_container && (
+                  <div style={{ fontSize: '12px', color: '#4b5563' }}>
+                    From: {getContainerDisplay(event.from_container)} ({event.from_position})<br />
+                    To: {getContainerDisplay(event.to_container)} ({event.to_position})
+                  </div>
+                )}
+                {event.to_container && !event.from_container && (
+                  <div style={{ fontSize: '12px', color: '#4b5563' }}>
+                    Container: {getContainerDisplay(event.to_container)} ({event.to_position})
+                  </div>
+                )}
+                {event.user && (
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    By: {event.user}
+                  </div>
+                )}
+                {event.source && (
+                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                    Source: {event.source}
+                  </div>
+                )}
               </div>
             ))}
           </div>

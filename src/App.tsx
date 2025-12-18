@@ -8,7 +8,6 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
-import { ContainerCardSkeleton } from './components/LoadingSkeleton'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -476,7 +475,7 @@ export default function App() {
               <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
             </div>
             <div className="container-list">
-              {loadingContainers && [...Array(6)].map((_, i) => <ContainerCardSkeleton key={i} />)}
+              {loadingContainers && <div className="muted">Loading containers...</div>}
               {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
               {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
                 <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
@@ -560,10 +559,10 @@ export default function App() {
               </div>
             </div>
             <div className="container-list">
-              {loadingArchived && [...Array(6)].map((_, i) => <ContainerCardSkeleton key={i} />)}
+              {loadingArchived && <div className="muted">Loading archived containers...</div>}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
-              {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived />
+              {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c:any) => (
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived={c.archived} />
               ))}
             </div>
             {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
