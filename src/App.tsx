@@ -324,22 +324,55 @@ export default function App() {
       setLoadingSamples(true)
       try{
         const isArchiveRoute = route === '#/archive'
-        // Load all samples - use range with high limit to override default 1000 row limit
-        const { data, error } = await supabase
-          .from('samples')
-          .select(`
-            *, 
-            containers!samples_container_id_fkey(id, name, location, type),
-            previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
-          `)
-          .eq('is_archived', isArchiveRoute ? true : false)
-          .order('created_at', { ascending: false })
-          .range(0, 99999) // Override default 1000 limit - supports up to 100k samples
+        
+        // Load ALL samples using pagination to bypass 1000 row limit
+        const pageSize = 1000
+        let allSamples: any[] = []
+        let page = 0
+        let hasMore = true
+        
+        console.log('Starting to load all samples...')
+        
+        while (hasMore) {
+          const from = page * pageSize
+          const to = from + pageSize - 1
+          
+          const { data, error } = await supabase
+            .from('samples')
+            .select(`
+              *, 
+              containers!samples_container_id_fkey(id, name, location, type),
+              previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
+            `)
+            .eq('is_archived', isArchiveRoute ? true : false)
+            .order('created_at', { ascending: false })
+            .range(from, to)
+          
+          if (error) throw error
+          
+          if (!data || data.length === 0) {
+            hasMore = false
+          } else {
+            allSamples.push(...data)
+            console.log(`Loaded page ${page + 1}: ${data.length} samples (total so far: ${allSamples.length})`)
+            page++
+            
+            // If we got fewer than pageSize, we've reached the end
+            if (data.length < pageSize) {
+              hasMore = false
+            }
+          }
+          
+          // Safety check to prevent infinite loops
+          if (page > 200) { // max 200k samples
+            console.warn('Reached maximum page limit (200 pages)')
+            hasMore = false
+          }
+        }
         
         if (!mounted) return
-        if (error) throw error
-        console.log(`Loaded ${data?.length || 0} samples (archived: ${isArchiveRoute})`)
-        setSamples(data ?? [])
+        console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
+        setSamples(allSamples)
         setCurrentPage(1) // Reset to first page when reloading
       }catch(e){
         console.warn('failed to load samples', e)
