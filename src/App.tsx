@@ -324,7 +324,7 @@ export default function App() {
       setLoadingSamples(true)
       try{
         const isArchiveRoute = route === '#/archive'
-        // Load all samples without limit to ensure complete search results
+        // Load all samples - use range with high limit to override default 1000 row limit
         const { data, error } = await supabase
           .from('samples')
           .select(`
@@ -334,6 +334,7 @@ export default function App() {
           `)
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
+          .range(0, 99999) // Override default 1000 limit - supports up to 100k samples
         
         if (!mounted) return
         if (error) throw error
