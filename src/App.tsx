@@ -324,16 +324,16 @@ export default function App() {
       setLoadingSamples(true)
       try{
         const isArchiveRoute = route === '#/archive'
+        // Load all samples without limit to ensure complete search results
         const { data, error } = await supabase
           .from('samples')
           .select(`
             *, 
             containers!samples_container_id_fkey(id, name, location, type),
             previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
-          `, { count: 'exact' })
+          `)
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
-          .range(0, 999999)
         
         if (!mounted) return
         if (error) throw error
