@@ -337,6 +337,7 @@ export default function App() {
         
         if (!mounted) return
         if (error) throw error
+        console.log(`Loaded ${data?.length || 0} samples (archived: ${isArchiveRoute})`)
         setSamples(data ?? [])
         setCurrentPage(1) // Reset to first page when reloading
       }catch(e){
@@ -352,6 +353,9 @@ export default function App() {
   // Apply search filter and type filter to samples
   const filteredSamples = React.useMemo(() => {
     if (!samples) return []
+    
+    console.log(`Total samples loaded: ${samples.length}`)
+    
     let filtered = samples
     
     // Apply type filter
@@ -363,11 +367,14 @@ export default function App() {
           : (s.containers?.type || 'Sample Type')
         return sampleTypeFilters.includes(containerType)
       })
+      console.log(`After type filter (${sampleTypeFilters.join(', ')}): ${filtered.length} samples`)
     }
     
     // Apply search filter
     if (searchQuery.trim()) {
       const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+      console.log(`Searching for terms: ${terms.join(', ')}`)
+      
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
         // Include both current and previous container info for checked out samples
@@ -375,10 +382,13 @@ export default function App() {
         const containerLocation = s.containers?.location || s.previous_containers?.location || ''
         const containerType = s.containers?.type || s.previous_containers?.type || ''
         const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
-        return terms.some(term => searchText.includes(term))
+        const matches = terms.some(term => searchText.includes(term))
+        return matches
       })
+      console.log(`After search filter: ${filtered.length} samples`)
     }
     
+    console.log(`Final filtered count: ${filtered.length}`)
     return filtered
   }, [samples, searchQuery, sampleTypeFilters])
 
