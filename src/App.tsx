@@ -8,6 +8,7 @@ import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
+import SampleHistory from './components/SampleHistory'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -467,6 +468,20 @@ export default function App() {
             highlightPositions={positions}
             onBack={() => { window.location.hash = '#/worklist' }}
           />
+        </div>
+      </div>
+    )
+  }
+
+  // sample history route: #/samples/:sampleId/history
+  if (route.startsWith('#/samples/') && route.includes('/history')) {
+    const parts = route.split('/')
+    const sampleId = decodeURIComponent(parts[2])
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{marginTop:18}}>
+          <SampleHistory sampleId={sampleId} onBack={() => { window.location.hash = '#/samples' }} />
         </div>
       </div>
     )
@@ -1065,7 +1080,23 @@ export default function App() {
                               }}
                             />
                           </td>
-                          <td style={{padding: 12, fontWeight: 600}}>{s.sample_id}</td>
+                          <td style={{padding: 12}}>
+                            <button
+                              onClick={() => window.location.hash = `#/samples/${encodeURIComponent(s.sample_id)}/history`}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#3b82f6',
+                                fontWeight: 600,
+                                fontSize: 14,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                padding: 0
+                              }}
+                            >
+                              {s.sample_id}
+                            </button>
+                          </td>
                           <td style={{padding: 12}}>
                             <span style={{
                               padding: '4px 10px',
