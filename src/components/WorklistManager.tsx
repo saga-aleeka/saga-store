@@ -3,23 +3,6 @@ import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 
-// Sample type color mapping (matches ContainerFilters)
-const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
-  'PA Pools': '#fb923c',
-  'DP Pools': '#10b981',
-  'cfDNA Tubes': '#9ca3af',
-  'cfDNA': '#9ca3af',
-  'DTC Tubes': '#7c3aed',
-  'DTC': '#7c3aed',
-  'MNC Tubes': '#ef4444',
-  'MNC': '#ef4444',
-  'Plasma Tubes': '#f59e0b',
-  'Plasma': '#f59e0b',
-  'BC Tubes': '#3b82f6',
-  'IDT Plates': '#06b6d4',
-  'IDT': '#06b6d4'
-}
-
 interface WorklistSample {
   sample_id: string
   container_id?: string
@@ -40,7 +23,7 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
     const name = containerName.toUpperCase()
     if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
     if (name.includes('DTC')) return 'DTC'
-    if (name.includes('PA POOL') || name.includes('PAPOOL') || name.includes('PA TUBE') || name.includes('PATUBE')) return 'PA Pools'
+    if (name.includes('PA POOL') || name.includes('PAPOOL')) return 'PA Pools'
     if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
     if (name.includes('MNC')) return 'MNC'
     if (name.includes('IDT')) return 'IDT'
@@ -55,8 +38,7 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   if (/PAP\d+$/i.test(id)) return 'PA Pools'
   if (/DPP\d+[A-D]$/i.test(id)) return 'DP Pools'
   if (/NC\d+$/i.test(id)) return 'MNC'
-  // Match PP followed by 2 or 3 digits at the end (PP## or PP###)
-  if (/PP\d{2,3}$/i.test(id)) return 'IDT'
+  if (/PP\d+$/i.test(id)) return 'IDT'
   if (/BC\d+$/i.test(id)) return 'BC Tubes'
   if (/PL\d+$/i.test(id)) return 'Plasma'
   
@@ -557,32 +539,22 @@ export default function WorklistManager() {
             <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
               <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
               <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {availableTypes.map(type => {
-                  const typeColor = SAMPLE_TYPE_COLORS[type] || '#6b7280'
-                  return (
-                    <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-                      <input
-                        type="checkbox"
-                        checked={selectedTypes.includes(type)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTypes([...selectedTypes, type])
-                          } else {
-                            setSelectedTypes(selectedTypes.filter(t => t !== type))
-                          }
-                        }}
-                      />
-                      <span style={{
-                        fontSize: 13,
-                        padding: '4px 10px',
-                        background: `${typeColor}22`,
-                        color: typeColor,
-                        borderRadius: 9999,
-                        fontWeight: 500
-                      }}>{type}</span>
-                    </label>
-                  )
-                })}
+                {availableTypes.map(type => (
+                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTypes.includes(type)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTypes([...selectedTypes, type])
+                        } else {
+                          setSelectedTypes(selectedTypes.filter(t => t !== type))
+                        }
+                      }}
+                    />
+                    <span style={{fontSize: 13}}>{type}</span>
+                  </label>
+                ))}
                 {selectedTypes.length > 0 && (
                   <button 
                     className="btn ghost" 
@@ -731,11 +703,11 @@ export default function WorklistManager() {
                     <td style={{padding: 12, fontWeight: 600}}>{sample.sample_id}</td>
                     <td style={{padding: 12}}>
                       <span style={{
-                        padding: '4px 10px',
-                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : `${SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'}22`,
-                        color: sample.sample_type === 'Unknown' ? '#6b7280' : (SAMPLE_TYPE_COLORS[sample.sample_type] || '#6b7280'),
-                        borderRadius: 9999,
-                        fontSize: 13,
+                        padding: '2px 8px',
+                        background: sample.sample_type === 'Unknown' ? '#f3f4f6' : '#dbeafe',
+                        color: sample.sample_type === 'Unknown' ? '#6b7280' : '#1e40af',
+                        borderRadius: 4,
+                        fontSize: 12,
                         fontWeight: 500
                       }}>
                         {sample.sample_type}

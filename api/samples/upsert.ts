@@ -107,7 +107,7 @@ module.exports = async function handler(req: any, res: any){
         entityId: occupyingSample.id,
         action: 'checked_out',
         entityName: occupyingSample.sample_id,
-        description: `Sample ${occupyingSample.sample_id} checked out (displaced by ${normalizedSampleId})`,
+        description: `Sample ${occupyingSample.sample_id} checked out from {container} ({position}) (displaced by ${normalizedSampleId})`,
         metadata: {
           sample_id: occupyingSample.sample_id,
           previous_container_id: occupyingSample.container_id,
@@ -215,7 +215,7 @@ module.exports = async function handler(req: any, res: any){
         entityId: updated.id,
         action: 'moved',
         entityName: normalizedSampleId,
-        description: `Sample ${normalizedSampleId} moved`,
+        description: `Sample ${normalizedSampleId} moved from {from_container} ({from_position}) > {to_container} ({to_position})`,
         metadata: {
           sample_id: normalizedSampleId,
           from_container: sample.container_id || null,
@@ -277,7 +277,7 @@ module.exports = async function handler(req: any, res: any){
         entityId: inserted.id,
         action: 'created',
         entityName: normalizedSampleId,
-        description: `Sample ${normalizedSampleId} created`,
+        description: `Sample ${normalizedSampleId} scanned into {container} ({position})`,
         metadata: {
           sample_id: normalizedSampleId,
           container_id: container_id,
