@@ -370,7 +370,11 @@ export default function App() {
       const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
-        const searchText = `${s.sample_id || ''} ${s.containers?.name || ''} ${s.containers?.location || ''} ${s.position || ''} ${checkedOutText}`.toLowerCase()
+        // Include both current and previous container info for checked out samples
+        const containerName = s.containers?.name || s.previous_containers?.name || ''
+        const containerLocation = s.containers?.location || s.previous_containers?.location || ''
+        const containerType = s.containers?.type || s.previous_containers?.type || ''
+        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
         return terms.some(term => searchText.includes(term))
       })
     }
