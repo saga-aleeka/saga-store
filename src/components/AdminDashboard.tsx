@@ -2,93 +2,6 @@ import React, {useEffect, useState} from 'react'
 import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
-import { AuditLogSkeleton, TableSkeleton } from './LoadingSkeleton'
-
-// Helper to format audit log descriptions with container names and positions
-function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
-  const metadata = audit.metadata || {}
-  const sampleId = metadata.sample_id || audit.entity_name
-  
-  // Build detailed description based on action
-  if (audit.entity_type === 'sample') {
-    if (audit.action === 'moved') {
-      const fromContainer = metadata.from_container_name || containerNames.get(metadata.from_container) || 'Unknown'
-      const toContainer = metadata.to_container_name || containerNames.get(metadata.to_container) || 'Unknown'
-      const fromPos = metadata.from_position || '?'
-      const toPos = metadata.to_position || '?'
-      
-      if (fromContainer === toContainer) {
-        return `Sample ${sampleId} moved within ${toContainer} (${fromPos} → ${toPos})`
-      }
-      return `Sample ${sampleId} moved from ${fromContainer} (${fromPos}) to ${toContainer} (${toPos})`
-    }
-    
-    if (audit.action === 'created' || audit.action === 'inserted') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} created and stored in ${container} (${position})`
-    }
-    
-    if (audit.action === 'checked_out') {
-      const container = metadata.previous_container_name || containerNames.get(metadata.previous_container_id) || 'Unknown'
-      const position = metadata.previous_position || '?'
-      const displacedBy = metadata.displaced_by ? ` (displaced by ${metadata.displaced_by})` : ''
-      return `Sample ${sampleId} checked out from ${container} (${position})${displacedBy}`
-    }
-    
-    if (audit.action === 'archived') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} archived from ${container} (${position})`
-    }
-    
-    if (audit.action === 'unarchived') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} unarchived in ${container} (${position})`
-    }
-    
-    if (audit.action === 'deleted') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} permanently deleted from ${container} (${position})`
-    }
-    
-    if (audit.action === 'marked_training') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} marked as training in ${container} (${position})`
-    }
-    
-    if (audit.action === 'unmarked_training') {
-      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
-      const position = metadata.position || '?'
-      return `Sample ${sampleId} unmarked as training in ${container} (${position})`
-    }
-  }
-  
-  if (audit.entity_type === 'container') {
-    if (audit.action === 'created') {
-      return `Container ${audit.entity_name} was created`
-    }
-    if (audit.action === 'archived') {
-      return `Container ${audit.entity_name} was archived`
-    }
-    if (audit.action === 'unarchived') {
-      return `Container ${audit.entity_name} was unarchived`
-    }
-    if (audit.action === 'updated') {
-      return `Container ${audit.entity_name} was updated`
-    }
-    if (audit.action === 'deleted') {
-      const sampleCount = metadata.samples_deleted || 0
-      return `Container ${audit.entity_name} was deleted (${sampleCount} samples removed)`
-    }
-  }
-  
-  // Fallback
-  return audit.description || audit.entity_name || 'Unknown action'
-}
 
 // parser helpers
 function parseGridText(raw: string){
@@ -621,7 +534,7 @@ export default function AdminDashboard(){
                       if (nameUpper.includes('CFDNA')) return 'cfDNA Tubes'
                       if (nameUpper.includes('DP') && nameUpper.includes('POOL')) return 'DP Pools'
                       if (nameUpper.includes('DTC')) return 'DTC Tubes'
-                      if (nameUpper.includes('PA') && nameUpper.includes('POOL')) return 'PA Pools'
+                      if ((nameUpper.includes('PA') && nameUpper.includes('POOL')) || (nameUpper.includes('PA') && nameUpper.includes('TUBE'))) return 'PA Pools'
                       if (nameUpper.includes('MNC')) return 'MNC Tubes'
                       if (nameUpper.includes('PLASMA')) return 'Plasma Tubes'
                       if (nameUpper.includes('BC')) return 'BC Tubes'
@@ -864,11 +777,11 @@ export default function AdminDashboard(){
                   {filteredAudits
                     .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
                     .map((a:any) => (
-              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6,display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:1,display:'flex',flexDirection:'column',gap:8}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6}}>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                     <span style={{
-                      padding:'3px 8px',
+                      padding:'2px 8px',
                       background: a.entity_type === 'container' ? '#dbeafe' : '#fef3c7',
                       color: a.entity_type === 'container' ? '#1e40af' : '#92400e',
                       borderRadius:4,
@@ -879,15 +792,13 @@ export default function AdminDashboard(){
                       {a.entity_type}
                     </span>
                     <span style={{
-                      padding:'3px 8px',
+                      padding:'2px 8px',
                       background: a.action === 'deleted' ? '#fee2e2' : 
                                  a.action === 'created' ? '#dcfce7' : 
-                                 a.action === 'archived' ? '#fed7aa' : 
-                                 a.action === 'moved' ? '#e0e7ff' : '#e5e7eb',
+                                 a.action === 'archived' ? '#fed7aa' : '#e5e7eb',
                       color: a.action === 'deleted' ? '#991b1b' : 
                             a.action === 'created' ? '#166534' : 
-                            a.action === 'archived' ? '#9a3412' : 
-                            a.action === 'moved' ? '#3730a3' : '#374151',
+                            a.action === 'archived' ? '#9a3412' : '#374151',
                       borderRadius:4,
                       fontSize:11,
                       fontWeight:600,
@@ -896,23 +807,49 @@ export default function AdminDashboard(){
                       {a.action}
                     </span>
                     {a.user_initials && (
-                      <span style={{
-                        padding:'3px 8px',
-                        background:'#f3f4f6',
-                        color:'#374151',
-                        borderRadius:4,
-                        fontSize:11,
-                        fontWeight:600
-                      }}>
-                        {a.user_initials}
+                      <span style={{fontSize:12,color:'#6b7280'}}>
+                        by <strong>{a.user_initials}</strong>{a.user_name ? ` (${a.user_name})` : ''}
                       </span>
                     )}
                   </div>
-                  <div style={{fontSize:14,color:'#374151',lineHeight:1.5}}>
-                    {formatAuditDescription(a, containerNames)}
-                  </div>
+                  <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.description || a.entity_name}</div>
+                  {a.entity_name && a.description && a.entity_type === 'container' && (
+                    <div className="muted" style={{fontSize:12}}>Container: {containerNames.get(a.entity_id) || a.entity_name}</div>
+                  )}
+                  {a.entity_name && a.description && a.entity_type === 'sample' && (
+                    <div className="muted" style={{fontSize:12}}>Sample: {a.entity_name}</div>
+                  )}
+                  {a.metadata && (
+                    <div className="muted" style={{fontSize:12,marginTop:4}}>
+                      {/* Sample metadata */}
+                      {a.entity_type === 'sample' && a.metadata.sample_id && `Sample: ${a.metadata.sample_id} • `}
+                      {a.metadata.position && !a.metadata.from_position && `Position: ${a.metadata.position} • `}
+                      
+                      {/* Container info for samples */}
+                      {a.entity_type === 'sample' && a.metadata.container_id && !a.metadata.from_container && 
+                        `Container: ${containerNames.get(a.metadata.container_id) || a.metadata.container_id.substring(0,8) + '...'} • `}
+                      
+                      {/* Movement info */}
+                      {a.metadata.from_container && a.metadata.to_container && 
+                        `Moved: ${containerNames.get(a.metadata.from_container) || a.metadata.from_container.substring(0,8) + '...'} (${a.metadata.from_position}) → ${containerNames.get(a.metadata.to_container) || a.metadata.to_container.substring(0,8) + '...'} (${a.metadata.to_position}) • `}
+                      
+                      {/* Checkout status */}
+                      {a.metadata.is_checked_out && `Checked Out • `}
+                      {a.metadata.checked_out_by && `By: ${a.metadata.checked_out_by} • `}
+                      
+                      {/* Previous location for deleted samples */}
+                      {a.action === 'deleted' && a.metadata.previous_container_id && 
+                        `Previous: ${containerNames.get(a.metadata.previous_container_id) || a.metadata.previous_container_id.substring(0,8) + '...'} (${a.metadata.previous_position}) • `}
+                      
+                      {/* Container metadata */}
+                      {a.entity_type === 'container' && a.metadata.location && `Location: ${a.metadata.location} • `}
+                      {a.metadata.layout && `Layout: ${a.metadata.layout} • `}
+                      {a.metadata.samples_deleted > 0 && `Samples deleted: ${a.metadata.samples_deleted} • `}
+                      {a.metadata.source && `Source: ${a.metadata.source}`}
+                    </div>
+                  )}
                 </div>
-                <div className="muted" style={{fontSize:11,whiteSpace:'nowrap'}}>
+                <div className="muted" style={{fontSize:11,whiteSpace:'nowrap',alignSelf:'flex-start'}}>
                   {formatDateTime(a.created_at)}
                 </div>
               </div>
@@ -922,11 +859,7 @@ export default function AdminDashboard(){
             )
           })()}
           
-          {audits.loading && (
-            <div>
-              {[...Array(5)].map((_, i) => <AuditLogSkeleton key={i} />)}
-            </div>
-          )}
+          {audits.loading && <div className="muted" style={{marginTop:12}}>Loading...</div>}
           {!audits.loading && audits.data && audits.data.length === 0 && (
             <div className="muted" style={{marginTop:12}}>No audit events</div>
           )}
@@ -978,7 +911,7 @@ export default function AdminDashboard(){
           </div>
           
           <div style={{marginTop:12}}>
-            {backups.loading && <TableSkeleton rows={3} columns={3} />}
+            {backups.loading && <div className="muted">Loading...</div>}
             {!backups.loading && (!backups.data || backups.data.length === 0) && (
               <div className="muted">No backups yet. Create your first manual backup or wait for the nightly backup.</div>
             )}
