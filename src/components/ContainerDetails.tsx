@@ -11,6 +11,15 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [selectedSample, setSelectedSample] = useState<any | null>(null)
   const [showSidebar, setShowSidebar] = useState(false)
   
+  // Multi-select state for edit mode
+  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
+  const [deleteConfirmationActive, setDeleteConfirmationActive] = useState(false)
+  const [deleteComment, setDeleteComment] = useState('')
+  const [archiveComment, setArchiveComment] = useState('')
+  const [showArchiveComment, setShowArchiveComment] = useState(false)
+  const [showDeleteComment, setShowDeleteComment] = useState(false)
+  const [batchActionInProgress, setBatchActionInProgress] = useState(false)
+  
   // Scanning state
   const [scanningMode, setScanningMode] = useState(false)
   const [currentPosition, setCurrentPosition] = useState<string | null>(null)
@@ -145,18 +154,27 @@ export default function ContainerDetails({ id }: { id: string | number }){
       return
     }
     
-    if (!editMode) return
+    if (editMode) {
+      // In edit mode (multi-select), toggle sample selection
+      if (sample) {
+        setSelectedSampleIds(prev => {
+          const newSet = new Set(prev)
+          if (newSet.has(sample.id)) {
+            newSet.delete(sample.id)
+          } else {
+            newSet.add(sample.id)
+          }
+          return newSet
+        })
+      }
+      return
+    }
     
+    // Not in edit mode - allow viewing sample details or adding new samples
     if (sample) {
-      // Existing sample clicked - show sidebar
+      // Existing sample clicked - show sidebar for viewing
       setSelectedSample(sample)
       setShowSidebar(true)
-    } else {
-      // Empty cell clicked - prompt for sample ID
-      const sampleId = prompt(`Add sample to position ${position}:`)
-      if (!sampleId) return
-      
-      handleAddSample(sampleId.trim(), position)
     }
   }
 
@@ -189,6 +207,149 @@ export default function ContainerDetails({ id }: { id: string | number }){
     } catch (error) {
       console.error('Add sample error:', error)
       alert('Failed to add sample')
+    }
+  }
+  
+  const handleBatchArchive = async () => {
+    if (selectedSampleIds.size === 0) return
+    
+    setBatchActionInProgress(true)
+    try {
+      const token = getToken()
+      
+      // Archive all selected samples
+      for (const sampleId of selectedSampleIds) {
+        await fetch(`/api/samples/${sampleId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ 
+            is_archived: true,
+            archive_comment: archiveComment.trim() || undefined
+          })
+        })
+      }
+      
+      // Reload and clear selection
+      await loadContainer()
+      setSelectedSampleIds(new Set())
+      setArchiveComment('')
+      setShowArchiveComment(false)
+    } catch (error) {
+      console.error('Batch archive error:', error)
+      alert('Failed to archive some samples')
+    } finally {
+      setBatchActionInProgress(false)
+    }
+  }
+  
+  const handleBatchCheckout = async () => {
+    if (selectedSampleIds.size === 0) return
+    if (!window.confirm(`Check out ${selectedSampleIds.size} sample(s)?`)) return
+    
+    setBatchActionInProgress(true)
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      const userInitials = user.initials || 'Unknown'
+      
+      // Checkout all selected samples
+      for (const sampleId of selectedSampleIds) {
+        const sample = data.samples.find((s: any) => s.id === sampleId)
+        if (sample) {
+          await supabase
+            .from('samples')
+            .update({
+              is_checked_out: true,
+              checked_out_at: new Date().toISOString(),
+              checked_out_by: userInitials,
+              previous_container_id: sample.container_id,
+              previous_position: sample.position,
+              container_id: null,
+              position: null
+            })
+            .eq('id', sampleId)
+        }
+      }
+      
+      // Reload and clear selection
+      await loadContainer()
+      setSelectedSampleIds(new Set())
+    } catch (error) {
+      console.error('Batch checkout error:', error)
+      alert('Failed to checkout some samples')
+    } finally {
+      setBatchActionInProgress(false)
+    }
+  }
+  
+  const handleBatchTrainingToggle = async () => {
+    if (selectedSampleIds.size === 0) return
+    if (!window.confirm(`Toggle training status for ${selectedSampleIds.size} sample(s)?`)) return
+    
+    setBatchActionInProgress(true)
+    try {
+      const token = getToken()
+      
+      // Toggle training for all selected samples
+      for (const sampleId of selectedSampleIds) {
+        const sample = data.samples.find((s: any) => s.id === sampleId)
+        if (sample) {
+          await fetch(`/api/samples/${sampleId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ is_training: !sample.is_training })
+          })
+        }
+      }
+      
+      // Reload and clear selection
+      await loadContainer()
+      setSelectedSampleIds(new Set())
+    } catch (error) {
+      console.error('Batch training toggle error:', error)
+      alert('Failed to update training status for some samples')
+    } finally {
+      setBatchActionInProgress(false)
+    }
+  }
+  
+  const handleBatchDelete = async () => {
+    if (selectedSampleIds.size === 0) return
+    
+    setBatchActionInProgress(true)
+    try {
+      const token = getToken()
+      
+      // Delete all selected samples
+      for (const sampleId of selectedSampleIds) {
+        await fetch(`/api/samples/${sampleId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            delete_comment: deleteComment.trim() || undefined
+          })
+        })
+      }
+      
+      // Reload and clear selection
+      await loadContainer()
+      setSelectedSampleIds(new Set())
+      setDeleteComment('')
+      setDeleteConfirmationActive(false)
+      setShowDeleteComment(false)
+    } catch (error) {
+      console.error('Batch delete error:', error)
+      alert('Failed to delete some samples')
+    } finally {
+      setBatchActionInProgress(false)
     }
   }
   
@@ -349,13 +510,21 @@ export default function ContainerDetails({ id }: { id: string | number }){
               </button>
               <button 
                 className="btn"
-                onClick={() => setEditMode(!editMode)}
+                onClick={() => {
+                  setEditMode(!editMode)
+                  setSelectedSampleIds(new Set())
+                  setDeleteConfirmationActive(false)
+                  setShowArchiveComment(false)
+                  setShowDeleteComment(false)
+                  setArchiveComment('')
+                  setDeleteComment('')
+                }}
                 style={{
                   background: editMode ? '#10b981' : '#3b82f6',
                   color: 'white'
                 }}
               >
-                {editMode ? '✓ Done Editing' : '✏️ Edit'}
+                {editMode ? '✓ Done' : '☑️ Multi-Select'}
               </button>
             </>
           )}
@@ -381,15 +550,238 @@ export default function ContainerDetails({ id }: { id: string | number }){
 
       {editMode && !scanningMode && (
         <div style={{
-          padding: '12px 16px',
-          background: '#fef3c7',
-          border: '1px solid #fbbf24',
-          borderRadius: '8px',
-          marginBottom: '16px',
-          fontSize: '14px',
-          color: '#92400e'
+          padding: '16px',
+          background: '#f0f9ff',
+          border: '2px solid #3b82f6',
+          borderRadius: '12px',
+          marginBottom: '16px'
         }}>
-          <strong>Edit Mode:</strong> Click empty cells to add samples, or click filled cells to view history and archive.
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{fontSize: 16, fontWeight: 700, color: '#1e40af', marginBottom: 8}}>
+              ☑️ Multi-Select Mode ({selectedSampleIds.size} selected)
+            </div>
+            <div style={{fontSize: 13, color: '#6b7280'}}>
+              Click samples to select/deselect them for batch operations
+            </div>
+          </div>
+          
+          {selectedSampleIds.size > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setShowArchiveComment(!showArchiveComment)}
+                  disabled={batchActionInProgress}
+                  className="btn"
+                  style={{
+                    background: '#fbbf24',
+                    color: '#78350f',
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  🗄️ Archive ({selectedSampleIds.size})
+                </button>
+                
+                <button
+                  onClick={handleBatchCheckout}
+                  disabled={batchActionInProgress}
+                  className="btn"
+                  style={{
+                    background: '#3b82f6',
+                    color: 'white',
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  📤 Checkout ({selectedSampleIds.size})
+                </button>
+                
+                <button
+                  onClick={handleBatchTrainingToggle}
+                  disabled={batchActionInProgress}
+                  className="btn"
+                  style={{
+                    background: '#6366f1',
+                    color: 'white',
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  🎓 Toggle Training ({selectedSampleIds.size})
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setDeleteConfirmationActive(true)
+                    setShowDeleteComment(false)
+                  }}
+                  disabled={batchActionInProgress || deleteConfirmationActive}
+                  className="btn"
+                  style={{
+                    background: '#fef2f2',
+                    color: '#991b1b',
+                    border: '1px solid #fecaca',
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  🗑️ Delete ({selectedSampleIds.size})
+                </button>
+                
+                <button
+                  onClick={() => setSelectedSampleIds(new Set())}
+                  disabled={batchActionInProgress}
+                  className="btn ghost"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  Clear Selection
+                </button>
+              </div>
+              
+              {showArchiveComment && (
+                <div style={{
+                  padding: '12px',
+                  background: '#fffbeb',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '8px'
+                }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600, color: '#78350f' }}>
+                    Archive Comment (optional)
+                  </label>
+                  <textarea
+                    value={archiveComment}
+                    onChange={(e) => setArchiveComment(e.target.value)}
+                    placeholder="Add a comment about why these samples are being archived..."
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      minHeight: '60px',
+                      resize: 'vertical'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      onClick={handleBatchArchive}
+                      disabled={batchActionInProgress}
+                      className="btn"
+                      style={{
+                        background: '#fbbf24',
+                        color: '#78350f',
+                        padding: '6px 12px',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {batchActionInProgress ? 'Archiving...' : 'Confirm Archive'}
+                    </button>
+                    <button
+                      onClick={() => setShowArchiveComment(false)}
+                      className="btn ghost"
+                      style={{ padding: '6px 12px', fontSize: '14px' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {deleteConfirmationActive && (
+                <div style={{
+                  padding: '16px',
+                  background: '#fef2f2',
+                  border: '2px solid #ef4444',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#991b1b', marginBottom: '4px' }}>
+                      ⚠️ Confirm Deletion
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#991b1b' }}>
+                      You are about to permanently delete {selectedSampleIds.size} sample(s). This action cannot be undone.
+                    </div>
+                  </div>
+                  
+                  {!showDeleteComment ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setShowDeleteComment(true)}
+                        className="btn"
+                        style={{
+                          background: '#ef4444',
+                          color: 'white',
+                          padding: '8px 16px',
+                          fontSize: '14px',
+                          fontWeight: 600
+                        }}
+                      >
+                        Continue
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmationActive(false)}
+                        className="btn ghost"
+                        style={{ padding: '8px 16px', fontSize: '14px' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600, color: '#991b1b' }}>
+                        Deletion Comment (optional)
+                      </label>
+                      <textarea
+                        value={deleteComment}
+                        onChange={(e) => setDeleteComment(e.target.value)}
+                        placeholder="Add a comment about why these samples are being deleted..."
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #fecaca',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          minHeight: '60px',
+                          resize: 'vertical',
+                          marginBottom: '8px'
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={handleBatchDelete}
+                          disabled={batchActionInProgress}
+                          className="btn"
+                          style={{
+                            background: '#991b1b',
+                            color: 'white',
+                            padding: '8px 16px',
+                            fontSize: '14px',
+                            fontWeight: 600
+                          }}
+                        >
+                          {batchActionInProgress ? 'Deleting...' : 'Delete Forever'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeleteConfirmationActive(false)
+                            setShowDeleteComment(false)
+                            setDeleteComment('')
+                          }}
+                          className="btn ghost"
+                          style={{ padding: '8px 16px', fontSize: '14px' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       
@@ -488,6 +880,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
           editMode={editMode || scanningMode}
           onSampleClick={handleSampleClick}
           scanningPosition={scanningMode ? currentPosition : null}
+          selectedSampleIds={editMode ? selectedSampleIds : undefined}
         />
       </div>
 

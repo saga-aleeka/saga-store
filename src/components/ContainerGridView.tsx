@@ -21,9 +21,10 @@ interface ContainerGridViewProps {
   scanningPosition?: string | null
   highlightedPositions?: string[]
   selectedPositions?: string[]
+  selectedSampleIds?: Set<string>
 }
 
-export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [], selectedPositions = [] }: ContainerGridViewProps) {
+export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [], selectedPositions = [], selectedSampleIds }: ContainerGridViewProps) {
   const [gridSize, setGridSize] = useState({ rows: 9, cols: 9 })
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
 
@@ -193,6 +194,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const isHighlighted = isPositionHighlighted(position)
               const isSelected = selectedPositions.map(p => p.toUpperCase()).includes(position.toUpperCase())
               const isScanning = scanningPosition === position
+              const isSampleSelected = selectedSampleIds && sample ? selectedSampleIds.has(sample.id) : false
               
               return (
                 <div
@@ -203,20 +205,24 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                       ? '#d1d5db'
                       : isScanning 
                         ? '#f3e8ff'
-                        : isSelected
+                        : isSampleSelected
                           ? '#dbeafe'
-                          : getCellColor(sample),
+                          : isSelected
+                            ? '#dbeafe'
+                            : getCellColor(sample),
                     border: isUnavailable
                       ? '2px solid #9ca3af'
                       : isScanning
                         ? '3px solid #8b5cf6'
-                        : isSelected
-                          ? '3px solid #3b82f6'
-                          : isHighlighted 
-                            ? '3px solid #f59e0b' 
-                            : isOccupied 
-                              ? '2px solid #3b82f6' 
-                              : '1px solid #d1d5db',
+                        : isSampleSelected
+                          ? '3px solid #2563eb'
+                          : isSelected
+                            ? '3px solid #3b82f6'
+                            : isHighlighted 
+                              ? '3px solid #f59e0b' 
+                              : isOccupied 
+                                ? '2px solid #3b82f6' 
+                                : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
@@ -236,11 +242,13 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     overflow: 'hidden',
                     boxShadow: isScanning 
                       ? '0 0 0 3px #c4b5fd'
-                      : isSelected
-                        ? '0 0 0 2px #60a5fa'
-                        : isHighlighted 
-                          ? '0 0 0 2px #fbbf24' 
-                          : 'none',
+                      : isSampleSelected
+                        ? '0 0 0 3px #93c5fd'
+                        : isSelected
+                          ? '0 0 0 2px #60a5fa'
+                          : isHighlighted 
+                            ? '0 0 0 2px #fbbf24' 
+                            : 'none',
                     opacity: isUnavailable ? 0.5 : 1
                   }}
                   className={!isUnavailable && (isOccupied || editMode) ? 'hover:shadow-md hover:scale-105' : ''}
@@ -254,6 +262,25 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     <div style={{ fontSize: '16px', fontWeight: 700, opacity: 0.7 }}>×</div>
                   ) : isOccupied ? (
                     <>
+                      {isSampleSelected && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '2px',
+                          right: '2px',
+                          background: '#2563eb',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '16px',
+                          height: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          fontWeight: 700
+                        }}>
+                          ✓
+                        </div>
+                      )}
                       <div style={{ 
                         fontSize: '11px', 
                         fontWeight: 700,
