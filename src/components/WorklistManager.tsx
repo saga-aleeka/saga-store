@@ -23,7 +23,7 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
     const name = containerName.toUpperCase()
     if (name.includes('CFDNA') || name.includes('CF DNA')) return 'cfDNA'
     if (name.includes('DTC')) return 'DTC'
-    if (name.includes('PA POOL') || name.includes('PAPOOL') || name.includes('PAP RACK') || name.includes('PAP BOX')) return 'PA Pools'
+    if (name.includes('PA POOL') || name.includes('PAPOOL') || name.includes('PAP_RACK') || name.includes('PAP_BOX')) return 'PA Pools'
     if (name.includes('DP POOL') || name.includes('DPPOOL') || name.includes('DP TUBE')) return 'DP Pools'
     if (name.includes('MNC')) return 'MNC'
     if (name.includes('IDT')) return 'IDT'
