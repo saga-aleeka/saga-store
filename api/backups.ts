@@ -99,13 +99,36 @@ module.exports = async function handler(req: any, res: any) {
           .order('name', { ascending: true })
           .range(0, 999999)
         
-        const { data: samples } = await supabaseAdmin
-          .from('samples')
-          .select('*')
-          .order('container_id', { ascending: true })
-          .range(0, 999999)
+        // Fetch all samples with pagination
+        let allSamples: any[] = []
+        let page = 0
+        const pageSize = 1000
+        let hasMore = true
         
-        const csvContent = generateCSV(containers || [], samples || [])
+        while (hasMore) {
+          const { data: samplesPage, error: samplesError } = await supabaseAdmin
+            .from('samples')
+            .select('*')
+            .order('container_id', { ascending: true })
+            .range(page * pageSize, (page + 1) * pageSize - 1)
+          
+          if (samplesError) {
+            console.error('Failed to fetch samples:', samplesError)
+            return res.status(500).json({ error: 'failed_to_fetch_samples' })
+          }
+          
+          if (samplesPage && samplesPage.length > 0) {
+            allSamples = allSamples.concat(samplesPage)
+            page++
+            hasMore = samplesPage.length === pageSize
+          } else {
+            hasMore = false
+          }
+        }
+        
+        console.log(`Downloaded backup with ${allSamples.length} total samples across ${page} pages`)
+        
+        const csvContent = generateCSV(containers || [], allSamples || [])
         
         res.setHeader('Content-Type', 'text/csv')
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
