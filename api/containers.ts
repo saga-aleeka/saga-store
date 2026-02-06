@@ -96,6 +96,9 @@ module.exports = async function handler(req: any, res: any){
         id: body?.id ?? undefined,
         name: body?.name ?? null,
         location: body?.location ?? null,
+        cold_storage_id: body?.cold_storage_id ?? null,
+        rack_id: body?.rack_id ?? null,
+        rack_position: body?.rack_position ?? null,
         layout: body?.layout ?? null,
         total: body?.total ?? null,
         used: body?.used ?? 0,
@@ -135,7 +138,10 @@ module.exports = async function handler(req: any, res: any){
             location: data[0].location,
             layout: data[0].layout,
             temperature: data[0].temperature,
-            type: data[0].type
+            type: data[0].type,
+            cold_storage_id: data[0].cold_storage_id,
+            rack_id: data[0].rack_id,
+            rack_position: data[0].rack_position
           },
           description: `Created container "${data[0].name}" at ${data[0].location}`
         })
@@ -207,6 +213,18 @@ module.exports = async function handler(req: any, res: any){
           changes.training = { from: original.training, to: data[0].training }
           changedFields.push('training')
         }
+        if (original.cold_storage_id !== data[0].cold_storage_id) {
+          changes.cold_storage_id = { from: original.cold_storage_id, to: data[0].cold_storage_id }
+          changedFields.push('cold_storage_id')
+        }
+        if (original.rack_id !== data[0].rack_id) {
+          changes.rack_id = { from: original.rack_id, to: data[0].rack_id }
+          changedFields.push('rack_id')
+        }
+        if (original.rack_position !== data[0].rack_position) {
+          changes.rack_position = { from: original.rack_position, to: data[0].rack_position }
+          changedFields.push('rack_position')
+        }
         
         const action = data[0].archived && !original.archived ? 'archived' : 
                       !data[0].archived && original.archived ? 'unarchived' : 'updated'
@@ -223,7 +241,10 @@ module.exports = async function handler(req: any, res: any){
             location: data[0].location,
             layout: data[0].layout,
             temperature: data[0].temperature,
-            type: data[0].type
+            type: data[0].type,
+            cold_storage_id: data[0].cold_storage_id,
+            rack_id: data[0].rack_id,
+            rack_position: data[0].rack_position
           },
           description: `Updated container "${data[0].name}": ${changedFields.join(', ')}`
         })

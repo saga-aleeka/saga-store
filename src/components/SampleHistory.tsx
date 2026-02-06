@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { formatDateTime } from '../lib/dateUtils'
+import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
+import LocationBreadcrumb from './LocationBreadcrumb'
 
 interface SampleHistoryProps {
   sampleId: string
@@ -20,7 +22,7 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
         // Load sample data
         const { data: sampleData, error: sampleError } = await supabase
           .from('samples')
-          .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+          .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
           .eq('sample_id', sampleId)
           .single()
         
@@ -150,7 +152,21 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
         >
           ← Back to Samples
         </button>
-        
+
+        {(() => {
+          const container = sample?.containers || sample?.previous_containers
+          const rack = container?.racks
+          const coldStorage = rack?.cold_storage_units || container?.cold_storage_units
+          const breadcrumbItems = [
+            ...(coldStorage ? [{ label: coldStorage.name, href: `#/cold-storage/${coldStorage.id}` }] : []),
+            ...(rack ? [{ label: rack.name, href: `#/racks/${rack.id}` }] : []),
+            ...(container ? [{ label: container.name || container.id, href: `#/containers/${container.id}` }] : []),
+            { label: sampleId }
+          ]
+
+          return <LocationBreadcrumb items={breadcrumbItems} />
+        })()}
+
         <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8 }}>
           Sample History: {sampleId}
         </h2>
@@ -220,8 +236,8 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
                     <div style={{ fontWeight: 600, marginTop: 4 }}>{sample.position || '-'}</div>
                   </div>
                   <div>
-                    <div className="muted" style={{ fontSize: 12 }}>Location</div>
-                    <div style={{ fontWeight: 600, marginTop: 4 }}>{sample.containers.location || '-'}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>Storage Path</div>
+                    <div style={{ fontWeight: 600, marginTop: 4 }}>{formatContainerLocation(sample.containers) || '-'}</div>
                   </div>
                 </>
               )}

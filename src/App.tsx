@@ -5,14 +5,19 @@ import ContainerCard from './components/ContainerCard'
 import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
 import ContainerCreateDrawer from './components/ContainerCreateDrawer'
+import RackCreateDrawer from './components/RackCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
 import SampleHistory from './components/SampleHistory'
+import ColdStorageList from './components/ColdStorageList'
+import ColdStorageDetails from './components/ColdStorageDetails'
+import RackDetails from './components/RackDetails'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
+import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -40,6 +45,17 @@ function readableTextColor(hex: string){
     const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
     return lum > 0.6 ? '#111827' : '#ffffff'
   }catch(e){ return '#ffffff' }
+}
+
+function buildDisplayLocation(container: any, rackMap: Map<string, any>, coldMap: Map<string, any>){
+  const rack = container?.racks || (container?.rack_id ? rackMap.get(container.rack_id) : null)
+  const coldStorage = rack?.cold_storage_units
+    || (container?.cold_storage_id ? coldMap.get(container.cold_storage_id) : null)
+    || (rack?.cold_storage_id ? coldMap.get(rack.cold_storage_id) : null)
+
+  const parts = [coldStorage?.name, rack?.name, container?.rack_position].filter(Boolean)
+  if (parts.length) return parts.join(' / ')
+  return container?.location || ''
 }
 
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
@@ -182,22 +198,34 @@ export default function App() {
     async function load(){
       setLoadingContainers(true)
       try{
-        const { data, error } = await supabase
-          .from('containers')
-          .select('*, samples!samples_container_id_fkey(*)')
-          .eq('archived', false)
-          .order('updated_at', { ascending: false })
+        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
+          supabase
+            .from('containers')
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .eq('archived', false)
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('racks')
+            .select('id, name, cold_storage_id'),
+          supabase
+            .from('cold_storage_units')
+            .select('id, name')
+        ])
         
         if (!mounted) return
         if (error) throw error
         
         // Count all samples (including archived) for each container
+        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
+        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
+
         const containersWithCounts = (data ?? []).map((c: any) => {
           const sampleCount = (c.samples || []).length
           console.log(`Container ${c.name}: ${sampleCount} samples (including archived)`, c.samples)
           return {
             ...c,
-            used: sampleCount
+            used: sampleCount,
+            display_location: buildDisplayLocation(c, rackMap, coldMap)
           }
         })
         
@@ -208,7 +236,7 @@ export default function App() {
       }finally{ if (mounted) setLoadingContainers(false) }
     }
 
-    if (route === '#/containers') load()
+    if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
   }, [route])
 
@@ -220,6 +248,8 @@ export default function App() {
       if (selectedTypes && selectedTypes.length){
         if (!selectedTypes.includes(c.type)) return false
       }
+      if (route === '#/rnd' && !c.is_rnd) return false
+      if (route === '#/containers' && c.is_rnd) return false
       // available only
       if (availableOnly){
         const used = Number(c.used || 0)
@@ -244,7 +274,8 @@ export default function App() {
     if (searchQuery.trim()) {
       const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((c: any) => {
-        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
+        const locationText = getContainerLocationSearchText(c)
+        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''} ${locationText || ''}`.toLowerCase()
         
         // Check if container info matches
         const containerMatches = terms.some(term => containerSearchText.includes(term))
@@ -259,29 +290,39 @@ export default function App() {
     }
     
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery, route])
 
   useEffect(() => {
     async function onUpdated(e: any){
       // refresh both lists when a container is updated (might be archived/unarchived)
       try {
-        const [activeRes, archivedRes] = await Promise.all([
+        const [activeRes, archivedRes, racksRes, coldRes] = await Promise.all([
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(*)')
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', false)
             .order('updated_at', { ascending: false }),
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(*)')
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', true)
-            .order('updated_at', { ascending: false })
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('racks')
+            .select('id, name, cold_storage_id'),
+          supabase
+            .from('cold_storage_units')
+            .select('id, name')
         ])
+
+        const rackMap = new Map((racksRes.data || []).map((r: any) => [r.id, r]))
+        const coldMap = new Map((coldRes.data || []).map((c: any) => [c.id, c]))
         
         if (activeRes.data) {
           const containersWithCounts = activeRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length
+            used: (c.samples || []).length,
+            display_location: buildDisplayLocation(c, rackMap, coldMap)
           }))
           setContainers(containersWithCounts)
         }
@@ -289,7 +330,8 @@ export default function App() {
         if (archivedRes.data) {
           const containersWithCounts = archivedRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length
+            used: (c.samples || []).length,
+            display_location: buildDisplayLocation(c, rackMap, coldMap)
           }))
           setArchivedContainers(containersWithCounts)
         }
@@ -307,11 +349,19 @@ export default function App() {
     async function load(){
       setLoadingArchived(true)
       try{
-        const { data, error } = await supabase
-          .from('containers')
-          .select('*, samples!samples_container_id_fkey(*)')
-          .eq('archived', true)
-          .order('updated_at', { ascending: false })
+        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
+          supabase
+            .from('containers')
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .eq('archived', true)
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('racks')
+            .select('id, name, cold_storage_id'),
+          supabase
+            .from('cold_storage_units')
+            .select('id, name')
+        ])
         
         if (!mounted) return
         if (error) {
@@ -322,9 +372,13 @@ export default function App() {
         console.log('Loaded archived containers:', data)
         
         // Count all samples (including archived) for each container
+        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
+        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
+
         const containersWithCounts = (data ?? []).map((c: any) => ({
           ...c,
-          used: (c.samples || []).length
+          used: (c.samples || []).length,
+          display_location: buildDisplayLocation(c, rackMap, coldMap)
         }))
         
         setArchivedContainers(containersWithCounts)
@@ -362,8 +416,8 @@ export default function App() {
             .from('samples')
             .select(`
               *, 
-              containers!samples_container_id_fkey(id, name, location, type),
-              previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
+              containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
+              previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})
             `)
             .eq('is_archived', isArchiveRoute ? true : false)
             .order('created_at', { ascending: false })
@@ -433,9 +487,10 @@ export default function App() {
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
         // Include both current and previous container info for checked out samples
-        const containerName = s.containers?.name || s.previous_containers?.name || ''
-        const containerLocation = s.containers?.location || s.previous_containers?.location || ''
-        const containerType = s.containers?.type || s.previous_containers?.type || ''
+        const containerData = s.containers || s.previous_containers
+        const containerName = containerData?.name || ''
+        const containerLocation = getContainerLocationSearchText(containerData) || containerData?.location || ''
+        const containerType = containerData?.type || ''
         const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
         const matches = terms.some(term => searchText.includes(term))
         return matches
@@ -487,6 +542,36 @@ export default function App() {
     )
   }
 
+  // cold storage detail route: #/cold-storage/:id
+  if (route.startsWith('#/cold-storage/') && route.split('/').length >= 3) {
+    const parts = route.split('/')
+    const idWithQuery = decodeURIComponent(parts[2])
+    const id = idWithQuery.split('?')[0]
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{marginTop:18}}>
+          <ColdStorageDetails id={id} />
+        </div>
+      </div>
+    )
+  }
+
+  // rack detail route: #/racks/:id
+  if (route.startsWith('#/racks/') && route.split('/').length >= 3) {
+    const parts = route.split('/')
+    const idWithQuery = decodeURIComponent(parts[2])
+    const id = idWithQuery.split('?')[0]
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{marginTop:18}}>
+          <RackDetails id={id} />
+        </div>
+      </div>
+    )
+  }
+
   // container detail route: #/containers/:id
   if (route.startsWith('#/containers/') && route.split('/').length >= 3) {
     const parts = route.split('/')
@@ -497,6 +582,17 @@ export default function App() {
         <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
+        </div>
+      </div>
+    )
+  }
+
+  if (route === '#/cold-storage') {
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{marginTop:18}}>
+          <ColdStorageList />
         </div>
       </div>
     )
@@ -513,6 +609,31 @@ export default function App() {
     )
   }
 
+  if (route === '#/new-storage') {
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{ marginTop: 18 }}>
+          <ContainerCreateDrawer
+            onClose={() => { window.location.hash = '#/cold-storage' }}
+            initialMode="storage"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (route === '#/new-rack') {
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{ marginTop: 18 }}>
+          <RackCreateDrawer onClose={() => { window.location.hash = '#/cold-storage' }} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
   <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
@@ -522,46 +643,105 @@ export default function App() {
       )}
 
       <div style={{marginTop:18}}>
-        {route === '#/containers' && (
+        {(route === '#/containers' || route === '#/rnd') && (
           <>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
               <div className="muted">
                 Showing {filteredContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, filteredContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, filteredContainers.length)} of ${filteredContainers.length}` : '...'} active containers
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <button className="btn" onClick={() => { window.location.hash = '#/new' }}>
+                  New Container
+                </button>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[24, 48, 96].map(size => (
-                  <button
-                    key={size}
-                    onClick={() => {
-                      setContainersPerPage(size)
-                      setContainersCurrentPage(1)
-                    }}
-                    style={{
-                      padding: '4px 12px',
-                      background: containersPerPage === size ? '#3b82f6' : 'white',
-                      color: containersPerPage === size ? 'white' : '#374151',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: containersPerPage === size ? 600 : 400
-                    }}
-                  >
-                    {size}
-                  </button>
-                ))}
+                <select
+                  value={containersPerPage}
+                  onChange={(e) => {
+                    const nextSize = parseInt(e.target.value, 10)
+                    setContainersPerPage(nextSize)
+                    setContainersCurrentPage(1)
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    background: 'white'
+                  }}
+                >
+                  {[24, 48, 96].map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {/* Filters */}
             <div style={{marginTop:8}}>
               <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
             </div>
+            {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 12
+              }}>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={containersCurrentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {containersCurrentPage} of {Math.ceil(filteredContainers.length / containersPerPage)}
+                </span>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(filteredContainers.length / containersPerPage), p + 1))}
+                  disabled={containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             <div className="container-list">
               {loadingContainers && <div className="muted">Loading containers...</div>}
               {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
               {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
+                <ContainerCard
+                  key={c.id}
+                  id={c.id}
+                  name={c.name}
+                  type={c.type}
+                  temperature={c.temperature}
+                  layout={c.layout}
+                  occupancy={{used:c.used,total:c.total}}
+                  updatedAt={c.updated_at}
+                  location={c.display_location || c.location}
+                  training={c.training}
+                  is_rnd={c.is_rnd}
+                  cold_storage_id={c.cold_storage_id}
+                  rack_id={c.rack_id}
+                  rack_position={c.rack_position}
+                />
               ))}
             </div>
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
@@ -641,11 +821,70 @@ export default function App() {
                 ))}
               </div>
             </div>
+            {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 12
+              }}>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={containersCurrentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {containersCurrentPage} of {Math.ceil(archivedContainers.length / containersPerPage)}
+                </span>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(archivedContainers.length / containersPerPage), p + 1))}
+                  disabled={containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             <div className="container-list">
               {loadingArchived && <div className="muted">Loading archived containers...</div>}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
               {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c:any) => (
-                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived={c.archived} />
+                <ContainerCard
+                  key={c.id}
+                  id={c.id}
+                  name={c.name}
+                  type={c.type}
+                  temperature={c.temperature}
+                  layout={c.layout}
+                  occupancy={{used:c.used,total:c.total}}
+                  updatedAt={c.updated_at}
+                  location={c.display_location || c.location}
+                  training={c.training}
+                  archived={c.archived}
+                  is_rnd={c.is_rnd}
+                  cold_storage_id={c.cold_storage_id}
+                  rack_id={c.rack_id}
+                  rack_position={c.rack_position}
+                />
               ))}
             </div>
             {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
@@ -707,7 +946,7 @@ export default function App() {
                     }
                     
                     const containerName = s.containers?.name || s.container_id
-                    const containerLocation = s.containers?.location || 'Location unknown'
+                    const containerLocation = formatContainerLocation(s.containers) || s.containers?.location || 'Location unknown'
                     
                     return (
                       <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -737,6 +976,7 @@ export default function App() {
                             {s.data?.collected_at && (
                               <div className="muted" style={{marginTop:4}}>Collected: {formatDate(s.data.collected_at)}</div>
                             )}
+                            <div className="muted" style={{marginTop:4}}>Storage Path: {containerLocation}</div>
                           </div>
                         </div>
                         <div className="muted" style={{fontSize:13}}>Archived {formatDateTime(s.updated_at)}</div>
@@ -833,7 +1073,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -893,7 +1133,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -949,6 +1189,49 @@ export default function App() {
             {(() => {
               // Use the same order as ContainerFilters
               const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
+                          {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && (
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: 8,
+                              marginTop: 12
+                            }}>
+                              <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: currentPage === 1 ? '#f3f4f6' : 'white',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: 6,
+                                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                  fontSize: 13,
+                                  color: currentPage === 1 ? '#9ca3af' : '#374151'
+                                }}
+                              >
+                                Previous
+                              </button>
+                              <span className="muted" style={{fontSize: 13}}>
+                                Page {currentPage} of {Math.ceil(filteredSamples.length / samplesPerPage)}
+                              </span>
+                              <button
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredSamples.length / samplesPerPage), p + 1))}
+                                disabled={currentPage >= Math.ceil(filteredSamples.length / samplesPerPage)}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#f3f4f6' : 'white',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: 6,
+                                  cursor: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
+                                  fontSize: 13,
+                                  color: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#9ca3af' : '#374151'
+                                }}
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
               const allTypesInSamples = samples ? Array.from(new Set(samples.map((s: any) => {
                 // For checked out samples, use previous container type; otherwise use current container type
                 return s.is_checked_out && s.previous_containers?.type
@@ -1035,7 +1318,7 @@ export default function App() {
                       </th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Storage Path</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
@@ -1048,8 +1331,9 @@ export default function App() {
                         window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
                       }
                       
-                      const containerName = s.containers?.name || s.container_id || '-'
-                      const containerLocation = s.containers?.location || '-'
+                      const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
+                      const containerName = containerData?.name || s.container_id || '-'
+                      const containerLocation = formatContainerLocation(containerData) || containerData?.location || '-'
                       // For checked out samples, use previous container type; otherwise use current container type
                       const containerType = s.is_checked_out && s.previous_containers?.type
                         ? s.previous_containers.type
