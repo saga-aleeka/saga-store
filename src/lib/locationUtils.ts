@@ -26,6 +26,7 @@ export const CONTAINER_LOCATION_SELECT = `
   updated_at,
   used,
   total,
+  layout,
   location,
   type,
   temperature,

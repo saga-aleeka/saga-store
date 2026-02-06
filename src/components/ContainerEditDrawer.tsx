@@ -106,6 +106,8 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
   if (!container) return null
 
+  const layoutLocked = !!container?.layout
+
   const loadRacks = async (coldStorageId: string) => {
     if (!coldStorageId) {
       setRackOptions([])
@@ -674,9 +676,18 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
           <label>
             Dimension
-            <select value={form.layout ?? LAYOUTS[0]} onChange={(e)=> updateField('layout', e.target.value)}>
+            <select
+              value={form.layout ?? LAYOUTS[0]}
+              onChange={(e)=> updateField('layout', e.target.value)}
+              disabled={layoutLocked}
+            >
               {LAYOUTS.map(l => <option key={l}>{l}</option>)}
             </select>
+            {layoutLocked ? (
+              <div className="muted" style={{fontSize:12,marginTop:4}}>
+                Dimensions are locked after creation.
+              </div>
+            ) : null}
           </label>
 
           <label>

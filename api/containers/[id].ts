@@ -85,6 +85,14 @@ module.exports = async function handler(req: any, res: any){
         .select('*')
         .eq('id', id)
         .single()
+
+      const hasLayoutUpdate = body && Object.prototype.hasOwnProperty.call(body, 'layout')
+      if (hasLayoutUpdate && original?.layout && body.layout !== original.layout) {
+        return res.status(409).json({
+          error: 'layout_locked',
+          message: 'Container layout is locked after creation.'
+        })
+      }
       
       const { data, error } = await supabaseAdmin
         .from('containers')
