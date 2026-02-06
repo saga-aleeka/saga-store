@@ -23,6 +23,7 @@ export const CONTAINER_LOCATION_RELATIONS = `
 export const CONTAINER_LOCATION_SELECT = `
   id,
   name,
+  updated_at,
   used,
   total,
   location,
