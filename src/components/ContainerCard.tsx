@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import ContainerEditDrawer from './ContainerEditDrawer'
 import { getApiUrl } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
+import { formatContainerLocation } from '../lib/locationUtils'
 
 function TypeBadge({ type }: { type?: string }){
   const map: Record<string,string> = {
@@ -55,7 +56,7 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
             <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium whitespace-nowrap">{temperature}</span>
             <span className="px-2 py-1 text-xs bg-gray-100 rounded whitespace-nowrap">{layout}</span>
           </div>
-          <div className="text-sm text-gray-600 mt-1">{rest.location ?? ''}</div>
+          <div className="text-sm text-gray-600 mt-1">{rest.display_location ?? rest.location ?? formatContainerLocation(rest) ?? ''}</div>
         </div>
 
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -80,7 +81,22 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
 
       <div className="mt-3 text-sm text-gray-500">Last updated: {formatDateTime(updatedAt)}</div>
     </div>
-    {openEdit && <ContainerEditDrawer container={{id,name,type,temperature,layout,used:occupancy.used,total:occupancy.total,updated_at:updatedAt,archived:rest.archived,location:rest.location}} onClose={() => setOpenEdit(false)} />}
+    {openEdit && <ContainerEditDrawer container={{
+      id,
+      name,
+      type,
+      temperature,
+      layout,
+      used: occupancy.used,
+      total: occupancy.total,
+      updated_at: updatedAt,
+      archived: rest.archived,
+      training: rest.training,
+      is_rnd: rest.is_rnd,
+      cold_storage_id: rest.cold_storage_id,
+      rack_id: rest.rack_id,
+      rack_position: rest.rack_position
+    }} onClose={() => setOpenEdit(false)} />}
     </>
   )
 }

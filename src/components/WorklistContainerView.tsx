@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react'
 import ContainerGridView from './ContainerGridView'
 import { supabase } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
+import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 
 interface Props {
   containerId: string
@@ -25,7 +26,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
     try {
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select('*, samples!samples_container_id_fkey(*)')
+        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
         .eq('id', containerId)
         .single()
       
@@ -189,7 +190,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         </button>
         <div style={{flex: 1}}>
           <h2 style={{fontSize: 24, fontWeight: 600, margin: 0}}>{container.name}</h2>
-          <div className="muted">{container.location} • {container.type} • {container.layout}</div>
+          <div className="muted">Storage: {formatContainerLocation(container) || 'Unassigned'} • {container.type} • {container.layout}</div>
         </div>
       </div>
 

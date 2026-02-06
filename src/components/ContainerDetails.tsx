@@ -3,6 +3,8 @@ import ContainerGridView from './ContainerGridView'
 import SampleHistorySidebar from './SampleHistorySidebar'
 import { supabase } from '../lib/api'
 import { getToken } from '../lib/auth'
+import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
+import LocationBreadcrumb from './LocationBreadcrumb'
 
 export default function ContainerDetails({ id }: { id: string | number }){
   const [data, setData] = useState<any | null>(null)
@@ -33,13 +35,40 @@ export default function ContainerDetails({ id }: { id: string | number }){
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select('*, samples!samples_container_id_fkey(*)')
+        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
         .eq('id', id)
         .single()
       
       if (error) throw error
-      setData(containerData)
-      return containerData
+
+      let enriched = containerData
+
+      if (containerData && !containerData.racks && containerData.rack_id) {
+        const { data: rackData } = await supabase
+          .from('racks')
+          .select('id, name, position, cold_storage_id, cold_storage_units: cold_storage_units!racks_cold_storage_id_fkey(id, name, type, temperature, location)')
+          .eq('id', containerData.rack_id)
+          .single()
+
+        if (rackData) {
+          enriched = { ...enriched, racks: rackData }
+        }
+      }
+
+      if (containerData && !enriched.cold_storage_units && containerData.cold_storage_id) {
+        const { data: coldData } = await supabase
+          .from('cold_storage_units')
+          .select('id, name, type, temperature, location')
+          .eq('id', containerData.cold_storage_id)
+          .single()
+
+        if (coldData) {
+          enriched = { ...enriched, cold_storage_units: coldData }
+        }
+      }
+
+      setData(enriched)
+      return enriched
     }catch(e){
       console.warn('failed to load container', e)
       setData(null)
@@ -51,6 +80,14 @@ export default function ContainerDetails({ id }: { id: string | number }){
 
   useEffect(() => {
     loadContainer()
+  }, [id])
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadContainer(true)
+    }
+    window.addEventListener('refresh-container', handleRefresh)
+    return () => window.removeEventListener('refresh-container', handleRefresh)
   }, [id])
   
   // Focus input only when scanning mode starts (not on every position change)
@@ -458,12 +495,24 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const returnTo = urlParams.get('returnTo')
   const backUrl = returnTo === 'samples' ? '#/samples' : '#/containers'
 
+  const rack = data.racks
+  const coldStorage = rack?.cold_storage_units || data.cold_storage_units
+  const breadcrumbItems = [
+    ...(coldStorage ? [{ label: coldStorage.name, href: `#/cold-storage/${coldStorage.id}` }] : []),
+    ...(rack ? [{ label: rack.name, href: `#/racks/${rack.id}` }] : []),
+    { label: data.name || String(data.id) }
+  ]
+
   return (
     <div style={{ position: 'relative' }}>
+      <LocationBreadcrumb items={breadcrumbItems} />
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:20}}>
         <div>
           <h2 style={{margin:0}}>{data.name || 'Unnamed Container'}</h2>
-          <div className="muted">Location: {data.location || 'Not specified'}</div>
+          <div className="muted">Storage Path: {formatContainerLocation(data) || data.location || 'Not specified'}</div>
+          {data.rack_position && (
+            <div className="muted">Rack Position: {data.rack_position}</div>
+          )}
           <div className="muted">
             {data.type} • {data.layout} • {data.temperature}
           </div>

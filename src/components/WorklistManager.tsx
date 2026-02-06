@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/api'
+import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 
@@ -170,7 +171,7 @@ export default function WorklistManager() {
       // First, try to fetch all samples that match (case-insensitive, including archived)
       const { data, error } = await supabase
         .from('samples')
-        .select('*, containers!samples_container_id_fkey(id, name, location)')
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
         .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       if (error) {
@@ -195,7 +196,7 @@ export default function WorklistManager() {
           sample_id: id,
           container_id: sample?.container_id,
           container_name: sample?.containers?.name,
-          container_location: sample?.containers?.location,
+          container_location: formatContainerLocation(sample?.containers),
           position: sample?.position,
           is_checked_out: isActuallyCheckedOut,
           checked_out_at: isActuallyCheckedOut ? sample?.checked_out_at : null,
@@ -318,7 +319,7 @@ export default function WorklistManager() {
       // Refresh worklist with case-insensitive query
       const { data: refreshed } = await supabase
         .from('samples')
-        .select('*, containers!samples_container_id_fkey(id, name, location)')
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
         .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       // Update worklist state with case-insensitive matching
@@ -331,7 +332,7 @@ export default function WorklistManager() {
             ...item,
             container_id: updated.container_id,
             container_name: updated.containers?.name,
-            container_location: updated.containers?.location,
+            container_location: formatContainerLocation(updated.containers),
             position: updated.position,
             is_checked_out: updated.is_checked_out,
             checked_out_at: updated.checked_out_at,
@@ -420,7 +421,7 @@ export default function WorklistManager() {
       // Refresh worklist with case-insensitive query
       const { data: refreshed } = await supabase
         .from('samples')
-        .select('*, containers!samples_container_id_fkey(id, name, location)')
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
         .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
       
       setWorklist(prev => prev.map(item => {
@@ -432,7 +433,7 @@ export default function WorklistManager() {
             ...item,
             container_id: updated.container_id,
             container_name: updated.containers?.name,
-            container_location: updated.containers?.location,
+            container_location: formatContainerLocation(updated.containers),
             position: updated.position,
             is_checked_out: updated.is_checked_out,
             checked_out_at: updated.checked_out_at,
@@ -677,7 +678,7 @@ export default function WorklistManager() {
                   </th>
                   <th style={{padding: 12, textAlign: 'left'}}>Sample ID</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Type</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Location</th>
+                  <th style={{padding: 12, textAlign: 'left'}}>Storage Path</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Container</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Position</th>
                   <th style={{padding: 12, textAlign: 'left'}}>Status</th>
