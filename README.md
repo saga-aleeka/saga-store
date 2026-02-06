@@ -138,6 +138,9 @@ Run the migrations in `/db/migrations/` in order:
 - **ContainerDetails**: Detailed view with scanning interface
 - **WorklistManager**: CSV import and worklist tracking
 - **WorklistContainerView**: Highlighted positions inside a container
+- **ColdStorageList**: Storage unit and rack list views
+- **ColdStorageDetails**: Storage unit shelves, items, and interior image view
+- **RackDetails**: Rack assignments and grid view
 - **AdminDashboard**: Admin tools for import, audit, backups, and users
 - **SampleHistorySidebar**: Sample details and history viewer
 
