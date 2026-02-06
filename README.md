@@ -26,6 +26,13 @@ A modern laboratory sample management system for tracking biological samples acr
 - **Bulk Operations**: Create, edit, and archive multiple containers
 - **Smart Position Finding**: Automatic next-available position detection
 
+### Cold Storage & Racks
+- **Storage Units**: Track freezers/refrigerators with metadata, PM dates, and status
+- **Rack Management**: Grid or list views, rack edits, and container assignment
+- **Shelves & Items**: Visual shelf view with drag-and-drop ordering and bulk edits
+- **Storage Mapping**: Cold storage → rack → position path mapping across the app
+- **Interior Images**: Upload and view private interior images with signed URLs
+
 ### Search & Filtering
 - **Multi-term Search**: Search containers and samples with comma-separated values
 - **Advanced Filters**: Filter by availability, training status, and container type
@@ -80,14 +87,12 @@ CRON_SECRET=your_cron_secret
 
 ### Database Setup
 
-Run the migrations in `/db/migrations/` in order:
-1. Create authorized_users table
-2. Create audit_logs table
-3. Create backups table
-4. Enable RLS policies
-5. Add training sample flag
-6. Add checkout fields
-7. Create samples_upsert RPC function
+Run the migrations in `/db/migrations/` in order. In addition to the base tables and policies, the cold storage/rack system adds:
+1. Cold storage units and racks tables
+2. Shelves and shelf items
+3. Rack grid sizing
+4. Cold storage item types, ordering, and badge colors
+5. Cold storage interior image path
 
 ## Scripts
 
@@ -144,3 +149,7 @@ Private project - All rights reserved
 ## Support
 
 For issues or questions, contact the project maintainer.
+
+## Versions
+
+- 2026-02: Cold storage units, racks, shelves, interior image uploads, rack grid view, and enhanced shelf badges/search.
