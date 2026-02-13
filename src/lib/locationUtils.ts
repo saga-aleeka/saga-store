@@ -11,9 +11,6 @@ export const CONTAINER_LOCATION_RELATIONS = `
     id,
     name,
     position,
-    archived,
-    training,
-    is_rnd,
     cold_storage_units: cold_storage_units!racks_cold_storage_id_fkey(
       id,
       name,
@@ -27,6 +24,7 @@ export const CONTAINER_LOCATION_RELATIONS = `
 export const CONTAINER_LOCATION_SELECT = `
   id,
   name,
+  created_at,
   updated_at,
   used,
   total,
@@ -34,6 +32,8 @@ export const CONTAINER_LOCATION_SELECT = `
   location,
   type,
   temperature,
+  archived,
+  training,
   is_rnd,
   rack_id,
   rack_position,
