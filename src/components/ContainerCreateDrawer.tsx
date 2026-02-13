@@ -596,18 +596,18 @@ export default function ContainerCreateDrawer({
           </label>
 
           <div style={{display:'grid',gap:8}}>
-            <label style={{display:'grid',gridTemplateColumns:'16px 1fr',alignItems:'center',gap:8}}>
-              <input style={{margin:0}} type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Archive Container</span>
             </label>
 
-            <label style={{display:'grid',gridTemplateColumns:'16px 1fr',alignItems:'center',gap:8}}>
-              <input style={{margin:0}} type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Training Container</span>
             </label>
 
-            <label style={{display:'grid',gridTemplateColumns:'16px 1fr',alignItems:'center',gap:8}}>
-              <input style={{margin:0}} type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>R&amp;D Container</span>
             </label>
           </div>

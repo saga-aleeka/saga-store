@@ -698,18 +698,18 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
           </label>
 
           <div style={{display:'grid',gap:8}}>
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Archived</span>
             </label>
 
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Training only</span>
             </label>
 
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>R&amp;D only</span>
             </label>
           </div>

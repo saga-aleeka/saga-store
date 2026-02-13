@@ -203,7 +203,7 @@ export default function App() {
             .from('containers')
             .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', false)
-            .order('updated_at', { ascending: false }),
+            .order('created_at', { ascending: false }),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
@@ -301,12 +301,12 @@ export default function App() {
             .from('containers')
             .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', false)
-            .order('updated_at', { ascending: false }),
+            .order('created_at', { ascending: false }),
           supabase
             .from('containers')
             .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', true)
-            .order('updated_at', { ascending: false }),
+            .order('created_at', { ascending: false }),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
@@ -354,7 +354,7 @@ export default function App() {
             .from('containers')
             .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
             .eq('archived', true)
-            .order('updated_at', { ascending: false }),
+            .order('created_at', { ascending: false }),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
