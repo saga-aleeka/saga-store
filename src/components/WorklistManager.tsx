@@ -52,7 +52,7 @@ export default function WorklistManager() {
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
-  const [sortMode, setSortMode] = useState<'worklist' | 'container'>('worklist')
+  const [sortState, setSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load worklist from sessionStorage on mount (persists during navigation)
@@ -508,22 +508,54 @@ export default function WorklistManager() {
           ? worklist.filter(s => s.sample_type && selectedTypes.includes(s.sample_type))
           : worklist
         
-        // Apply sort based on mode
-        if (sortMode === 'container') {
+        if (sortState) {
+          const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+          const direction = sortState.direction === 'asc' ? 1 : -1
+          const baseOrder = new Map(worklist.map((s, index) => [s.sample_id, index]))
+          const statusLabel = (s: WorklistSample) => {
+            if (s.is_checked_out) return 'Checked Out'
+            if (s.container_id) return 'In Container'
+            return 'Not Found'
+          }
+
           filteredWorklist = [...filteredWorklist].sort((a, b) => {
-            // First sort by container name
-            const containerA = a.container_name || ''
-            const containerB = b.container_name || ''
-            if (containerA !== containerB) {
-              return containerA.localeCompare(containerB)
+            const aIndex = baseOrder.get(a.sample_id) ?? 0
+            const bIndex = baseOrder.get(b.sample_id) ?? 0
+            const tieBreak = () => aIndex - bIndex
+
+            if (sortState.key === 'sample_id') {
+              const compare = collator.compare(a.sample_id || '', b.sample_id || '') * direction
+              return compare || tieBreak()
             }
-            // Then by position within same container
-            const posA = a.position || ''
-            const posB = b.position || ''
-            return posA.localeCompare(posB)
+
+            if (sortState.key === 'type') {
+              const compare = collator.compare(a.sample_type || '', b.sample_type || '') * direction
+              return compare || tieBreak()
+            }
+
+            if (sortState.key === 'storage_path') {
+              const compare = collator.compare(a.container_location || '', b.container_location || '') * direction
+              return compare || tieBreak()
+            }
+
+            if (sortState.key === 'container') {
+              const compare = collator.compare(a.container_name || '', b.container_name || '') * direction
+              return compare || tieBreak()
+            }
+
+            if (sortState.key === 'position') {
+              const compare = collator.compare(a.position || '', b.position || '') * direction
+              return compare || tieBreak()
+            }
+
+            if (sortState.key === 'status') {
+              const compare = collator.compare(statusLabel(a), statusLabel(b)) * direction
+              return compare || tieBreak()
+            }
+
+            return tieBreak()
           })
         }
-        // else keep worklist order (default)
         
         // Get unique containers needed from filtered list
         const containersNeeded = Array.from(
@@ -568,26 +600,6 @@ export default function WorklistManager() {
               </div>
             </div>
           )}
-          
-          <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
-            <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Sort Order:</div>
-            <div style={{display: 'flex', gap: 8}}>
-              <button
-                className={sortMode === 'worklist' ? 'btn' : 'btn ghost'}
-                onClick={() => setSortMode('worklist')}
-                style={{fontSize: 13, padding: '6px 12px'}}
-              >
-                Worklist Order
-              </button>
-              <button
-                className={sortMode === 'container' ? 'btn' : 'btn ghost'}
-                onClick={() => setSortMode('container')}
-                style={{fontSize: 13, padding: '6px 12px'}}
-              >
-                Group by Container & Position
-              </button>
-            </div>
-          </div>
           
           {containersNeeded.length > 0 && (
             <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
@@ -650,13 +662,22 @@ export default function WorklistManager() {
             </button>
           </div>
 
-          <div style={{marginBottom: 16}}>
+          <div style={{marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'}}>
             <div className="muted">
               Showing {filteredWorklist.length} of {worklist.length} samples • 
               {' '}{filteredWorklist.filter(s => s.is_checked_out).length} checked out • 
               {' '}{filteredWorklist.filter(s => s.container_id).length} in containers • 
               {' '}{filteredWorklist.filter(s => !s.container_id && !s.is_checked_out).length} not found
             </div>
+            {sortState && (
+              <button
+                className="btn ghost"
+                onClick={() => setSortState(null)}
+                style={{fontSize: 12, padding: '2px 8px'}}
+              >
+                Clear Sort
+              </button>
+            )}
           </div>
 
           <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
@@ -676,12 +697,48 @@ export default function WorklistManager() {
                       }}
                     />
                   </th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Sample ID</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Type</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Storage Path</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Container</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Position</th>
-                  <th style={{padding: 12, textAlign: 'left'}}>Status</th>
+                  {([
+                    { label: 'Sample ID', key: 'sample_id' },
+                    { label: 'Type', key: 'type' },
+                    { label: 'Storage Path', key: 'storage_path' },
+                    { label: 'Container', key: 'container' },
+                    { label: 'Position', key: 'position' },
+                    { label: 'Status', key: 'status' }
+                  ] as Array<{ label: string; key: string }>).map((col) => {
+                    const isActive = sortState?.key === col.key
+                    const direction = isActive ? sortState?.direction : 'asc'
+                    return (
+                      <th key={col.key} style={{padding: 12, textAlign: 'left'}}>
+                        <button
+                          onClick={() => {
+                            setSortState((prev) => {
+                              if (prev?.key === col.key) {
+                                return { key: col.key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+                              }
+                              return { key: col.key, direction: 'asc' }
+                            })
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            color: isActive ? '#111827' : '#1f2937'
+                          }}
+                          aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          {col.label}
+                          <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.35 }}>
+                            {direction === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </button>
+                      </th>
+                    )
+                  })}
                   <th style={{padding: 12, textAlign: 'left'}}>Actions</th>
                 </tr>
               </thead>

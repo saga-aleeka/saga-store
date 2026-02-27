@@ -136,7 +136,7 @@ export default function HeaderBar({route = window.location.hash || '#/containers
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21l-4.35-4.35" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 <input 
                   className="bg-transparent outline-none text-sm flex-1" 
-                  placeholder={route === '#/samples' ? 'Search samples by ID, container, storage path, or position... (separate multiple terms with comma)' : 'Search containers by ID, name, rack, or storage path... (separate multiple terms with comma)'}
+                  placeholder={(route === '#/samples' || route === '#/rnd/samples') ? 'Search samples by ID, container, storage path, or position... (separate multiple terms with comma)' : 'Search containers by ID, name, rack, or storage path... (separate multiple terms with comma)'}
                   value={searchQuery}
                   onChange={(e) => onSearchChange?.(e.target.value)}
                 />

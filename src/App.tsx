@@ -13,6 +13,7 @@ import SampleHistory from './components/SampleHistory'
 import ColdStorageList from './components/ColdStorageList'
 import ColdStorageDetails from './components/ColdStorageDetails'
 import RackDetails from './components/RackDetails'
+import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
@@ -85,6 +86,7 @@ export default function App() {
   const [loadingArchived, setLoadingArchived] = useState(false)
   const [samples, setSamples] = useState<any[] | null>(null)
   const [loadingSamples, setLoadingSamples] = useState(false)
+  const [samplesCount, setSamplesCount] = useState<number | null>(null)
   // filters
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [availableOnly, setAvailableOnly] = useState(false)
@@ -92,6 +94,10 @@ export default function App() {
   // pagination for samples
   const [samplesPerPage, setSamplesPerPage] = useState(24)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sampleSort, setSampleSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'created_at',
+    direction: 'desc'
+  })
   // pagination for containers
   const [containersPerPage, setContainersPerPage] = useState(24)
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
@@ -119,9 +125,9 @@ export default function App() {
     setContainersCurrentPage(1)
   }, [route])
 
-  // Clear sample selection and checkout history when navigating away from samples page
+  // Clear sample selection and checkout history when navigating away from samples pages
   useEffect(() => {
-    if (route !== '#/samples') {
+    if (route !== '#/samples' && route !== '#/rnd/samples') {
       setSelectedSampleIds(new Set())
       setCheckoutHistory([])
     }
@@ -179,7 +185,7 @@ export default function App() {
         
         if (!mounted) return
         if (error) throw error
-        if (!samples) setSamples(new Array(count || 0))
+        if (samplesCount === null) setSamplesCount(count || 0)
       } catch(e) {
         console.warn('failed to load samples count', e)
       }
@@ -239,6 +245,8 @@ export default function App() {
     if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
   }, [route])
+
+  const samplesCountDisplay = samplesCount ?? (samples?.length ?? 0)
 
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
@@ -393,7 +401,7 @@ export default function App() {
   }, [route])
 
   useEffect(() => {
-    // load samples when on samples route or archive route
+    // load samples when on samples, archive, or R&D samples routes
     let mounted = true
     async function loadSamples(){
       setLoadingSamples(true)
@@ -412,7 +420,7 @@ export default function App() {
           const from = page * pageSize
           const to = from + pageSize - 1
           
-          const { data, error } = await supabase
+          const query = supabase
             .from('samples')
             .select(`
               *, 
@@ -421,7 +429,8 @@ export default function App() {
             `)
             .eq('is_archived', isArchiveRoute ? true : false)
             .order('created_at', { ascending: false })
-            .range(from, to)
+
+          const { data, error } = await query.range(from, to)
           
           if (error) throw error
           
@@ -455,9 +464,21 @@ export default function App() {
       }finally{ if (mounted) setLoadingSamples(false) }
     }
 
-    if (route === '#/samples' || route === '#/archive') loadSamples()
+    if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') loadSamples()
     return () => { mounted = false }
   }, [route])
+
+  const samplesForTypeFilters = React.useMemo(() => {
+    if (!samples) return []
+    if (route === '#/rnd/samples') {
+      return samples.filter((s: any) => {
+        if (!s) return false
+        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
+        return !!containerData?.is_rnd
+      })
+    }
+    return samples
+  }, [samples, route])
 
   // Apply search filter and type filter to samples
   const filteredSamples = React.useMemo(() => {
@@ -465,7 +486,7 @@ export default function App() {
     
     console.log(`Total samples loaded: ${samples.length}`)
     
-    let filtered = samples
+    let filtered = samples.filter((s: any) => !!s)
     
     // Apply type filter
     if (sampleTypeFilters.length > 0) {
@@ -498,9 +519,142 @@ export default function App() {
       console.log(`After search filter: ${filtered.length} samples`)
     }
     
+    if (route === '#/rnd/samples') {
+      filtered = filtered.filter((s: any) => {
+        if (!s) return false
+        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
+        return !!containerData?.is_rnd
+      })
+    }
+
+    if (sampleSort.key) {
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+      const direction = sampleSort.direction === 'asc' ? 1 : -1
+      const compareText = (a: string, b: string) => collator.compare(a || '', b || '') * direction
+      const keyCache = new WeakMap<any, {
+        sampleId: string
+        type: string
+        inv: string
+        rack: string
+        container: string
+        position: string
+        status: string
+      }>()
+
+      filtered.forEach((s: any, index: number) => {
+        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
+        const sampleId = s.sample_id || ''
+        const type = containerData?.type || 'Sample Type'
+        const inv = containerData?.racks?.cold_storage_units?.name || containerData?.cold_storage_units?.name || ''
+        const rack = containerData?.racks?.name || ''
+        const container = containerData?.name || s.container_id || ''
+        const position = s.position || ''
+        const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
+        keyCache.set(s, {
+          sampleId,
+          type,
+          inv,
+          rack,
+          container,
+          position,
+          status
+        })
+      })
+
+      filtered = [...filtered].sort((a: any, b: any) => {
+        const aKey = keyCache.get(a)
+        const bKey = keyCache.get(b)
+        if (!aKey || !bKey) return 0
+
+        if (sampleSort.key === 'sample_id') {
+          return compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        if (sampleSort.key === 'type') {
+          const typeCompare = compareText(aKey.type, bKey.type)
+          return typeCompare !== 0 ? typeCompare : compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        if (sampleSort.key === 'storage_path') {
+          const invCompare = compareText(aKey.inv, bKey.inv)
+          if (invCompare !== 0) return invCompare
+
+          const rackCompare = compareText(aKey.rack, bKey.rack)
+          if (rackCompare !== 0) return rackCompare
+
+          const posCompare = compareText(aKey.position, bKey.position)
+          if (posCompare !== 0) return posCompare
+
+          return compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        if (sampleSort.key === 'container') {
+          const nameCompare = compareText(aKey.container, bKey.container)
+          return nameCompare !== 0 ? nameCompare : compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        if (sampleSort.key === 'position') {
+          const posCompare = compareText(aKey.position, bKey.position)
+          return posCompare !== 0 ? posCompare : compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        if (sampleSort.key === 'status') {
+          const statusCompare = compareText(aKey.status, bKey.status)
+          return statusCompare !== 0 ? statusCompare : compareText(aKey.sampleId, bKey.sampleId)
+        }
+
+        return compareText(aKey.sampleId, bKey.sampleId)
+      })
+    }
+
     console.log(`Final filtered count: ${filtered.length}`)
     return filtered
-  }, [samples, searchQuery, sampleTypeFilters])
+  }, [samples, searchQuery, sampleTypeFilters, sampleSort.key, sampleSort.direction])
+
+  const downloadSamplesCsv = (rows: any[], filename: string) => {
+    if (!rows.length) {
+      alert('No samples to export')
+      return
+    }
+
+    const escapeCsv = (value: any) => {
+      const str = String(value ?? '')
+      if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`
+      return str
+    }
+
+    const header = ['Sample ID', 'Type', 'Storage Path', 'Container', 'Position', 'Status']
+    const lines = [header.join(',')]
+
+    rows.forEach((s: any) => {
+      const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
+      const containerName = containerData?.name || s.container_id || '-'
+      const containerLocation = formatContainerLocation(containerData) || containerData?.location || '-'
+      const containerType = s.is_checked_out && s.previous_containers?.type
+        ? s.previous_containers.type
+        : (s.containers?.type || 'Sample Type')
+      const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
+
+      lines.push([
+        escapeCsv(s.sample_id || ''),
+        escapeCsv(containerType),
+        escapeCsv(containerLocation),
+        escapeCsv(containerName),
+        escapeCsv(s.position || ''),
+        escapeCsv(status)
+      ].join(','))
+    })
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -516,7 +670,7 @@ export default function App() {
 
     return (
       <div className="app">
-        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <WorklistContainerView 
             containerId={id} 
@@ -534,7 +688,7 @@ export default function App() {
     const sampleId = decodeURIComponent(parts[2])
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <SampleHistory sampleId={sampleId} onBack={() => { window.location.hash = '#/samples' }} />
         </div>
@@ -549,7 +703,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ColdStorageDetails id={id} />
         </div>
@@ -564,7 +718,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <RackDetails id={id} />
         </div>
@@ -579,7 +733,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
         </div>
@@ -590,7 +744,7 @@ export default function App() {
   if (route === '#/cold-storage') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ColdStorageList />
         </div>
@@ -601,7 +755,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>
@@ -612,7 +766,7 @@ export default function App() {
   if (route === '#/new-storage') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{ marginTop: 18 }}>
           <ContainerCreateDrawer
             onClose={() => { window.location.hash = '#/cold-storage' }}
@@ -636,7 +790,7 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />
@@ -645,6 +799,24 @@ export default function App() {
       <div style={{marginTop:18}}>
         {(route === '#/containers' || route === '#/rnd') && (
           <>
+            {route === '#/rnd' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <button
+                  className="btn"
+                  style={{ background: '#3b82f6', color: 'white', fontSize: 13 }}
+                  onClick={() => { window.location.hash = '#/rnd' }}
+                >
+                  R&amp;D Containers
+                </button>
+                <button
+                  className="btn ghost"
+                  style={{ fontSize: 13 }}
+                  onClick={() => { window.location.hash = '#/rnd/samples' }}
+                >
+                  R&amp;D Samples
+                </button>
+              </div>
+            )}
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
               <div className="muted">
                 Showing {filteredContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, filteredContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, filteredContainers.length)} of ${filteredContainers.length}` : '...'} active containers
@@ -723,7 +895,9 @@ export default function App() {
               </div>
             )}
             <div className="container-list">
-              {loadingContainers && <div className="muted">Loading containers...</div>}
+              {loadingContainers && [...Array(6)].map((_, i) => (
+                <ContainerCardSkeleton key={`container-skeleton-${i}`} />
+              ))}
               {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
               {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
                 <ContainerCard
@@ -798,27 +972,25 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[24, 48, 96].map(size => (
-                  <button
-                    key={size}
-                    onClick={() => {
-                      setContainersPerPage(size)
-                      setContainersCurrentPage(1)
-                    }}
-                    style={{
-                      padding: '4px 12px',
-                      background: containersPerPage === size ? '#3b82f6' : 'white',
-                      color: containersPerPage === size ? 'white' : '#374151',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: containersPerPage === size ? 600 : 400
-                    }}
-                  >
-                    {size}
-                  </button>
-                ))}
+                <select
+                  value={containersPerPage}
+                  onChange={(e) => {
+                    const nextSize = parseInt(e.target.value, 10)
+                    setContainersPerPage(nextSize)
+                    setContainersCurrentPage(1)
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    background: 'white'
+                  }}
+                >
+                  {[24, 48, 96].map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
@@ -865,7 +1037,9 @@ export default function App() {
               </div>
             )}
             <div className="container-list">
-              {loadingArchived && <div className="muted">Loading archived containers...</div>}
+              {loadingArchived && [...Array(6)].map((_, i) => (
+                <ContainerCardSkeleton key={`archived-skeleton-${i}`} />
+              ))}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
               {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c:any) => (
                 <ContainerCard
@@ -989,8 +1163,26 @@ export default function App() {
           </>
         )}
 
-        {route === '#/samples' && (
+        {(route === '#/samples' || route === '#/rnd/samples') && (
           <div>
+            {route === '#/rnd/samples' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <button
+                  className="btn ghost"
+                  style={{ fontSize: 13 }}
+                  onClick={() => { window.location.hash = '#/rnd' }}
+                >
+                  R&amp;D Containers
+                </button>
+                <button
+                  className="btn"
+                  style={{ background: '#3b82f6', color: 'white', fontSize: 13 }}
+                  onClick={() => { window.location.hash = '#/rnd/samples' }}
+                >
+                  R&amp;D Samples
+                </button>
+              </div>
+            )}
             {/* Action buttons */}
             {filteredSamples && filteredSamples.length > 0 && (
               <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
@@ -1152,6 +1344,21 @@ export default function App() {
                 >
                   Undo Checkout ({checkoutHistory.length})
                 </button>
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    const selected = filteredSamples.filter((s: any) => selectedSampleIds.has(s.id))
+                    if (selected.length > 0) {
+                      downloadSamplesCsv(selected, 'samples-selected.csv')
+                      return
+                    }
+                    downloadSamplesCsv(filteredSamples, 'samples-filtered.csv')
+                  }}
+                  disabled={loadingSamples || filteredSamples.length === 0}
+                  style={{fontSize: 13}}
+                >
+                  Download CSV
+                </button>
               </div>
             )}
             
@@ -1161,27 +1368,25 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                {[24, 48, 96].map(size => (
-                  <button
-                    key={size}
-                    onClick={() => {
-                      setSamplesPerPage(size)
-                      setCurrentPage(1)
-                    }}
-                    style={{
-                      padding: '4px 12px',
-                      background: samplesPerPage === size ? '#3b82f6' : 'white',
-                      color: samplesPerPage === size ? 'white' : '#374151',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: samplesPerPage === size ? 600 : 400
-                    }}
-                  >
-                    {size}
-                  </button>
-                ))}
+                <select
+                  value={samplesPerPage}
+                  onChange={(e) => {
+                    const nextSize = parseInt(e.target.value, 10)
+                    setSamplesPerPage(nextSize)
+                    setCurrentPage(1)
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    background: 'white'
+                  }}
+                >
+                  {[24, 48, 96].map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
               </div>
             </div>
             
@@ -1232,7 +1437,7 @@ export default function App() {
                               </button>
                             </div>
                           )}
-              const allTypesInSamples = samples ? Array.from(new Set(samples.map((s: any) => {
+              const allTypesInSamples = samplesForTypeFilters.length ? Array.from(new Set(samplesForTypeFilters.map((s: any) => {
                 // For checked out samples, use previous container type; otherwise use current container type
                 return s.is_checked_out && s.previous_containers?.type
                   ? s.previous_containers.type
@@ -1289,7 +1494,11 @@ export default function App() {
               return null
             })()}
             
-            {loadingSamples && <div className="muted">Loading samples...</div>}
+            {loadingSamples && (
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: 'white' }}>
+                <TableSkeleton rows={6} columns={7} />
+              </div>
+            )}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
@@ -1316,12 +1525,49 @@ export default function App() {
                           }}
                         />
                       </th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Storage Path</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
+                      {([
+                        { label: 'Sample ID', key: 'sample_id' },
+                        { label: 'Type', key: 'type' },
+                        { label: 'Storage Path', key: 'storage_path' },
+                        { label: 'Container', key: 'container' },
+                        { label: 'Position', key: 'position' },
+                        { label: 'Status', key: 'status' }
+                      ] as Array<{ label: string; key: string }>).map((col) => {
+                        const isActive = sampleSort.key === col.key
+                        const direction = isActive ? sampleSort.direction : 'asc'
+                        return (
+                          <th key={col.key} style={{padding: 12, textAlign: 'left', fontWeight: 600}}>
+                            <button
+                              onClick={() => {
+                                setSampleSort((prev) => {
+                                  if (prev.key === col.key) {
+                                    return { key: col.key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+                                  }
+                                  return { key: col.key, direction: 'asc' }
+                                })
+                                setCurrentPage(1)
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                color: isActive ? '#111827' : '#1f2937'
+                              }}
+                              aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              {col.label}
+                              <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.35 }}>
+                                {direction === 'asc' ? '▲' : '▼'}
+                              </span>
+                            </button>
+                          </th>
+                        )
+                      })}
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
                     </tr>
                   </thead>
