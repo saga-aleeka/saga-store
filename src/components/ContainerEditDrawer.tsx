@@ -106,6 +106,8 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
   if (!container) return null
 
+  const layoutLocked = !!container?.layout
+
   const loadRacks = async (coldStorageId: string) => {
     if (!coldStorageId) {
       setRackOptions([])
@@ -674,9 +676,18 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
 
           <label>
             Dimension
-            <select value={form.layout ?? LAYOUTS[0]} onChange={(e)=> updateField('layout', e.target.value)}>
+            <select
+              value={form.layout ?? LAYOUTS[0]}
+              onChange={(e)=> updateField('layout', e.target.value)}
+              disabled={layoutLocked}
+            >
               {LAYOUTS.map(l => <option key={l}>{l}</option>)}
             </select>
+            {layoutLocked ? (
+              <div className="muted" style={{fontSize:12,marginTop:4}}>
+                Dimensions are locked after creation.
+              </div>
+            ) : null}
           </label>
 
           <label>
@@ -687,18 +698,18 @@ export default function ContainerEditDrawer({ container, onClose }: { container:
           </label>
 
           <div style={{display:'grid',gap:8}}>
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.archived} onChange={(e)=> updateField('archived', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Archived</span>
             </label>
 
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.training} onChange={(e)=> updateField('training', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>Training only</span>
             </label>
 
-            <label style={{display:'flex',alignItems:'center',gap:8}}>
-              <input type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
+            <label className="toggle-row">
+              <input className="toggle-input" type="checkbox" checked={!!form.is_rnd} onChange={(e)=> updateField('is_rnd', e.target.checked)} />
               <span style={{whiteSpace:'nowrap'}}>R&amp;D only</span>
             </label>
           </div>

@@ -82,7 +82,7 @@ export default function WorklistManager() {
     const lines = text.trim().split('\n')
     if (lines.length === 0) return []
     
-    // Parse header to find SampleID and Source_TubeID columns
+    // Parse header to find SampleID, Source_TubeID, and Source_PlateID columns
     const headerLine = lines[0]
     const headers = headerLine.split(/[,\t]/).map(h => h.trim())
     
@@ -101,9 +101,17 @@ export default function WorklistManager() {
       h.toLowerCase() === 'sourcetubeid' ||
       h.toLowerCase().replace(/[\s_]/g, '') === 'sourcetubeid'
     )
+
+    // Find Source_PlateID column - try various common names
+    const sourcePlateIndex = headers.findIndex(h =>
+      /^source.*plate.*id$/i.test(h) ||
+      h.toLowerCase() === 'source_plateid' ||
+      h.toLowerCase() === 'sourceplateid' ||
+      h.toLowerCase().replace(/[\s_]/g, '') === 'sourceplateid'
+    )
     
-    if (sampleIdIndex === -1 && sourceTubeIndex === -1) {
-      console.warn('Could not find SampleID or Source_TubeID column, using first column')
+    if (sampleIdIndex === -1 && sourceTubeIndex === -1 && sourcePlateIndex === -1) {
+      console.warn('Could not find SampleID, Source_TubeID, or Source_PlateID column, using first column')
     }
     
     const sampleIds: string[] = []
@@ -116,12 +124,14 @@ export default function WorklistManager() {
       
       const parts = line.split(/[,\t]/).map(p => p.trim())
       
-      // Try to get value from SampleID column first, then Source_TubeID, then first column
+      // Try to get value from SampleID column first, then Source_TubeID, then Source_PlateID, then first column
       let sampleId = ''
       if (sampleIdIndex !== -1) {
         sampleId = parts[sampleIdIndex]
       } else if (sourceTubeIndex !== -1) {
         sampleId = parts[sourceTubeIndex]
+      } else if (sourcePlateIndex !== -1) {
+        sampleId = parts[sourcePlateIndex]
       } else if (parts.length > 0) {
         sampleId = parts[0]
       }
@@ -132,6 +142,15 @@ export default function WorklistManager() {
         if (tubeSampleId && !seen.has(tubeSampleId)) {
           sampleIds.push(tubeSampleId)
           seen.add(tubeSampleId)
+        }
+      }
+
+      // Also include Source_PlateID if it exists and is different from SampleID
+      if (sourcePlateIndex !== -1 && parts[sourcePlateIndex] && parts[sourcePlateIndex] !== sampleId) {
+        const plateSampleId = parts[sourcePlateIndex]
+        if (plateSampleId && !seen.has(plateSampleId)) {
+          sampleIds.push(plateSampleId)
+          seen.add(plateSampleId)
         }
       }
       
