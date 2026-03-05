@@ -1,4 +1,5 @@
 // Lightweight debug endpoint to report presence of important environment variables
+export {}
 // Does NOT return secret values — only booleans indicating presence. Useful for preview debugging.
 module.exports = async function handler(req: any, res: any){
   try{

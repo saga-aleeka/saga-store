@@ -1,4 +1,5 @@
 // Sample upsert endpoint - creates or updates samples without duplicates
+export {}
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
 
@@ -114,7 +115,7 @@ module.exports = async function handler(req: any, res: any){
     }
 
     // Filter to get the exact sample at this position (case-insensitive)
-    const occupyingSample = (occupyingSamples || []).find(s => 
+    const occupyingSample = (occupyingSamples || []).find((s: any) => 
       s.container_id === container_id && 
       String(s.position).trim().toUpperCase() === String(position).trim().toUpperCase() &&
       !s.is_archived
@@ -179,7 +180,7 @@ module.exports = async function handler(req: any, res: any){
     }
 
     // Filter to ensure EXACT match (in case database has case-sensitivity issues)
-    const exactMatches = (existingActive || []).filter(s => 
+    const exactMatches = (existingActive || []).filter((s: any) => 
       String(s.sample_id).trim().toUpperCase() === normalizedSampleId
     )
 

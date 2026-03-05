@@ -1,4 +1,5 @@
 // Serverless endpoint to manage audit logs
+export {}
 const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async function handler(req: any, res: any) {
