@@ -1,20 +1,18 @@
 // Consolidated API router for Vercel Hobby plan limits.
 export {}
 
-const envCheck = require('./_handlers/_env_check')
-const adminUsers = require('./_handlers/admin_users')
-const audit = require('./_handlers/audit')
-const authSignin = require('./_handlers/auth/signin')
-const authorizedUsers = require('./_handlers/authorized_users')
-const backups = require('./_handlers/backups')
-const containers = require('./_handlers/containers')
-const containersById = require('./_handlers/containers/[id]')
-const importHandler = require('./_handlers/import')
-const sampleTags = require('./_handlers/sample-tags')
-const samples = require('./_handlers/samples')
-const samplesById = require('./_handlers/samples/[id]')
-const samplesUpsert = require('./_handlers/samples/upsert')
-const tags = require('./_handlers/tags')
+const loadHandler = (path: string) => {
+  try {
+    return require(path)
+  } catch (err: any) {
+    return { __loadError: err }
+  }
+}
+
+const respondLoadError = (res: any, err: any) => {
+  const message = err?.message || String(err)
+  return res.status(500).json({ error: 'handler_load_failed', message })
+}
 
 module.exports = async function handler(req: any, res: any) {
   const url = new URL(req.url || '', 'http://localhost')
@@ -24,30 +22,82 @@ module.exports = async function handler(req: any, res: any) {
     return res.status(200).json({ ok: true })
   }
 
-  if (pathname === '/api/_env_check') return envCheck(req, res)
-  if (pathname === '/api/auth/signin') return authSignin(req, res)
-  if (pathname === '/api/authorized_users') return authorizedUsers(req, res)
-  if (pathname === '/api/admin_users') return adminUsers(req, res)
-  if (pathname === '/api/audit') return audit(req, res)
-  if (pathname === '/api/tags') return tags(req, res)
-  if (pathname === '/api/sample-tags') return sampleTags(req, res)
-  if (pathname === '/api/import') return importHandler(req, res)
-
-  if (pathname === '/api/backups') return backups(req, res)
-
-  if (pathname === '/api/samples/upsert') return samplesUpsert(req, res)
-  if (pathname === '/api/samples') return samples(req, res)
-  if (pathname.startsWith('/api/samples/')) {
-    const id = pathname.split('/')[3]
-    req.query = { ...(req.query || {}), id }
-    return samplesById(req, res)
+  if (pathname === '/api/_env_check') {
+    const handler = loadHandler('./_handlers/_env_check')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/auth/signin') {
+    const handler = loadHandler('./_handlers/auth/signin')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/authorized_users') {
+    const handler = loadHandler('./_handlers/authorized_users')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/admin_users') {
+    const handler = loadHandler('./_handlers/admin_users')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/audit') {
+    const handler = loadHandler('./_handlers/audit')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/tags') {
+    const handler = loadHandler('./_handlers/tags')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/sample-tags') {
+    const handler = loadHandler('./_handlers/sample-tags')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/import') {
+    const handler = loadHandler('./_handlers/import')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
   }
 
-  if (pathname === '/api/containers') return containers(req, res)
-  if (pathname.startsWith('/api/containers/')) {
+  if (pathname === '/api/backups') {
+    const handler = loadHandler('./_handlers/backups')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+
+  if (pathname === '/api/samples/upsert') {
+    const handler = loadHandler('./_handlers/samples/upsert')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname === '/api/samples') {
+    const handler = loadHandler('./_handlers/samples')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname.startsWith('/api/samples/')) {
+    const handler = loadHandler('./_handlers/samples/[id]')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
     const id = pathname.split('/')[3]
     req.query = { ...(req.query || {}), id }
-    return containersById(req, res)
+    return handler(req, res)
+  }
+
+  if (pathname === '/api/containers') {
+    const handler = loadHandler('./_handlers/containers')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    return handler(req, res)
+  }
+  if (pathname.startsWith('/api/containers/')) {
+    const handler = loadHandler('./_handlers/containers/[id]')
+    if (handler.__loadError) return respondLoadError(res, handler.__loadError)
+    const id = pathname.split('/')[3]
+    req.query = { ...(req.query || {}), id }
+    return handler(req, res)
   }
 
   return res.status(404).json({ error: 'not_found' })
