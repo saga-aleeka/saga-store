@@ -37,6 +37,10 @@ module.exports = async function handler(req: any, res: any){
     try{ if (!body && req.json) body = await req.json() }catch(e){}
 
     const { sample_id, container_id, position, data: sampleData } = body
+    const tagIdsRaw = body?.tag_ids ?? body?.tagIds ?? []
+    const tagIds = Array.isArray(tagIdsRaw)
+      ? Array.from(new Set(tagIdsRaw.map((id: any) => String(id)).filter(Boolean)))
+      : []
     
     if (!sample_id) {
       return res.status(400).json({ error: 'sample_id_required' })
@@ -56,6 +60,45 @@ module.exports = async function handler(req: any, res: any){
     console.log(`[UPSERT] Attempting to upsert sample: "${normalizedSampleId}" to container ${container_id} at position ${position}`)
 
     const now = new Date().toISOString()
+
+    const attachTags = async (sampleId: string, sampleIdText?: string) => {
+      if (!tagIds.length) return
+      const { data: tagRows, error: tagError } = await supabaseAdmin
+        .from('tags')
+        .select('id, name, color')
+        .in('id', tagIds)
+
+      if (tagError) {
+        throw new Error(`tag_fetch_failed: ${tagError.message}`)
+      }
+
+      const rows = tagIds.map((tagId: string) => ({
+        sample_id: sampleId,
+        tag_id: tagId,
+        created_by: user || null
+      }))
+
+      const { error } = await supabaseAdmin
+        .from('sample_tags')
+        .upsert(rows, { onConflict: 'sample_id,tag_id' })
+
+      if (error) {
+        throw new Error(`tag_attach_failed: ${error.message}`)
+      }
+
+      await createAuditLog(supabaseAdmin, {
+        userInitials: user,
+        entityType: 'sample',
+        entityId: sampleId,
+        action: 'tags_added',
+        entityName: sampleIdText || normalizedSampleId,
+        metadata: {
+          sample_id: sampleIdText || normalizedSampleId,
+          tags: tagRows || []
+        },
+        description: `Tags added: ${(tagRows || []).map((t: any) => t.name).filter(Boolean).join(', ')}`
+      })
+    }
 
     // FIRST: Check if target position is occupied by a DIFFERENT sample
     const { data: occupyingSamples, error: occupyError } = await supabaseAdmin
@@ -159,6 +202,7 @@ module.exports = async function handler(req: any, res: any){
       // Prevent moving to same position in same container
       if (sample.container_id === container_id && sample.position === position) {
         console.log(`[UPSERT] Sample "${normalizedSampleId}" already at target position, no change needed`)
+        await attachTags(sample.id, sample.sample_id)
         return res.status(200).json({ data: sample, action: 'unchanged' })
       }
       
@@ -205,6 +249,8 @@ module.exports = async function handler(req: any, res: any){
         console.error('Update error:', updateError)
         return res.status(500).json({ error: 'update_failed', message: updateError.message })
       }
+
+      await attachTags(updated.id, updated.sample_id)
 
       console.log(`[UPSERT] Successfully moved sample "${normalizedSampleId}"`)
       
@@ -267,6 +313,8 @@ module.exports = async function handler(req: any, res: any){
         console.error('Insert error:', insertError)
         return res.status(500).json({ error: 'insert_failed', message: insertError.message })
       }
+
+      await attachTags(inserted.id, inserted.sample_id)
 
       console.log(`[UPSERT] Inserted new sample "${normalizedSampleId}" at ${container_id}/${position}`)
       

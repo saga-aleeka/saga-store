@@ -2,9 +2,25 @@ import React, {useEffect, useState} from 'react'
 import ContainerGridView from './ContainerGridView'
 import SampleHistorySidebar from './SampleHistorySidebar'
 import { supabase } from '../lib/api'
-import { getToken } from '../lib/auth'
+import { getToken, getUser } from '../lib/auth'
+import { apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import LocationBreadcrumb from './LocationBreadcrumb'
+
+// Compute readable text color (white or dark) based on background hex
+function readableTextColor(hex: string){
+  try{
+    const h = hex.replace('#','')
+    const r = parseInt(h.substring(0,2),16)/255
+    const g = parseInt(h.substring(2,4),16)/255
+    const b = parseInt(h.substring(4,6),16)/255
+    const Rs = r <= 0.03928 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)
+    const Gs = g <= 0.03928 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4)
+    const Bs = b <= 0.03928 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4)
+    const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
+    return lum > 0.6 ? '#111827' : '#ffffff'
+  }catch(e){ return '#ffffff' }
+}
 
 export default function ContainerDetails({ id }: { id: string | number }){
   const [data, setData] = useState<any | null>(null)
@@ -30,12 +46,19 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [lastScannedId, setLastScannedId] = useState<string | null>(null)
   const scanInputRef = React.useRef<HTMLInputElement>(null)
 
+  const [tags, setTags] = useState<any[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#94a3b8')
+  const [creatingTag, setCreatingTag] = useState(false)
+
   const loadContainer = async (skipLoadingState = false) => {
     if (!skipLoadingState) setLoading(true)
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color)))`)
         .eq('id', id)
         .single()
       
@@ -81,6 +104,63 @@ export default function ContainerDetails({ id }: { id: string | number }){
   useEffect(() => {
     loadContainer()
   }, [id])
+
+  useEffect(() => {
+    loadTags()
+  }, [])
+
+  const loadTags = async () => {
+    setLoadingTags(true)
+    try {
+      const res = await apiFetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to load tags')
+      const payload = await res.json()
+      setTags(payload?.data || [])
+    } catch (err) {
+      console.error('Failed to load tags:', err)
+      setTags([])
+    } finally {
+      setLoadingTags(false)
+    }
+  }
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) {
+        next.delete(tagId)
+      } else {
+        next.add(tagId)
+      }
+      return next
+    })
+  }
+
+  const handleCreateTag = async () => {
+    const name = newTagName.trim()
+    if (!name) return
+
+    setCreatingTag(true)
+    try {
+      const res = await apiFetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: newTagColor || '#94a3b8' })
+      })
+
+      if (!res.ok) throw new Error('Failed to create tag')
+      const payload = await res.json()
+      const created = payload?.data
+      setTags((prev) => [...prev, created].sort((a, b) => String(a.name).localeCompare(String(b.name))))
+      setNewTagName('')
+      setSelectedTagIds((prev) => new Set([...prev, created.id]))
+    } catch (err: any) {
+      console.error('Failed to create tag:', err)
+      alert(`Failed to create tag: ${err?.message || 'Unknown error'}`)
+    } finally {
+      setCreatingTag(false)
+    }
+  }
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -220,11 +300,10 @@ export default function ContainerDetails({ id }: { id: string | number }){
       const token = getToken()
       
       // Create or move sample to this position
-      const res = await fetch('/api/samples/upsert', {
+      const res = await apiFetch('/api/samples/upsert', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           sample_id: sampleId,
@@ -419,21 +498,26 @@ export default function ContainerDetails({ id }: { id: string | number }){
       const sampleId = scanInput.trim()
       
       // Create or move sample to this position
-      const res = await fetch('/api/samples/upsert', {
+      const payload: any = {
+        sample_id: sampleId,
+        container_id: data.id,
+        position: currentPosition,
+        data: {
+          added_via: 'scan',
+          added_at: new Date().toISOString()
+        }
+      }
+
+      if (selectedTagIds.size > 0) {
+        payload.tag_ids = Array.from(selectedTagIds)
+      }
+
+      const res = await apiFetch('/api/samples/upsert', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          sample_id: sampleId,
-          container_id: data.id,
-          position: currentPosition,
-          data: {
-            added_via: 'scan',
-            added_at: new Date().toISOString()
-          }
-        })
+        body: JSON.stringify(payload)
       })
 
       if (!res.ok) throw new Error('Failed to add sample')
@@ -443,6 +527,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       
       // Reload container to get updated sample list (skip loading state to avoid blip)
       const updatedData = await loadContainer(true)
+      window.dispatchEvent(new CustomEvent('samples-updated'))
       
       // After reload, advance to next position using the helper function
       if (updatedData) {
@@ -585,6 +670,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                 setCurrentPosition(null)
                 setScanInput('')
                 setLastScannedId(null)
+                setSelectedTagIds(new Set())
               }}
               style={{
                 background: '#ef4444',
@@ -919,6 +1005,85 @@ export default function ContainerDetails({ id }: { id: string | number }){
               {scanning ? 'Saving...' : 'Add →'}
             </button>
           </form>
+
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6', marginBottom: 8 }}>
+              Tags
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {loadingTags && <span className="muted">Loading tags...</span>}
+              {!loadingTags && tags.length === 0 && (
+                <span className="muted">No tags yet</span>
+              )}
+              {!loadingTags && tags.map((tag) => {
+                const active = selectedTagIds.has(tag.id)
+                const color = tag.color || '#94a3b8'
+                const bg = active ? color : `${color}22`
+                const textColor = active ? readableTextColor(color) : color
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 9999,
+                      border: active ? 'none' : `1px solid ${color}55`,
+                      background: bg,
+                      color: textColor,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                )
+              })}
+              {selectedTagIds.size > 0 && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setSelectedTagIds(new Set())}
+                  style={{ fontSize: 12, padding: '2px 8px' }}
+                >
+                  Clear tags
+                </button>
+              )}
+            </div>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="New tag name"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  fontSize: 13,
+                  minWidth: 180
+                }}
+              />
+              <input
+                type="color"
+                value={newTagColor}
+                onChange={(e) => setNewTagColor(e.target.value)}
+                style={{ width: 42, height: 34, border: 'none', background: 'transparent' }}
+                aria-label="Tag color"
+              />
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={handleCreateTag}
+                disabled={!newTagName.trim() || creatingTag}
+                style={{ fontSize: 13 }}
+              >
+                {creatingTag ? 'Adding...' : 'Add Tag'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw'
 
 // seed data
 const containers = [
@@ -24,77 +24,134 @@ const audits = [
   { id: 2, type: 'move', target: 'sample', target_id: 'S-002', actor: 'bob', msg: 'Moved S-002 to container 1', at: '2025-10-31T09:12:00Z' }
 ]
 
+let tagSeq = 1
+const tags: Array<{ id: string; name: string; color: string; created_at: string }> = []
+const sampleTags: Array<{ sample_id: string; tag_id: string; created_at: string }> = []
+
 export const handlers = [
   // containers list
-  rest.get('/api/containers', (req: msw.RestRequest, res: msw.ResponseResolver, ctx: msw.ResponseComposition) => {
-    interface Container {
-      id: number | string;
-      name: string;
-      location: string;
-      type: string;
-      temperature: string;
-      layout: string;
-      used: number;
-      total: number;
-      archived: boolean;
-      training: boolean;
-      updated_at: string;
-    }
-
-    const archived = req.url.searchParams.get('archived') === 'true';
-    const list = containers.filter((c: Container) => !!c.archived === archived);
-    return res(ctx.status(200), ctx.json({ data: list }));
+  http.get('/api/containers', ({ request }) => {
+    const url = new URL(request.url)
+    const archived = url.searchParams.get('archived') === 'true'
+    const list = containers.filter(c => !!c.archived === archived)
+    return HttpResponse.json({ data: list }, { status: 200 })
   }),
 
-  rest.get('/api/containers/:id', (req, res, ctx) => {
-    const idParam = String(req.params.id)
+  http.get('/api/containers/:id', ({ params }) => {
+    const idParam = String(params.id)
     const c = containers.find(x => String(x.id) === idParam)
-    if (!c) return res(ctx.status(404), ctx.json({ error: 'not_found' }))
+    if (!c) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
     const contained = samples.filter(s => String(s.container_id) === idParam)
-    return res(ctx.status(200), ctx.json({ data: { ...c, samples: contained } }))
+    return HttpResponse.json({ data: { ...c, samples: contained } }, { status: 200 })
   }),
 
   // samples list
-  rest.get('/api/samples', (req, res, ctx) => {
-    return res(ctx.status(200), ctx.json({ data: samples }))
+  http.get('/api/samples', () => {
+    return HttpResponse.json({ data: samples }, { status: 200 })
   }),
 
   // audit events
-  rest.get('/api/audit', (req, res, ctx) => {
-    return res(ctx.status(200), ctx.json({ data: audits }))
+  http.get('/api/audit', () => {
+    return HttpResponse.json({ data: audits }, { status: 200 })
+  }),
+
+  // tags list
+  http.get('/api/tags', () => {
+    return HttpResponse.json({ data: tags }, { status: 200 })
+  }),
+
+  // create tag
+  http.post('/api/tags', async ({ request }) => {
+    const body = await request.json()
+    const name = String(body?.name || '').trim()
+    if (!name) return HttpResponse.json({ error: 'name_required' }, { status: 400 })
+    const exists = tags.find(t => t.name.toLowerCase() === name.toLowerCase())
+    if (exists) return HttpResponse.json({ error: 'name_exists' }, { status: 409 })
+    const color = String(body?.color || '#94a3b8')
+    const tag = { id: `tag-${tagSeq++}`, name, color, created_at: new Date().toISOString() }
+    tags.push(tag)
+    audits.unshift({ id: audits.length + 1, type: 'create', target: 'tag', target_id: tag.id, actor: 'alice', msg: `Created tag ${name}`, at: new Date().toISOString() })
+    return HttpResponse.json({ data: tag }, { status: 201 })
+  }),
+
+  // update tag
+  http.put('/api/tags', async ({ request }) => {
+    const body = await request.json()
+    const id = String(body?.id || '')
+    const idx = tags.findIndex(t => String(t.id) === id)
+    if (idx === -1) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
+    const name = String(body?.name || '').trim()
+    if (!name) return HttpResponse.json({ error: 'name_required' }, { status: 400 })
+    tags[idx] = { ...tags[idx], name, color: String(body?.color || tags[idx].color) }
+    audits.unshift({ id: audits.length + 1, type: 'update', target: 'tag', target_id: id, actor: 'alice', msg: `Updated tag ${name}`, at: new Date().toISOString() })
+    return HttpResponse.json({ data: tags[idx] }, { status: 200 })
+  }),
+
+  // delete tag
+  http.delete('/api/tags', async ({ request }) => {
+    const body = await request.json()
+    const id = String(body?.id || '')
+    const idx = tags.findIndex(t => String(t.id) === id)
+    if (idx === -1) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
+    const [removed] = tags.splice(idx, 1)
+    for (let i = sampleTags.length - 1; i >= 0; i -= 1) {
+      if (sampleTags[i].tag_id === id) sampleTags.splice(i, 1)
+    }
+    audits.unshift({ id: audits.length + 1, type: 'delete', target: 'tag', target_id: id, actor: 'alice', msg: `Deleted tag ${removed?.name || id}`, at: new Date().toISOString() })
+    return HttpResponse.json({ ok: true }, { status: 200 })
+  }),
+
+  // attach tag to sample
+  http.post('/api/sample-tags', async ({ request }) => {
+    const body = await request.json()
+    const sampleId = String(body?.sample_id || '')
+    const tagId = String(body?.tag_id || '')
+    if (!sampleId || !tagId) return HttpResponse.json({ error: 'sample_id_and_tag_id_required' }, { status: 400 })
+    const exists = sampleTags.find(st => st.sample_id === sampleId && st.tag_id === tagId)
+    if (!exists) sampleTags.push({ sample_id: sampleId, tag_id: tagId, created_at: new Date().toISOString() })
+    const tag = tags.find(t => String(t.id) === tagId)
+    audits.unshift({ id: audits.length + 1, type: 'tag_added', target: 'sample', target_id: sampleId, actor: 'alice', msg: `Tag ${tag?.name || tagId} added`, at: new Date().toISOString() })
+    return HttpResponse.json({ success: true }, { status: 201 })
+  }),
+
+  // detach tag from sample
+  http.delete('/api/sample-tags', async ({ request }) => {
+    const body = await request.json()
+    const sampleId = String(body?.sample_id || '')
+    const tagId = String(body?.tag_id || '')
+    if (!sampleId || !tagId) return HttpResponse.json({ error: 'sample_id_and_tag_id_required' }, { status: 400 })
+    for (let i = sampleTags.length - 1; i >= 0; i -= 1) {
+      if (sampleTags[i].sample_id === sampleId && sampleTags[i].tag_id === tagId) sampleTags.splice(i, 1)
+    }
+    const tag = tags.find(t => String(t.id) === tagId)
+    audits.unshift({ id: audits.length + 1, type: 'tag_removed', target: 'sample', target_id: sampleId, actor: 'alice', msg: `Tag ${tag?.name || tagId} removed`, at: new Date().toISOString() })
+    return HttpResponse.json({ success: true }, { status: 200 })
   }),
 
   // import (mass import) - accept and echo
-  rest.post('/api/import', async (req, res, ctx) => {
-    const payload = await req.json()
-    // pretend we created items and an audit record
+  http.post('/api/import', async ({ request }) => {
+    const payload = await request.json()
     const imported = Array.isArray(payload.items) ? payload.items.map((it, idx) => ({ ...it, id: `new-${Date.now()}-${idx}` })) : []
     audits.unshift({ id: audits.length + 1, type: 'import', target: 'samples', target_id: null, actor: 'alice', msg: `Imported ${imported.length} samples`, at: new Date().toISOString() })
-    return res(ctx.status(201), ctx.json({ data: imported }))
+    return HttpResponse.json({ data: imported }, { status: 201 })
   }),
 
   // backups
-  rest.get('/api/backups', (req, res, ctx) => {
+  http.get('/api/backups', () => {
     const backups = [
       { id: 'bkp-2025-10-30', created_at: '2025-10-30T01:00:00Z', size: '12MB' }
     ]
-    return res(ctx.status(200), ctx.json({ data: backups }))
+    return HttpResponse.json({ data: backups }, { status: 200 })
   }),
 
   // authorized users - proxy to Supabase authorized_users table when Vite env is set
-  // This removes any hard-coded/dev users and lets the app read the real table in dev
-  rest.get('/api/authorized_users', async (req, res, ctx) => {
-    // Vite env vars are available as import.meta.env at build/run time
+  http.get('/api/authorized_users', async () => {
     const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || ''
     const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || ''
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      // Not configured: return empty list (removes dev users)
-      // Frontend should handle no authorized users gracefully.
-      // Keep a console message to help developers configure env vars.
-      // eslint-disable-next-line no-console
       console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set; returning empty authorized_users')
-      return res(ctx.status(200), ctx.json({ data: [] }))
+      return HttpResponse.json({ data: [] }, { status: 200 })
     }
 
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/authorized_users?select=*&order=initials.asc`
@@ -108,25 +165,24 @@ export const handlers = [
       const r = await fetch(url, { method: 'GET', headers })
       if (!r.ok) {
         const txt = await r.text()
-        return res(ctx.status(502), ctx.json({ error: 'supabase_fetch_failed', status: r.status, body: txt }))
+        return HttpResponse.json({ error: 'supabase_fetch_failed', status: r.status, body: txt }, { status: 502 })
       }
       const json = await r.json()
-      return res(ctx.status(200), ctx.json({ data: json }))
+      return HttpResponse.json({ data: json }, { status: 200 })
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('authorized_users proxy error', err)
-      return res(ctx.status(500), ctx.json({ error: 'proxy_error' }))
+      return HttpResponse.json({ error: 'proxy_error' }, { status: 500 })
     }
   }),
 
   // admin users endpoint for dev to mirror server-side admin API
-  rest.get('/api/admin_users', async (req, res, ctx) => {
+  http.get('/api/admin_users', async () => {
     const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || ''
     const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || ''
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set; returning empty admin_users')
-      return res(ctx.status(200), ctx.json({ data: [] }))
+      return HttpResponse.json({ data: [] }, { status: 200 })
     }
 
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/authorized_users?select=id,initials,name,created_at&order=initials.asc`
@@ -138,27 +194,25 @@ export const handlers = [
 
     try{
       const r = await fetch(url, { method: 'GET', headers })
-      if (!r.ok){ const txt = await r.text(); return res(ctx.status(502), ctx.json({ error: 'supabase_fetch_failed', status: r.status, body: txt })) }
+      if (!r.ok){ const txt = await r.text(); return HttpResponse.json({ error: 'supabase_fetch_failed', status: r.status, body: txt }, { status: 502 }) }
       const json = await r.json()
-      return res(ctx.status(200), ctx.json({ data: json }))
-    }catch(err){ console.warn('admin_users proxy error', err); return res(ctx.status(500), ctx.json({ error: 'proxy_error' })) }
+      return HttpResponse.json({ data: json }, { status: 200 })
+    }catch(err){ console.warn('admin_users proxy error', err); return HttpResponse.json({ error: 'proxy_error' }, { status: 500 }) }
   }),
 
-  rest.post('/api/backups/restore', async (req, res, ctx) => {
-    const body = await req.json()
+  http.post('/api/backups/restore', async ({ request }) => {
+    const body = await request.json()
     audits.unshift({ id: audits.length + 1, type: 'restore', target: 'backup', target_id: body.id, actor: 'alice', msg: `Restored backup ${body.id}`, at: new Date().toISOString() })
-    return res(ctx.status(200), ctx.json({ ok: true }))
-  })
+    return HttpResponse.json({ ok: true }, { status: 200 })
+  }),
 
-  ,
   // update container
-  rest.put('/api/containers/:id', async (req, res, ctx) => {
-    const idParam = String(req.params.id)
-    const body = await req.json()
+  http.put('/api/containers/:id', async ({ params, request }) => {
+    const idParam = String(params.id)
+    const body = await request.json()
     const idx = containers.findIndex(c => String(c.id) === idParam)
-    if (idx === -1) return res(ctx.status(404), ctx.json({ error: 'not_found' }))
-    // update allowed fields
-  const allowed = ['name','location','type','temperature','layout','used','total','archived','training']
+    if (idx === -1) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
+    const allowed = ['name','location','type','temperature','layout','used','total','archived','training']
     for (const k of Object.keys(body)){
       if (allowed.includes(k)) {
         // @ts-ignore
@@ -166,14 +220,12 @@ export const handlers = [
       }
     }
     audits.unshift({ id: audits.length + 1, type: 'update', target: 'container', target_id: idParam, actor: 'alice', msg: `Updated container ${idParam}`, at: new Date().toISOString() })
-    return res(ctx.status(200), ctx.json({ data: containers[idx] }))
-  })
+    return HttpResponse.json({ data: containers[idx] }, { status: 200 })
+  }),
 
-  ,
   // create container
-  rest.post('/api/containers', async (req, res, ctx) => {
-    const body = await req.json()
-    // use provided id if present (allow string ids), otherwise generate numeric id
+  http.post('/api/containers', async ({ request }) => {
+    const body = await request.json()
     let id: any = body.id ?? null
     if (id === null || id === undefined){
       const numericIds = containers.map(c=> typeof c.id === 'number' ? c.id : 0)
@@ -194,34 +246,32 @@ export const handlers = [
     }
     containers.unshift(newContainer)
     audits.unshift({ id: audits.length + 1, type: 'create', target: 'container', target_id: id, actor: 'alice', msg: `Created container ${id}`, at: new Date().toISOString() })
-    return res(ctx.status(201), ctx.json({ data: newContainer }))
-  })
+    return HttpResponse.json({ data: newContainer }, { status: 201 })
+  }),
 
-  ,
   // move a sample to another container
-  rest.post('/api/samples/:id/move', async (req, res, ctx) => {
-    const sid = String(req.params.id)
-    const body = await req.json()
+  http.post('/api/samples/:id/move', async ({ params, request }) => {
+    const sid = String(params.id)
+    const body = await request.json()
     const sidx = samples.findIndex(s => s.id === sid)
-    if (sidx === -1) return res(ctx.status(404), ctx.json({ error: 'not_found' }))
+    if (sidx === -1) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
     const target = body.target_container_id
     samples[sidx].container_id = target
     audits.unshift({ id: audits.length + 1, type: 'move', target: 'sample', target_id: sid, actor: 'alice', msg: `Moved ${sid} to container ${target}`, at: new Date().toISOString() })
-    return res(ctx.status(200), ctx.json({ data: samples[sidx] }))
-  })
+    return HttpResponse.json({ data: samples[sidx] }, { status: 200 })
+  }),
 
-  ,
   // simple update sample
-  rest.put('/api/samples/:id', async (req, res, ctx) => {
-    const sid = String(req.params.id)
-    const body = await req.json()
+  http.put('/api/samples/:id', async ({ params, request }) => {
+    const sid = String(params.id)
+    const body = await request.json()
     const sidx = samples.findIndex(s => s.id === sid)
-    if (sidx === -1) return res(ctx.status(404), ctx.json({ error: 'not_found' }))
+    if (sidx === -1) return HttpResponse.json({ error: 'not_found' }, { status: 404 })
     for (const k of Object.keys(body)){
       // @ts-ignore
       samples[sidx][k] = body[k]
     }
     audits.unshift({ id: audits.length + 1, type: 'update', target: 'sample', target_id: sid, actor: 'alice', msg: `Updated sample ${sid}`, at: new Date().toISOString() })
-    return res(ctx.status(200), ctx.json({ data: samples[sidx] }))
+    return HttpResponse.json({ data: samples[sidx] }, { status: 200 })
   })
 ]

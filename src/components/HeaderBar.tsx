@@ -123,6 +123,7 @@ export default function HeaderBar({route = window.location.hash || '#/containers
                   <div ref={tabsDropdownRef} className="dropdown" role="menu" style={{minWidth: 180}}>
                     <button className="dropdown-item" onClick={() => navigate('#/rnd')}>R&amp;D</button>
                     <button className="dropdown-item" onClick={() => navigate('#/cold-storage')}>Storage Units</button>
+                    <button className="dropdown-item" onClick={() => navigate('#/tags')}>Tags</button>
                     <button className="dropdown-item" onClick={() => navigate('#/archive')}>Archive</button>
                   </div>
                 )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
+import { apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 
@@ -26,6 +27,7 @@ interface Sample {
   status?: string
   created_at?: string
   updated_at?: string
+  sample_tags?: Array<{ tags?: { id?: string; name?: string; color?: string } }>
 }
 
 interface SampleHistorySidebarProps {
@@ -41,6 +43,29 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
   const [deleting, setDeleting] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [containerNames, setContainerNames] = useState<Map<string, string>>(new Map())
+  const [tags, setTags] = useState<any[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#94a3b8')
+  const [creatingTag, setCreatingTag] = useState(false)
+  const [updatingTags, setUpdatingTags] = useState(false)
+
+  const readableTextColor = (hex: string) => {
+    try {
+      const h = hex.replace('#','')
+      const r = parseInt(h.substring(0,2),16)/255
+      const g = parseInt(h.substring(2,4),16)/255
+      const b = parseInt(h.substring(4,6),16)/255
+      const Rs = r <= 0.03928 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)
+      const Gs = g <= 0.03928 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4)
+      const Bs = b <= 0.03928 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4)
+      const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
+      return lum > 0.6 ? '#111827' : '#ffffff'
+    } catch (e) {
+      return '#111827'
+    }
+  }
 
   if (!sample) return null
 
@@ -84,6 +109,99 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     fetchContainerNames()
   }, [sample?.id])
 
+  useEffect(() => {
+    if (!sample) return
+    const existingTags = (sample.sample_tags || [])
+      .map((t: any) => t.tags?.id)
+      .filter(Boolean)
+    setSelectedTagIds(new Set(existingTags))
+  }, [sample?.id])
+
+  useEffect(() => {
+    if (!sample) return
+    loadTags()
+  }, [sample?.id])
+
+  const loadTags = async () => {
+    setLoadingTags(true)
+    try {
+      const res = await apiFetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to load tags')
+      const payload = await res.json()
+      setTags(payload?.data || [])
+    } catch (error) {
+      console.error('Failed to load tags:', error)
+      setTags([])
+    } finally {
+      setLoadingTags(false)
+    }
+  }
+
+  const toggleTag = async (tagId: string) => {
+    if (!sample) return
+    setUpdatingTags(true)
+    try {
+      if (selectedTagIds.has(tagId)) {
+        const res = await apiFetch('/api/sample-tags', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+        })
+
+        if (!res.ok) throw new Error('Failed to remove tag')
+        setSelectedTagIds(prev => {
+          const next = new Set(prev)
+          next.delete(tagId)
+          return next
+        })
+      } else {
+        const res = await apiFetch('/api/sample-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+        })
+
+        if (!res.ok) throw new Error('Failed to add tag')
+        setSelectedTagIds(prev => new Set([...prev, tagId]))
+      }
+
+      onUpdate?.()
+      window.dispatchEvent(new CustomEvent('samples-updated'))
+    } catch (error: any) {
+      console.error('Failed to update tags:', error)
+      alert(`Failed to update tags: ${error?.message || 'Unknown error'}`)
+    } finally {
+      setUpdatingTags(false)
+    }
+  }
+
+  const handleCreateTag = async () => {
+    const name = newTagName.trim()
+    if (!name) return
+
+    setCreatingTag(true)
+    try {
+      const res = await apiFetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: newTagColor || '#94a3b8' })
+      })
+
+      if (!res.ok) throw new Error('Failed to create tag')
+      const payload = await res.json()
+      const created = payload?.data
+      setTags((prev) => [...prev, created].sort((a, b) => String(a.name).localeCompare(String(b.name))))
+      setNewTagName('')
+      await toggleTag(created.id)
+      window.dispatchEvent(new CustomEvent('samples-updated'))
+    } catch (error: any) {
+      console.error('Failed to create tag:', error)
+      alert(`Failed to create tag: ${error?.message || 'Unknown error'}`)
+    } finally {
+      setCreatingTag(false)
+    }
+  }
+
   const getContainerDisplay = (containerId: string | undefined) => {
     if (!containerId) return 'Unknown'
     return containerNames.get(containerId) || containerId
@@ -98,7 +216,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     setArchiving(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/samples/${sample.id}`, {
+      const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -128,7 +246,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     setArchiving(true) // Reuse the archiving state for loading
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/samples/${sample.id}`, {
+      const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -195,7 +313,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     setDeleting(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/samples/${sample.id}`, {
+      const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -334,6 +452,85 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               🎓 Training Sample
             </div>
           )}
+        </div>
+
+        {/* Tags */}
+        <div style={{ marginTop: '16px', padding: '12px', background: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: 8 }}>Tags</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {loadingTags && <span className="muted">Loading tags...</span>}
+            {!loadingTags && tags.length === 0 && (
+              <span className="muted">No tags yet</span>
+            )}
+            {!loadingTags && tags.map((tag) => {
+              const active = selectedTagIds.has(tag.id)
+              const color = tag.color || '#94a3b8'
+              const bg = active ? color : `${color}22`
+              const textColor = active ? readableTextColor(color) : color
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => toggleTag(tag.id)}
+                  disabled={updatingTags}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 9999,
+                    border: active ? 'none' : `1px solid ${color}55`,
+                    background: bg,
+                    color: textColor,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: updatingTags ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {tag.name}
+                </button>
+              )
+            })}
+            {selectedTagIds.size > 0 && (
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setSelectedTagIds(new Set())}
+                style={{ fontSize: 12, padding: '2px 8px' }}
+              >
+                Clear tags
+              </button>
+            )}
+          </div>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="New tag name"
+              style={{
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                fontSize: 12,
+                minWidth: 160
+              }}
+            />
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(e) => setNewTagColor(e.target.value)}
+              style={{ width: 36, height: 30, border: 'none', background: 'transparent' }}
+              aria-label="Tag color"
+            />
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={handleCreateTag}
+              disabled={!newTagName.trim() || creatingTag}
+              style={{ fontSize: 12 }}
+            >
+              {creatingTag ? 'Adding...' : 'Add Tag'}
+            </button>
+          </div>
         </div>
 
         {/* Archive Toggle */}

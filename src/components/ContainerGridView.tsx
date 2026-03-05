@@ -11,6 +11,7 @@ interface Sample {
   is_training?: boolean
   owner?: string
   status?: string
+  sample_tags?: Array<{ tags?: { id?: string; name?: string; color?: string } }>
 }
 
 interface ContainerGridViewProps {
@@ -90,10 +91,29 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
 
   const getCellColor = (sample?: Sample) => {
     if (!sample) return '#f9fafb'
+    const tagColor = sample.sample_tags?.[0]?.tags?.color
+    if (tagColor) return tagColor
     if (sample.is_training) return '#c7d2fe' // indigo-300
     if (sample.is_archived) return '#fef3c7'
     if (sample.data?.status === 'pending') return '#fef3c7'
     return '#dbeafe'
+  }
+
+  const getTextColor = (sample?: Sample) => {
+    const color = sample ? getCellColor(sample) : '#f9fafb'
+    try {
+      const h = color.replace('#', '')
+      const r = parseInt(h.substring(0, 2), 16) / 255
+      const g = parseInt(h.substring(2, 4), 16) / 255
+      const b = parseInt(h.substring(4, 6), 16) / 255
+      const Rs = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4)
+      const Gs = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4)
+      const Bs = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4)
+      const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
+      return lum > 0.6 ? '#111827' : '#ffffff'
+    } catch (e) {
+      return '#1f2937'
+    }
   }
 
   // Get highlight parameter from URL hash or from props
@@ -237,7 +257,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     transition: 'all 0.15s',
                     fontSize: '11px',
                     fontWeight: isOccupied ? 600 : 400,
-                    color: isUnavailable ? '#6b7280' : isOccupied ? '#1f2937' : '#9ca3af',
+                    color: isUnavailable ? '#6b7280' : isOccupied ? getTextColor(sample) : '#9ca3af',
                     position: 'relative',
                     overflow: 'hidden',
                     boxShadow: isScanning 

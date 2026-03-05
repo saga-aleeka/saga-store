@@ -104,7 +104,7 @@ body{
 .hamburger span{display:block;height:2px;background:var(--muted);border-radius:2px}
 .hamburger:focus{outline:none;box-shadow:0 6px 18px rgba(99,102,241,0.12)}
 
-.dropdown{position:absolute;right:0;top:44px;background:var(--card);box-shadow:var(--shadow);border-radius:10px;padding:6px;min-width:160px;border:1px solid rgba(15,23,42,0.04)}
+.dropdown{position:absolute;right:0;top:44px;background:var(--card);box-shadow:var(--shadow);border-radius:10px;padding:6px;min-width:160px;border:1px solid rgba(15,23,42,0.04);z-index:80}
 .dropdown-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;cursor:pointer;border-radius:8px}
 .dropdown-item:hover{background:rgba(99,102,241,0.04)}
 

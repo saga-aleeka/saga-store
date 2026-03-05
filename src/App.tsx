@@ -13,6 +13,7 @@ import SampleHistory from './components/SampleHistory'
 import ColdStorageList from './components/ColdStorageList'
 import ColdStorageDetails from './components/ColdStorageDetails'
 import RackDetails from './components/RackDetails'
+import TagsManager from './components/TagsManager'
 import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
 import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
@@ -109,6 +110,84 @@ export default function App() {
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
   const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
 
+  const loadSamples = React.useCallback(async (activeRoute?: string) => {
+    const routeToUse = activeRoute ?? route
+    setLoadingSamples(true)
+    try{
+      const isArchiveRoute = routeToUse === '#/archive'
+      
+      // Load ALL samples using pagination to bypass 1000 row limit
+      const pageSize = 1000
+      let allSamples: any[] = []
+      let page = 0
+      let hasMore = true
+      
+      console.log('Starting to load all samples...')
+      
+      while (hasMore) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
+        
+        const query = supabase
+          .from('samples')
+          .select(`
+            *, 
+            containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
+            previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
+            sample_tags:sample_tags(tag_id, tags:tags(id, name, color))
+          `)
+          .eq('is_archived', isArchiveRoute ? true : false)
+          .order('created_at', { ascending: false })
+
+        const { data, error } = await query.range(from, to)
+        
+        if (error) throw error
+        
+        if (!data || data.length === 0) {
+          hasMore = false
+        } else {
+          allSamples.push(...data)
+          console.log(`Loaded page ${page + 1}: ${data.length} samples (total so far: ${allSamples.length})`)
+          page++
+          
+          // If we got fewer than pageSize, we've reached the end
+          if (data.length < pageSize) {
+            hasMore = false
+          }
+        }
+        
+        // Safety check to prevent infinite loops
+        if (page > 200) { // max 200k samples
+          console.warn('Reached maximum page limit (200 pages)')
+          hasMore = false
+        }
+      }
+      
+      console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
+      setSamples(allSamples)
+      setCurrentPage(1) // Reset to first page when reloading
+    }catch(e){
+      console.warn('failed to load samples', e)
+      setSamples([])
+    }finally{ setLoadingSamples(false) }
+  }, [route])
+
+  useEffect(() => {
+    if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') {
+      loadSamples(route)
+    }
+  }, [route, loadSamples])
+
+  useEffect(() => {
+    const onSamplesUpdated = () => {
+      if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') {
+        loadSamples(route)
+      }
+    }
+    window.addEventListener('samples-updated', onSamplesUpdated)
+    return () => window.removeEventListener('samples-updated', onSamplesUpdated)
+  }, [route, loadSamples])
+
   // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1)
@@ -196,55 +275,7 @@ export default function App() {
     loadSamplesCount()
     
     return () => { mounted = false }
-  }, [route])
-
-  useEffect(() => {
-    // load containers when on containers route
-    let mounted = true
-    async function load(){
-      setLoadingContainers(true)
-      try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
-            .eq('archived', false)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('racks')
-            .select('id, name, cold_storage_id'),
-          supabase
-            .from('cold_storage_units')
-            .select('id, name')
-        ])
-        
-        if (!mounted) return
-        if (error) throw error
-        
-        // Count all samples (including archived) for each container
-        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
-        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
-
-        const containersWithCounts = (data ?? []).map((c: any) => {
-          const sampleCount = (c.samples || []).length
-          console.log(`Container ${c.name}: ${sampleCount} samples (including archived)`, c.samples)
-          return {
-            ...c,
-            used: sampleCount,
-            display_location: buildDisplayLocation(c, rackMap, coldMap)
-          }
-        })
-        
-        setContainers(containersWithCounts)
-      }catch(e){
-        console.warn('failed to load containers', e)
-        if (mounted) setContainers([])
-      }finally{ if (mounted) setLoadingContainers(false) }
-    }
-
-    if (route === '#/containers' || route === '#/rnd') load()
-    return () => { mounted = false }
-  }, [route])
+  }, [route, containers, archivedContainers, samplesCount])
 
   const samplesCountDisplay = samplesCount ?? (samples?.length ?? 0)
 
@@ -401,70 +432,48 @@ export default function App() {
   }, [route])
 
   useEffect(() => {
-    // load samples when on samples, archive, or R&D samples routes
+    // load active containers when on containers or R&D route
     let mounted = true
-    async function loadSamples(){
-      setLoadingSamples(true)
+    async function load(){
+      setLoadingContainers(true)
       try{
-        const isArchiveRoute = route === '#/archive'
-        
-        // Load ALL samples using pagination to bypass 1000 row limit
-        const pageSize = 1000
-        let allSamples: any[] = []
-        let page = 0
-        let hasMore = true
-        
-        console.log('Starting to load all samples...')
-        
-        while (hasMore) {
-          const from = page * pageSize
-          const to = from + pageSize - 1
-          
-          const query = supabase
-            .from('samples')
-            .select(`
-              *, 
-              containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
-              previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})
-            `)
-            .eq('is_archived', isArchiveRoute ? true : false)
-            .order('created_at', { ascending: false })
+        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
+          supabase
+            .from('containers')
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .eq('archived', false)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('racks')
+            .select('id, name, cold_storage_id'),
+          supabase
+            .from('cold_storage_units')
+            .select('id, name')
+        ])
 
-          const { data, error } = await query.range(from, to)
-          
-          if (error) throw error
-          
-          if (!data || data.length === 0) {
-            hasMore = false
-          } else {
-            allSamples.push(...data)
-            console.log(`Loaded page ${page + 1}: ${data.length} samples (total so far: ${allSamples.length})`)
-            page++
-            
-            // If we got fewer than pageSize, we've reached the end
-            if (data.length < pageSize) {
-              hasMore = false
-            }
-          }
-          
-          // Safety check to prevent infinite loops
-          if (page > 200) { // max 200k samples
-            console.warn('Reached maximum page limit (200 pages)')
-            hasMore = false
-          }
-        }
-        
         if (!mounted) return
-        console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
-        setSamples(allSamples)
-        setCurrentPage(1) // Reset to first page when reloading
+        if (error) {
+          console.error('Failed to load containers:', error)
+          throw error
+        }
+
+        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
+        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
+
+        const containersWithCounts = (data ?? []).map((c: any) => ({
+          ...c,
+          used: (c.samples || []).length,
+          display_location: buildDisplayLocation(c, rackMap, coldMap)
+        }))
+
+        setContainers(containersWithCounts)
       }catch(e){
-        console.warn('failed to load samples', e)
-        if (mounted) setSamples([])
-      }finally{ if (mounted) setLoadingSamples(false) }
+        console.warn('failed to load containers', e)
+        if (mounted) setContainers([])
+      }finally{ if (mounted) setLoadingContainers(false) }
     }
 
-    if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') loadSamples()
+    if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
   }, [route])
 
@@ -512,7 +521,11 @@ export default function App() {
         const containerName = containerData?.name || ''
         const containerLocation = getContainerLocationSearchText(containerData) || containerData?.location || ''
         const containerType = containerData?.type || ''
-        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
+        const tagText = (s.sample_tags || [])
+          .map((t: any) => t.tags?.name)
+          .filter(Boolean)
+          .join(' ')
+        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText} ${tagText}`.toLowerCase()
         const matches = terms.some(term => searchText.includes(term))
         return matches
       })
@@ -539,6 +552,7 @@ export default function App() {
         container: string
         position: string
         status: string
+        tags: string
       }>()
 
       filtered.forEach((s: any, index: number) => {
@@ -550,6 +564,10 @@ export default function App() {
         const container = containerData?.name || s.container_id || ''
         const position = s.position || ''
         const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
+        const tags = (s.sample_tags || [])
+          .map((t: any) => t.tags?.name)
+          .filter(Boolean)
+          .join(', ')
         keyCache.set(s, {
           sampleId,
           type,
@@ -557,7 +575,8 @@ export default function App() {
           rack,
           container,
           position,
-          status
+          status,
+          tags
         })
       })
 
@@ -603,6 +622,11 @@ export default function App() {
           return statusCompare !== 0 ? statusCompare : compareText(aKey.sampleId, bKey.sampleId)
         }
 
+        if (sampleSort.key === 'tags') {
+          const tagsCompare = compareText(aKey.tags, bKey.tags)
+          return tagsCompare !== 0 ? tagsCompare : compareText(aKey.sampleId, bKey.sampleId)
+        }
+
         return compareText(aKey.sampleId, bKey.sampleId)
       })
     }
@@ -623,7 +647,7 @@ export default function App() {
       return str
     }
 
-    const header = ['Sample ID', 'Type', 'Storage Path', 'Container', 'Position', 'Status']
+    const header = ['Sample ID', 'Type', 'Storage Path', 'Container', 'Position', 'Status', 'Tags']
     const lines = [header.join(',')]
 
     rows.forEach((s: any) => {
@@ -634,6 +658,10 @@ export default function App() {
         ? s.previous_containers.type
         : (s.containers?.type || 'Sample Type')
       const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
+      const tags = (s.sample_tags || [])
+        .map((t: any) => t.tags?.name)
+        .filter(Boolean)
+        .join('; ')
 
       lines.push([
         escapeCsv(s.sample_id || ''),
@@ -641,7 +669,8 @@ export default function App() {
         escapeCsv(containerLocation),
         escapeCsv(containerName),
         escapeCsv(s.position || ''),
-        escapeCsv(status)
+        escapeCsv(status),
+        escapeCsv(tags)
       ].join(','))
     })
 
@@ -747,6 +776,17 @@ export default function App() {
         <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ColdStorageList />
+        </div>
+      </div>
+    )
+  }
+
+  if (route === '#/tags') {
+    return (
+      <div className="app">
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <div style={{marginTop:18}}>
+          <TagsManager />
         </div>
       </div>
     )
@@ -1265,7 +1305,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color))`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -1325,7 +1365,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color))`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -1496,7 +1536,7 @@ export default function App() {
             
             {loadingSamples && (
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: 'white' }}>
-                <TableSkeleton rows={6} columns={7} />
+                <TableSkeleton rows={6} columns={8} />
               </div>
             )}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
@@ -1531,7 +1571,8 @@ export default function App() {
                         { label: 'Storage Path', key: 'storage_path' },
                         { label: 'Container', key: 'container' },
                         { label: 'Position', key: 'position' },
-                        { label: 'Status', key: 'status' }
+                        { label: 'Status', key: 'status' },
+                        { label: 'Tags', key: 'tags' }
                       ] as Array<{ label: string; key: string }>).map((col) => {
                         const isActive = sampleSort.key === col.key
                         const direction = isActive ? sampleSort.direction : 'asc'
@@ -1585,6 +1626,9 @@ export default function App() {
                         ? s.previous_containers.type
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
+                      const tagItems = (s.sample_tags || [])
+                        .map((t: any) => t.tags)
+                        .filter(Boolean)
                       
                       return (
                         <tr 
@@ -1678,6 +1722,32 @@ export default function App() {
                               }}>
                                 In Container
                               </span>
+                            ) : (
+                              <span className="muted">-</span>
+                            )}
+                          </td>
+                          <td style={{padding: 12}}>
+                            {tagItems.length > 0 ? (
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {tagItems.map((tag: any) => {
+                                  const color = tag.color || '#94a3b8'
+                                  return (
+                                    <span
+                                      key={tag.id}
+                                      style={{
+                                        padding: '2px 8px',
+                                        background: `${color}22`,
+                                        color: color,
+                                        borderRadius: 9999,
+                                        fontSize: 12,
+                                        fontWeight: 600
+                                      }}
+                                    >
+                                      {tag.name}
+                                    </span>
+                                  )
+                                })}
+                              </div>
                             ) : (
                               <span className="muted">-</span>
                             )}

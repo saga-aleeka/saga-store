@@ -65,6 +65,22 @@ function formatAuditDescription(audit: any, containerNames: Map<string, string>)
       const position = metadata.position || '?'
       return `Sample ${sampleId} unmarked as training in ${container} (${position})`
     }
+
+    if (audit.action === 'tag_added') {
+      const tagName = metadata.tag_name || 'tag'
+      return `Tag "${tagName}" added to sample ${sampleId}`
+    }
+
+    if (audit.action === 'tag_removed') {
+      const tagName = metadata.tag_name || 'tag'
+      return `Tag "${tagName}" removed from sample ${sampleId}`
+    }
+
+    if (audit.action === 'tags_added') {
+      const tags = (metadata.tags || []).map((t: any) => t.name).filter(Boolean)
+      if (tags.length) return `Tags added to sample ${sampleId}: ${tags.join(', ')}`
+      return `Tags added to sample ${sampleId}`
+    }
   }
   
   if (audit.entity_type === 'container') {
@@ -84,6 +100,12 @@ function formatAuditDescription(audit: any, containerNames: Map<string, string>)
       const sampleCount = metadata.samples_deleted || 0
       return `Container ${audit.entity_name} was deleted (${sampleCount} samples removed)`
     }
+  }
+
+  if (audit.entity_type === 'tag') {
+    if (audit.action === 'created') return `Tag ${audit.entity_name} created`
+    if (audit.action === 'updated') return `Tag ${audit.entity_name} updated`
+    if (audit.action === 'deleted') return `Tag ${audit.entity_name} deleted`
   }
   
   // Fallback

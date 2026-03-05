@@ -5,8 +5,9 @@ import './styles.css'
 import { getApiUrl } from './lib/api'
 
 async function init(){
-  // start MSW in development for a mocked backend
-  if ((import.meta as any).env?.DEV) {
+  // start MSW in development only when explicitly enabled
+  const enableMsw = String((import.meta as any).env?.VITE_ENABLE_MSW || '').toLowerCase() === 'true'
+  if ((import.meta as any).env?.DEV && enableMsw) {
     try {
       const { worker } = await import('./mocks/browser')
       await worker.start()
@@ -35,6 +36,8 @@ async function init(){
     } catch (e) {
       console.warn('MSW failed to start', e)
     }
+  } else if ((import.meta as any).env?.DEV) {
+    console.info('MSW disabled (set VITE_ENABLE_MSW=true to enable)')
   }
 
   createRoot(document.getElementById('root')!).render(
