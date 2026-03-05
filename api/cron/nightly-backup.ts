@@ -1,6 +1,5 @@
 // Cron job endpoint for nightly backups
 // This endpoint is called by Vercel Cron at 3am EST daily
-export {}
 const { createClient } = require('@supabase/supabase-js')
 
 // Helper to generate CSV content (same as backups.ts)

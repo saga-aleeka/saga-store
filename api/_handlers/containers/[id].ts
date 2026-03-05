@@ -1,6 +1,5 @@
 // Dynamic route handler for /api/containers/:id
 // Handles GET, PUT, PATCH, DELETE for a specific container
-export {}
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
 

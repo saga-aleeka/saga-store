@@ -1,7 +1,6 @@
 // Server-side listing of authorized users. Uses the service role key so this
 // handler can read the table regardless of RLS. This endpoint intentionally
 // does NOT return tokens.
-export {}
 const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async function handler(req:any, res:any){

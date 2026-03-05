@@ -1,5 +1,4 @@
 // Consolidated API router for Vercel Hobby plan limits.
-export {}
 
 const path = require('path')
 

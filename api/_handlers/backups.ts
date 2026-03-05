@@ -1,5 +1,4 @@
 // Backup endpoint - generates CSV backups and lists stored backups
-export {}
 const { createClient } = require('@supabase/supabase-js')
 
 // Helper to generate CSV content

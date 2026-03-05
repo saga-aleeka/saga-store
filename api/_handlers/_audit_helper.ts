@@ -1,5 +1,4 @@
 // Helper function to create audit log entries
-export {}
 async function createAuditLog(supabaseAdmin: any, params: {
   userInitials?: string | null
   userName?: string | null

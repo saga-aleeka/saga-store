@@ -2,7 +2,6 @@
 // Validates the client-provided token against `authorized_users` using the Supabase
 // service role key, then calls the `samples_upsert_v1` RPC with the provided items.
 // This file is intended to run on Vercel/Netlify/Supabase Edge Functions or similar.
-export {}
 const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async function handler(req: any, res: any){

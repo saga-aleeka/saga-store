@@ -1,5 +1,4 @@
 // Server-side signin endpoint that returns a token for valid initials
-export {}
 const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async function handler(req: any, res: any){

@@ -5,7 +5,6 @@
 // - POST /api/containers -> create container (requires admin secret or valid bearer token)
 // - PUT/PATCH /api/containers/:id -> update container (requires admin secret or valid bearer token)
 // - DELETE /api/containers/:id -> delete container and its samples (requires admin secret or valid bearer token)
-export {}
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('./_audit_helper')
 

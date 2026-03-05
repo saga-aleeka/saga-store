@@ -1,5 +1,4 @@
 // Serverless endpoint to list samples from Supabase.
-export {}
 // GET /api/samples[?container_id=X&archived=true] -> list all samples with optional filters
 const { createClient } = require('@supabase/supabase-js')
 
