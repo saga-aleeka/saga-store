@@ -1,9 +1,12 @@
 // Consolidated API router for Vercel Hobby plan limits.
 export {}
 
-const loadHandler = (path: string) => {
+const path = require('path')
+
+const loadHandler = (relativePath: string) => {
   try {
-    return require(path)
+    const handlerPath = path.join(__dirname, relativePath)
+    return require(handlerPath)
   } catch (err: any) {
     return { __loadError: err }
   }
@@ -11,6 +14,7 @@ const loadHandler = (path: string) => {
 
 const respondLoadError = (res: any, err: any) => {
   const message = err?.message || String(err)
+  console.error('Handler load failed:', err)
   return res.status(500).json({ error: 'handler_load_failed', message })
 }
 
