@@ -22,6 +22,26 @@ function readableTextColor(hex: string){
   }catch(e){ return '#ffffff' }
 }
 
+const TAG_COLOR_PALETTE = [
+  '#0ea5e9',
+  '#14b8a6',
+  '#22c55e',
+  '#f97316',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#84cc16',
+  '#06b6d4'
+]
+
+const pickRandomTagColor = (existingColors: string[]) => {
+  const used = new Set(existingColors.map((c) => String(c || '').toLowerCase()))
+  const available = TAG_COLOR_PALETTE.filter((c) => !used.has(c.toLowerCase()))
+  const choices = available.length > 0 ? available : TAG_COLOR_PALETTE
+  return choices[Math.floor(Math.random() * choices.length)]
+}
+
 export default function ContainerDetails({ id }: { id: string | number }){
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,13 +72,14 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#94a3b8')
   const [creatingTag, setCreatingTag] = useState(false)
+  const [showTagControls, setShowTagControls] = useState(true)
 
   const loadContainer = async (skipLoadingState = false) => {
     if (!skipLoadingState) setLoading(true)
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color)))`)
+        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))`)
         .eq('id', id)
         .single()
       
@@ -115,7 +136,11 @@ export default function ContainerDetails({ id }: { id: string | number }){
       const res = await apiFetch('/api/tags')
       if (!res.ok) throw new Error('Failed to load tags')
       const payload = await res.json()
-      setTags(payload?.data || [])
+      const nextTags = payload?.data || []
+      setTags(nextTags)
+      if (!newTagName.trim()) {
+        setNewTagColor(pickRandomTagColor(nextTags.map((tag: any) => tag?.color)))
+      }
     } catch (err) {
       console.error('Failed to load tags:', err)
       setTags([])
@@ -153,6 +178,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
       const created = payload?.data
       setTags((prev) => [...prev, created].sort((a, b) => String(a.name).localeCompare(String(b.name))))
       setNewTagName('')
+      setNewTagColor(pickRandomTagColor([...tags, created].map((tag: any) => tag?.color)))
       setSelectedTagIds((prev) => new Set([...prev, created.id]))
     } catch (err: any) {
       console.error('Failed to create tag:', err)
@@ -1007,82 +1033,97 @@ export default function ContainerDetails({ id }: { id: string | number }){
           </form>
 
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6', marginBottom: 8 }}>
-              Tags
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6' }}>
+                Tags
+              </div>
+              <label className="toggle-row" style={{ gap: 6 }}>
+                <input
+                  className="toggle-input"
+                  type="checkbox"
+                  checked={showTagControls}
+                  onChange={(e) => setShowTagControls(e.target.checked)}
+                />
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Show tags</span>
+              </label>
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              {loadingTags && <span className="muted">Loading tags...</span>}
-              {!loadingTags && tags.length === 0 && (
-                <span className="muted">No tags yet</span>
-              )}
-              {!loadingTags && tags.map((tag) => {
-                const active = selectedTagIds.has(tag.id)
-                const color = tag.color || '#94a3b8'
-                const bg = active ? color : `${color}22`
-                const textColor = active ? readableTextColor(color) : color
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 9999,
-                      border: active ? 'none' : `1px solid ${color}55`,
-                      background: bg,
-                      color: textColor,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {tag.name}
-                  </button>
-                )
-              })}
-              {selectedTagIds.size > 0 && (
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => setSelectedTagIds(new Set())}
-                  style={{ fontSize: 12, padding: '2px 8px' }}
-                >
-                  Clear tags
-                </button>
-              )}
-            </div>
+            {showTagControls && (
+              <>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {loadingTags && <span className="muted">Loading tags...</span>}
+                  {!loadingTags && tags.length === 0 && (
+                    <span className="muted">No tags yet</span>
+                  )}
+                  {!loadingTags && tags.map((tag) => {
+                    const active = selectedTagIds.has(tag.id)
+                    const color = tag.color || '#94a3b8'
+                    const bg = active ? color : `${color}22`
+                    const textColor = active ? readableTextColor(color) : color
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => toggleTag(tag.id)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 9999,
+                          border: active ? 'none' : `1px solid ${color}55`,
+                          background: bg,
+                          color: textColor,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    )
+                  })}
+                  {selectedTagIds.size > 0 && (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => setSelectedTagIds(new Set())}
+                      style={{ fontSize: 12, padding: '2px 8px' }}
+                    >
+                      Clear tags
+                    </button>
+                  )}
+                </div>
 
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input
-                type="text"
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="New tag name"
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 13,
-                  minWidth: 180
-                }}
-              />
-              <input
-                type="color"
-                value={newTagColor}
-                onChange={(e) => setNewTagColor(e.target.value)}
-                style={{ width: 42, height: 34, border: 'none', background: 'transparent' }}
-                aria-label="Tag color"
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={handleCreateTag}
-                disabled={!newTagName.trim() || creatingTag}
-                style={{ fontSize: 13 }}
-              >
-                {creatingTag ? 'Adding...' : 'Add Tag'}
-              </button>
-            </div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="New tag name"
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: '1px solid #d1d5db',
+                      fontSize: 13,
+                      minWidth: 180
+                    }}
+                  />
+                  <input
+                    type="color"
+                    value={newTagColor}
+                    onChange={(e) => setNewTagColor(e.target.value)}
+                    style={{ width: 42, height: 34, border: 'none', background: 'transparent' }}
+                    aria-label="Tag color"
+                  />
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={handleCreateTag}
+                    disabled={!newTagName.trim() || creatingTag}
+                    style={{ fontSize: 13 }}
+                  >
+                    {creatingTag ? 'Adding...' : 'Add Tag'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

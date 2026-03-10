@@ -1,15 +1,37 @@
 import React, { useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
 
+const TAG_COLOR_PALETTE = [
+  '#0ea5e9',
+  '#14b8a6',
+  '#22c55e',
+  '#f97316',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#84cc16',
+  '#06b6d4'
+]
+
+const pickRandomTagColor = (existingColors: string[]) => {
+  const used = new Set(existingColors.map((c) => String(c || '').toLowerCase()))
+  const available = TAG_COLOR_PALETTE.filter((c) => !used.has(c.toLowerCase()))
+  const choices = available.length > 0 ? available : TAG_COLOR_PALETTE
+  return choices[Math.floor(Math.random() * choices.length)]
+}
+
 export default function TagsManager() {
   const [tags, setTags] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#94a3b8')
+  const [newHighlight, setNewHighlight] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('#94a3b8')
+  const [editHighlight, setEditHighlight] = useState(true)
 
   const readErrorDetail = async (res: Response) => {
     try {
@@ -35,7 +57,11 @@ export default function TagsManager() {
         throw new Error(`Failed to load tags (${res.status}): ${detail || res.statusText}`)
       }
       const payload = await res.json()
-      setTags(payload?.data || [])
+      const nextTags = payload?.data || []
+      setTags(nextTags)
+      if (!newName.trim()) {
+        setNewColor(pickRandomTagColor(nextTags.map((tag: any) => tag?.color)))
+      }
     } catch (err) {
       console.error('Failed to load tags:', err)
       setTags([])
@@ -57,14 +83,14 @@ export default function TagsManager() {
       const res = await apiFetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, color: newColor || '#94a3b8' })
+        body: JSON.stringify({ name, color: newColor || '#94a3b8', highlight: newHighlight })
       })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
         throw new Error(`Failed to create tag (${res.status}): ${detail || res.statusText}`)
       }
       setNewName('')
-      setNewColor('#94a3b8')
+      setNewHighlight(true)
       await loadTags()
     } catch (err: any) {
       console.error('Failed to create tag:', err)
@@ -78,12 +104,14 @@ export default function TagsManager() {
     setEditingId(tag.id)
     setEditName(tag.name || '')
     setEditColor(tag.color || '#94a3b8')
+    setEditHighlight(tag.highlight !== undefined ? !!tag.highlight : true)
   }
 
   const cancelEdit = () => {
     setEditingId(null)
     setEditName('')
     setEditColor('#94a3b8')
+    setEditHighlight(true)
   }
 
   const saveEdit = async () => {
@@ -96,7 +124,7 @@ export default function TagsManager() {
       const res = await apiFetch('/api/tags', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingId, name, color: editColor || '#94a3b8' })
+        body: JSON.stringify({ id: editingId, name, color: editColor || '#94a3b8', highlight: editHighlight })
       })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
@@ -167,6 +195,15 @@ export default function TagsManager() {
             style={{ width: 40, height: 32, border: 'none', background: 'transparent' }}
             aria-label="Tag color"
           />
+          <label className="toggle-row" style={{ gap: 6 }}>
+            <input
+              className="toggle-input"
+              type="checkbox"
+              checked={newHighlight}
+              onChange={(e) => setNewHighlight(e.target.checked)}
+            />
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Highlight samples</span>
+          </label>
           <button className="btn" onClick={handleCreate} disabled={saving || !newName.trim()}>
             {saving ? 'Saving...' : 'Create Tag'}
           </button>
@@ -204,6 +241,15 @@ export default function TagsManager() {
                         style={{ width: 36, height: 30, border: 'none', background: 'transparent' }}
                         aria-label="Tag color"
                       />
+                      <label className="toggle-row" style={{ gap: 6 }}>
+                        <input
+                          className="toggle-input"
+                          type="checkbox"
+                          checked={editHighlight}
+                          onChange={(e) => setEditHighlight(e.target.checked)}
+                        />
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>Highlight samples</span>
+                      </label>
                       <button className="btn" onClick={saveEdit} disabled={saving || !editName.trim()}>
                         Save
                       </button>
@@ -215,6 +261,9 @@ export default function TagsManager() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ fontWeight: 600 }}>{tag.name}</div>
                       <span className="muted" style={{ fontSize: 12 }}>{tag.color}</span>
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {tag.highlight === false ? 'No highlight' : 'Highlights'}
+                      </span>
                     </div>
                   )}
                 </div>

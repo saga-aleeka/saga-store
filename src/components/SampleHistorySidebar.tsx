@@ -4,6 +4,26 @@ import { apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 
+const TAG_COLOR_PALETTE = [
+  '#0ea5e9',
+  '#14b8a6',
+  '#22c55e',
+  '#f97316',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#84cc16',
+  '#06b6d4'
+]
+
+const pickRandomTagColor = (existingColors: string[]) => {
+  const used = new Set(existingColors.map((c) => String(c || '').toLowerCase()))
+  const available = TAG_COLOR_PALETTE.filter((c) => !used.has(c.toLowerCase()))
+  const choices = available.length > 0 ? available : TAG_COLOR_PALETTE
+  return choices[Math.floor(Math.random() * choices.length)]
+}
+
 interface HistoryEvent {
   when: string
   action: string
@@ -128,7 +148,11 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       const res = await apiFetch('/api/tags')
       if (!res.ok) throw new Error('Failed to load tags')
       const payload = await res.json()
-      setTags(payload?.data || [])
+      const nextTags = payload?.data || []
+      setTags(nextTags)
+      if (!newTagName.trim()) {
+        setNewTagColor(pickRandomTagColor(nextTags.map((tag: any) => tag?.color)))
+      }
     } catch (error) {
       console.error('Failed to load tags:', error)
       setTags([])
@@ -192,6 +216,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       const created = payload?.data
       setTags((prev) => [...prev, created].sort((a, b) => String(a.name).localeCompare(String(b.name))))
       setNewTagName('')
+      setNewTagColor(pickRandomTagColor([...tags, created].map((tag: any) => tag?.color)))
       await toggleTag(created.id)
       window.dispatchEvent(new CustomEvent('samples-updated'))
     } catch (error: any) {

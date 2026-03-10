@@ -11,7 +11,7 @@ interface Sample {
   is_training?: boolean
   owner?: string
   status?: string
-  sample_tags?: Array<{ tags?: { id?: string; name?: string; color?: string } }>
+  sample_tags?: Array<{ tags?: { id?: string; name?: string; color?: string; highlight?: boolean } }>
 }
 
 interface ContainerGridViewProps {
@@ -91,7 +91,8 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
 
   const getCellColor = (sample?: Sample) => {
     if (!sample) return '#f9fafb'
-    const tagColor = sample.sample_tags?.[0]?.tags?.color
+    const highlightTag = (sample.sample_tags || []).find((t) => t.tags?.highlight !== false)
+    const tagColor = highlightTag?.tags?.color
     if (tagColor) return tagColor
     if (sample.is_training) return '#c7d2fe' // indigo-300
     if (sample.is_archived) return '#fef3c7'

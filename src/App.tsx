@@ -134,7 +134,7 @@ export default function App() {
             *, 
             containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
             previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
-            sample_tags:sample_tags(tag_id, tags:tags(id, name, color))
+            sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))
           `)
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
@@ -1305,7 +1305,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color))`)
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -1365,7 +1365,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color))`)
+                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       

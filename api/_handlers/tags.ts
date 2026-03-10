@@ -16,7 +16,7 @@ module.exports = async function handler(req: any, res: any) {
     if (req.method === 'GET') {
       const { data, error } = await supabaseAdmin
         .from('tags')
-        .select('id, name, color, created_at, updated_at')
+        .select('id, name, color, highlight, created_at, updated_at')
         .order('name', { ascending: true })
 
       if (error) {
@@ -33,13 +33,14 @@ module.exports = async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       const name = String(body?.name || '').trim()
       const color = String(body?.color || '#94a3b8').trim() || '#94a3b8'
+      const highlight = body?.highlight !== undefined ? !!body.highlight : true
 
       if (!name) return res.status(400).json({ error: 'name_required' })
 
       const { data: created, error } = await supabaseAdmin
         .from('tags')
-        .insert({ name, color, created_by: user.initials || null })
-        .select('id, name, color, created_at, updated_at')
+        .insert({ name, color, highlight, created_by: user.initials || null })
+        .select('id, name, color, highlight, created_at, updated_at')
         .single()
 
       if (error) {
@@ -69,20 +70,21 @@ module.exports = async function handler(req: any, res: any) {
 
       const { data: before } = await supabaseAdmin
         .from('tags')
-        .select('id, name, color')
+        .select('id, name, color, highlight')
         .eq('id', tagId)
         .single()
 
       const updates: any = {}
       if (name) updates.name = name
       if (color) updates.color = color
+      if (body?.highlight !== undefined) updates.highlight = !!body.highlight
       updates.updated_at = new Date().toISOString()
 
       const { data: updated, error } = await supabaseAdmin
         .from('tags')
         .update(updates)
         .eq('id', tagId)
-        .select('id, name, color, created_at, updated_at')
+        .select('id, name, color, highlight, created_at, updated_at')
         .single()
 
       if (error) {
@@ -110,7 +112,7 @@ module.exports = async function handler(req: any, res: any) {
 
       const { data: existing } = await supabaseAdmin
         .from('tags')
-        .select('id, name, color')
+        .select('id, name, color, highlight')
         .eq('id', tagId)
         .single()
 
