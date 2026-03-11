@@ -15,6 +15,11 @@ interface WorklistSample {
   previous_container_id?: string
   previous_position?: string
   sample_type?: string
+  shelf_id?: string
+  shelf_name?: string
+  cold_storage_id?: string
+  cold_storage_name?: string
+  shelf_item_type?: string
 }
 
 // Helper function to detect sample type from container name or sample ID
@@ -199,29 +204,72 @@ export default function WorklistManager() {
         return
       }
 
+      const { data: shelfItemsData, error: shelfItemsError } = await supabase
+        .from('cold_storage_items')
+        .select(
+          `id,
+          item_id,
+          item_type,
+          shelf_id,
+          cold_storage_id,
+          cold_storage_shelves: cold_storage_shelves!cold_storage_items_shelf_id_fkey(
+            id,
+            name,
+            cold_storage_id,
+            cold_storage_units: cold_storage_units!cold_storage_shelves_cold_storage_id_fkey(id, name)
+          )`
+        )
+        .or(sampleIds.map(id => `item_id.ilike.${id}`).join(','))
+
+      if (shelfItemsError) {
+        console.warn('Shelf item lookup error:', shelfItemsError)
+      }
+
+      const shelfItemsById = new Map(
+        (shelfItemsData || []).map((item: any) => [String(item.item_id || '').toUpperCase(), item])
+      )
+
       // Build worklist with container info and sample type
       // Match samples case-insensitively since database query was case-insensitive
       const worklistData: WorklistSample[] = sampleIds.map(id => {
         const sample = data?.find(s => 
           s.sample_id.trim().toUpperCase() === id.trim().toUpperCase()
         )
+        const shelfItem = shelfItemsById.get(id.trim().toUpperCase())
         
         // Fix inconsistent state: if sample has container_id, it shouldn't be checked out
         // This handles cases where samples were put back in containers without using "Undo Checkout"
         const hasContainer = sample?.container_id != null
         const isActuallyCheckedOut = sample?.is_checked_out && !hasContainer
         
+        const shelfDetails = shelfItem?.cold_storage_shelves
+        const shelfUnit = shelfDetails?.cold_storage_units
+        const shelfLocation = shelfUnit?.name && shelfDetails?.name
+          ? `${shelfUnit.name} / ${shelfDetails.name}`
+          : shelfUnit?.name || shelfDetails?.name || null
+
         return {
           sample_id: id,
           container_id: sample?.container_id,
           container_name: sample?.containers?.name,
-          container_location: formatContainerLocation(sample?.containers),
+          container_location: formatContainerLocation(sample?.containers) || shelfLocation,
           position: sample?.position,
           is_checked_out: isActuallyCheckedOut,
           checked_out_at: isActuallyCheckedOut ? sample?.checked_out_at : null,
           previous_container_id: sample?.previous_container_id,
           previous_position: sample?.previous_position,
-          sample_type: detectSampleType(id, sample?.containers?.name)
+          sample_type: sample?.containers?.name
+            ? detectSampleType(id, sample?.containers?.name)
+            : shelfItem?.item_type === 'plate'
+              ? 'Plate'
+              : shelfItem?.item_type === 'tube'
+                ? 'Tube'
+                : detectSampleType(id, undefined),
+          shelf_id: shelfDetails?.id || shelfItem?.shelf_id,
+          shelf_name: shelfDetails?.name,
+          cold_storage_id: shelfItem?.cold_storage_id || shelfDetails?.cold_storage_id,
+          cold_storage_name: shelfUnit?.name,
+          shelf_item_type: shelfItem?.item_type
         }
       })
 
@@ -534,6 +582,7 @@ export default function WorklistManager() {
           const statusLabel = (s: WorklistSample) => {
             if (s.is_checked_out) return 'Checked Out'
             if (s.container_id) return 'In Container'
+            if (s.shelf_id || s.cold_storage_id) return 'On Shelf'
             return 'Not Found'
           }
 
@@ -558,7 +607,7 @@ export default function WorklistManager() {
             }
 
             if (sortState.key === 'container') {
-              const compare = collator.compare(a.container_name || '', b.container_name || '') * direction
+              const compare = collator.compare(a.container_name || a.shelf_item_type || '', b.container_name || b.shelf_item_type || '') * direction
               return compare || tieBreak()
             }
 
@@ -686,7 +735,8 @@ export default function WorklistManager() {
               Showing {filteredWorklist.length} of {worklist.length} samples • 
               {' '}{filteredWorklist.filter(s => s.is_checked_out).length} checked out • 
               {' '}{filteredWorklist.filter(s => s.container_id).length} in containers • 
-              {' '}{filteredWorklist.filter(s => !s.container_id && !s.is_checked_out).length} not found
+              {' '}{filteredWorklist.filter(s => s.shelf_id || s.cold_storage_id).length} on shelves •
+              {' '}{filteredWorklist.filter(s => !s.container_id && !s.is_checked_out && !s.shelf_id && !s.cold_storage_id).length} not found
             </div>
             {sortState && (
               <button
@@ -794,7 +844,7 @@ export default function WorklistManager() {
                       {sample.container_location || <span className="muted">—</span>}
                     </td>
                     <td style={{padding: 12}}>
-                      {sample.container_name || <span className="muted">—</span>}
+                      {sample.container_name || (sample.shelf_item_type ? `Shelf ${sample.shelf_item_type}` : <span className="muted">—</span>)}
                     </td>
                     <td style={{padding: 12}}>
                       {sample.position || <span className="muted">—</span>}
@@ -824,6 +874,18 @@ export default function WorklistManager() {
                         }}>
                           In Container
                         </span>
+                      ) : sample.shelf_id || sample.cold_storage_id ? (
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          background: '#e0f2fe',
+                          color: '#075985',
+                          borderRadius: 4,
+                          fontSize: 12,
+                          fontWeight: 500
+                        }}>
+                          On Shelf
+                        </span>
                       ) : (
                         <span style={{
                           display: 'inline-block',
@@ -846,6 +908,18 @@ export default function WorklistManager() {
                           style={{fontSize: 12, padding: '4px 8px'}}
                         >
                           View Container
+                        </button>
+                      )}
+                      {!sample.container_id && sample.cold_storage_id && (
+                        <button
+                          className="btn ghost"
+                          onClick={() => {
+                            const targetId = sample.cold_storage_id
+                            if (targetId) window.location.hash = `#/cold-storage/${targetId}`
+                          }}
+                          style={{fontSize: 12, padding: '4px 8px'}}
+                        >
+                          View Shelf
                         </button>
                       )}
                     </td>

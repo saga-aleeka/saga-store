@@ -88,6 +88,9 @@ export default function App() {
   const [samples, setSamples] = useState<any[] | null>(null)
   const [loadingSamples, setLoadingSamples] = useState(false)
   const [samplesCount, setSamplesCount] = useState<number | null>(null)
+  const [shelfItems, setShelfItems] = useState<any[]>([])
+  const [shelves, setShelves] = useState<any[]>([])
+  const [coldStorageUnits, setColdStorageUnits] = useState<any[]>([])
   // filters
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [availableOnly, setAvailableOnly] = useState(false)
@@ -277,7 +280,83 @@ export default function App() {
     return () => { mounted = false }
   }, [route, containers, archivedContainers, samplesCount])
 
+  useEffect(() => {
+    let mounted = true
+    async function loadShelfItems() {
+      try {
+        const [{ data: itemData }, { data: shelfData }, { data: unitData }] = await Promise.all([
+          supabase
+            .from('cold_storage_items')
+            .select('id, item_id, item_type, lot_id, description, shelf_id, cold_storage_id')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('cold_storage_shelves')
+            .select('id, name, cold_storage_id')
+            .order('name', { ascending: true }),
+          supabase
+            .from('cold_storage_units')
+            .select('id, name')
+            .order('name', { ascending: true })
+        ])
+
+        if (!mounted) return
+        setShelfItems(itemData || [])
+        setShelves(shelfData || [])
+        setColdStorageUnits(unitData || [])
+      } catch (e) {
+        console.warn('Failed to load shelf items for search:', e)
+        if (!mounted) return
+        setShelfItems([])
+        setShelves([])
+        setColdStorageUnits([])
+      }
+    }
+
+    loadShelfItems()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const samplesCountDisplay = samplesCount ?? (samples?.length ?? 0)
+
+  const shelfById = React.useMemo(() => {
+    return shelves.reduce<Record<string, any>>((acc, shelf) => {
+      acc[shelf.id] = shelf
+      return acc
+    }, {})
+  }, [shelves])
+
+  const unitById = React.useMemo(() => {
+    return coldStorageUnits.reduce<Record<string, any>>((acc, unit) => {
+      acc[unit.id] = unit
+      return acc
+    }, {})
+  }, [coldStorageUnits])
+
+  const shelfItemMatches = React.useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    if (terms.length === 0) return []
+
+    return shelfItems.filter((item) => {
+      const shelf = shelfById[item.shelf_id]
+      const unitId = item.cold_storage_id || shelf?.cold_storage_id
+      const unit = unitById[unitId]
+      const searchText = [
+        item.item_id,
+        item.item_type,
+        item.lot_id,
+        item.description,
+        shelf?.name,
+        unit?.name
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return terms.some((term) => searchText.includes(term))
+    })
+  }, [searchQuery, shelfItems, shelfById, unitById])
 
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
@@ -955,9 +1034,37 @@ export default function App() {
                   cold_storage_id={c.cold_storage_id}
                   rack_id={c.rack_id}
                   rack_position={c.rack_position}
+                  returnTo={route === '#/rnd' ? 'rnd' : undefined}
                 />
               ))}
             </div>
+            {searchQuery.trim() && shelfItemMatches.length > 0 && (
+              <div style={{ marginTop: 16, border: '1px solid #e5e7eb', borderRadius: 8, background: 'white' }}>
+                <div style={{ padding: 12, borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Shelf items matching search</div>
+                <div style={{ padding: 12, display: 'grid', gap: 8 }}>
+                  {shelfItemMatches.map((item) => {
+                    const shelf = shelfById[item.shelf_id]
+                    const unitId = item.cold_storage_id || shelf?.cold_storage_id
+                    const unit = unitById[unitId]
+                    return (
+                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{item.item_id}</div>
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            {(item.item_type || 'item').toUpperCase()} • {unit?.name || 'Unknown unit'} {shelf?.name ? `• ${shelf.name}` : ''}
+                          </div>
+                        </div>
+                        {unitId && (
+                          <button className="btn ghost" onClick={() => { window.location.hash = `#/cold-storage/${unitId}` }}>
+                            View shelf
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
               <div style={{
                 display: 'flex',
@@ -1221,6 +1328,33 @@ export default function App() {
                 >
                   R&amp;D Samples
                 </button>
+              </div>
+            )}
+            {searchQuery.trim() && shelfItemMatches.length > 0 && (
+              <div style={{ marginBottom: 16, border: '1px solid #e5e7eb', borderRadius: 8, background: 'white' }}>
+                <div style={{ padding: 12, borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Shelf items matching search</div>
+                <div style={{ padding: 12, display: 'grid', gap: 8 }}>
+                  {shelfItemMatches.map((item) => {
+                    const shelf = shelfById[item.shelf_id]
+                    const unitId = item.cold_storage_id || shelf?.cold_storage_id
+                    const unit = unitById[unitId]
+                    return (
+                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{item.item_id}</div>
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            {(item.item_type || 'item').toUpperCase()} • {unit?.name || 'Unknown unit'} {shelf?.name ? `• ${shelf.name}` : ''}
+                          </div>
+                        </div>
+                        {unitId && (
+                          <button className="btn ghost" onClick={() => { window.location.hash = `#/cold-storage/${unitId}` }}>
+                            View shelf
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
             {/* Action buttons */}
@@ -1615,7 +1749,8 @@ export default function App() {
                   <tbody>
                     {filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
                       const handleSampleClick = () => {
-                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
+                        const returnTo = route === '#/rnd/samples' ? 'rnd-samples' : 'samples'
+                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=${returnTo}`
                       }
                       
                       const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers

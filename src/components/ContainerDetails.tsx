@@ -343,6 +343,16 @@ export default function ContainerDetails({ id }: { id: string | number }){
       })
 
       if (!res.ok) throw new Error('Failed to add sample')
+
+      try {
+        await supabase
+          .from('cold_storage_items')
+          .delete()
+          .in('item_type', ['plate', 'tube'])
+          .eq('item_id', sampleId)
+      } catch (cleanupError) {
+        console.warn('Failed to remove plate/tube from shelf:', cleanupError)
+      }
       
       // Reload container
       await loadContainer()
@@ -547,6 +557,16 @@ export default function ContainerDetails({ id }: { id: string | number }){
       })
 
       if (!res.ok) throw new Error('Failed to add sample')
+
+      try {
+        await supabase
+          .from('cold_storage_items')
+          .delete()
+          .in('item_type', ['plate', 'tube'])
+          .eq('item_id', sampleId)
+      } catch (cleanupError) {
+        console.warn('Failed to remove plate/tube from shelf:', cleanupError)
+      }
       
       // Clear input first
       setScanInput('')
@@ -604,7 +624,14 @@ export default function ContainerDetails({ id }: { id: string | number }){
   // Check for returnTo parameter in URL
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1])
   const returnTo = urlParams.get('returnTo')
-  const backUrl = returnTo === 'samples' ? '#/samples' : '#/containers'
+  const backUrl =
+    returnTo === 'samples'
+      ? '#/samples'
+      : returnTo === 'rnd'
+        ? '#/rnd'
+        : returnTo === 'rnd-samples'
+          ? '#/rnd/samples'
+          : '#/containers'
 
   const rack = data.racks
   const coldStorage = rack?.cold_storage_units || data.cold_storage_units

@@ -31,9 +31,10 @@ type Props = {
   layout?: string
   occupancy?: { used:number; total:number }
   updatedAt?: string
+  returnTo?: string
 }
 
-export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, ...rest}: Props & any){
+export default function ContainerCard({id=1,name, type='Sample Type', temperature='-80°C', layout='9x9', occupancy = {used:0,total:80}, updatedAt, returnTo, ...rest}: Props & any){
   // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
   let effectiveTotal = occupancy.total
   if (type === 'DP Pools' && layout === '9x9' && occupancy.total === 81) {
@@ -43,9 +44,11 @@ export default function ContainerCard({id=1,name, type='Sample Type', temperatur
   const pct = Math.round((occupancy.used / Math.max(1, effectiveTotal)) * 100)
   const available = Math.max(0, (effectiveTotal - occupancy.used))
   const [openEdit, setOpenEdit] = useState(false)
+  const returnSuffix = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''
+
   return (
     <>
-    <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}` }}>
+    <div className="container-card rounded-lg p-4 bg-white shadow-sm" role="button" tabIndex={0} onClick={() => { window.location.hash = `#/containers/${id}${returnSuffix}` }} onKeyDown={(e) => { if (e.key === 'Enter') window.location.hash = `#/containers/${id}${returnSuffix}` }}>
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">

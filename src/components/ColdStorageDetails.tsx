@@ -22,7 +22,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     Record<
       string,
       {
-        item_type: 'container' | 'reagent' | 'other' | 'rack'
+        item_type: 'container' | 'reagent' | 'other' | 'rack' | 'plate' | 'tube'
         item_id: string
         lot_id: string
         description: string
@@ -43,6 +43,12 @@ export default function ColdStorageDetails({ id }: { id: string }) {
   const [contentsView, setContentsView] = useState<'shelves' | 'list'>('shelves')
   const [showContentsMenu, setShowContentsMenu] = useState(false)
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({})
+  const [itemFilters, setItemFilters] = useState({ type: 'all', shelf: 'all', lot: '' })
+  const [itemSort, setItemSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'shelf',
+    direction: 'asc'
+  })
+  const [exportingCsv, setExportingCsv] = useState(false)
   const [showCreateDrawer, setShowCreateDrawer] = useState(false)
   const [createDrawerName, setCreateDrawerName] = useState('')
   const [containerDropdownOpen, setContainerDropdownOpen] = useState<Record<string, boolean>>({})
@@ -205,6 +211,199 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     return acc
   }, {})
 
+  const normalizeItemType = (item: any) => item?.item_type || 'reagent'
+  const typeOptions = Array.from(new Set(items.map((item) => normalizeItemType(item)))).sort()
+  const lotOptions = Array.from(new Set(items.map((item) => item.lot_id).filter(Boolean))).sort()
+
+  const filteredItems = items.filter((item) => {
+    const typeValue = normalizeItemType(item)
+    if (itemFilters.type !== 'all' && typeValue !== itemFilters.type) return false
+    if (itemFilters.shelf !== 'all' && item.shelf_id !== itemFilters.shelf) return false
+    if (itemFilters.lot.trim()) {
+      const lotValue = String(item.lot_id || '').toLowerCase()
+      if (!lotValue.includes(itemFilters.lot.trim().toLowerCase())) return false
+    }
+    return true
+  })
+
+  const getSortValue = (item: any, key: string) => {
+    if (key === 'shelf') return shelfNameById[item.shelf_id] || ''
+    if (key === 'type') return normalizeItemType(item)
+    if (key === 'item_id') return item.item_id || ''
+    if (key === 'lot_id') return item.lot_id || ''
+    if (key === 'description') return item.description || ''
+    if (key === 'quantity') return item.quantity ?? ''
+    if (key === 'status') return item.status || ''
+    return ''
+  }
+
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    const aValue = getSortValue(a, itemSort.key)
+    const bValue = getSortValue(b, itemSort.key)
+    const direction = itemSort.direction === 'asc' ? 1 : -1
+
+    if (aValue == null && bValue == null) return 0
+    if (aValue == null) return 1 * direction
+    if (bValue == null) return -1 * direction
+
+    if (typeof aValue === 'number' || typeof bValue === 'number') {
+      const aNum = typeof aValue === 'number' ? aValue : parseFloat(aValue)
+      const bNum = typeof bValue === 'number' ? bValue : parseFloat(bValue)
+      if (Number.isNaN(aNum) && Number.isNaN(bNum)) return 0
+      if (Number.isNaN(aNum)) return 1 * direction
+      if (Number.isNaN(bNum)) return -1 * direction
+      return (aNum - bNum) * direction
+    }
+
+    return String(aValue).localeCompare(String(bValue)) * direction
+  })
+
+  const visibleItems = sortedItems
+
+  const handleSort = (key: string) => {
+    setItemSort((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }
+
+  const sortIndicator = (key: string) => {
+    if (itemSort.key !== key) return ''
+    return itemSort.direction === 'asc' ? ' ▲' : ' ▼'
+  }
+
+  const buildCsvCell = (value: any) => {
+    const text = value == null ? '' : String(value)
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`
+    }
+    return text
+  }
+
+  const exportItemsToCsv = async (mode: 'all' | 'selected') => {
+    const sourceItems = mode === 'selected'
+      ? items.filter((item) => selectedItems[item.id])
+      : visibleItems
+
+    if (sourceItems.length === 0) return
+
+    setExportingCsv(true)
+    try {
+      const containerIds = Array.from(
+        new Set(
+          sourceItems
+            .filter((item) => normalizeItemType(item) === 'container' && item.container_id)
+            .map((item) => item.container_id)
+        )
+      )
+
+      let samplesByContainerId: Record<string, any[]> = {}
+      if (containerIds.length > 0) {
+        const { data, error } = await supabase
+          .from('samples')
+          .select('id, sample_id, container_id, position, is_archived')
+          .in('container_id', containerIds)
+
+        if (error) throw error
+        samplesByContainerId = (data || []).reduce<Record<string, any[]>>((acc, sample) => {
+          if (!acc[sample.container_id]) acc[sample.container_id] = []
+          acc[sample.container_id].push(sample)
+          return acc
+        }, {})
+      }
+
+      const containersByRackId = containers.reduce<Record<string, any[]>>((acc, container) => {
+        if (!container.rack_id) return acc
+        if (!acc[container.rack_id]) acc[container.rack_id] = []
+        acc[container.rack_id].push(container)
+        return acc
+      }, {})
+
+      const rows = sourceItems.map((item) => {
+        const itemType = normalizeItemType(item)
+        let nestedContents = ''
+        let nestedCount: number | string = ''
+
+        if (itemType === 'container' && item.container_id) {
+          const samples = (samplesByContainerId[item.container_id] || []).filter((sample) => !sample.is_archived)
+          nestedCount = samples.length
+          nestedContents = samples
+            .map((sample) => {
+              const identifier = sample.sample_id || sample.id
+              return sample.position ? `${identifier}@${sample.position}` : identifier
+            })
+            .join('; ')
+        }
+
+        if (itemType === 'rack' && item.rack_id) {
+          const rackContainers = containersByRackId[item.rack_id] || []
+          nestedCount = rackContainers.length
+          nestedContents = rackContainers
+            .map((container) => {
+              const identifier = container.name || container.id
+              return container.rack_position ? `${identifier}@${container.rack_position}` : identifier
+            })
+            .join('; ')
+        }
+
+        return {
+          shelf: shelfNameById[item.shelf_id] || '',
+          shelf_id: item.shelf_id || '',
+          type: itemType,
+          item_id: item.item_id || '',
+          lot_id: item.lot_id || '',
+          description: item.description || '',
+          quantity: item.quantity ?? '',
+          status: item.status || '',
+          container_id: item.container_id || '',
+          rack_id: item.rack_id || '',
+          rack_position: item.rack_id ? rackById[item.rack_id]?.position || '' : '',
+          nested_count: nestedCount,
+          nested_contents: nestedContents
+        }
+      })
+
+      const headers = [
+        'shelf',
+        'shelf_id',
+        'type',
+        'item_id',
+        'lot_id',
+        'description',
+        'quantity',
+        'status',
+        'container_id',
+        'rack_id',
+        'rack_position',
+        'nested_count',
+        'nested_contents'
+      ]
+
+      const csvLines = [
+        headers.join(','),
+        ...rows.map((row) => headers.map((header) => buildCsvCell((row as any)[header])).join(','))
+      ]
+
+      const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const baseName = unit?.name || unit?.id || 'cold-storage'
+      link.href = url
+      link.download = `${baseName}-contents-${mode}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to export CSV:', error)
+      alert('Failed to export CSV')
+    } finally {
+      setExportingCsv(false)
+    }
+  }
+
   const SAMPLE_TYPE_COLORS: Record<string, string> = {
     'PA Pools': '#fb923c',
     'DP Pools': '#10b981',
@@ -251,6 +450,14 @@ export default function ColdStorageDetails({ id }: { id: string }) {
       const base = item.item_color || DEFAULT_OTHER_COLOR
       return { border: base, bg: addAlpha(base, '22'), text: base }
     }
+    if (item.item_type === 'plate') {
+      const base = item.item_color || DEFAULT_PLATE_COLOR
+      return { border: base, bg: addAlpha(base, '22'), text: base }
+    }
+    if (item.item_type === 'tube') {
+      const base = item.item_color || DEFAULT_TUBE_COLOR
+      return { border: base, bg: addAlpha(base, '22'), text: base }
+    }
     return { border: '#e5e7eb', bg: '#ffffff', text: '#0f172a' }
   }
 
@@ -282,10 +489,12 @@ export default function ColdStorageDetails({ id }: { id: string }) {
 
   const DEFAULT_REAGENT_COLOR = '#A3B18A'
   const DEFAULT_OTHER_COLOR = '#D6A36A'
+  const DEFAULT_PLATE_COLOR = '#38bdf8'
+  const DEFAULT_TUBE_COLOR = '#fb7185'
 
   const handleItemInput = (
     shelfId: string,
-    key: 'item_type' | 'item_id' | 'lot_id' | 'description' | 'quantity' | 'container_id' | 'search' | 'rack_search' | 'item_color',
+    key: 'item_type' | 'item_id' | 'lot_id' | 'description' | 'quantity' | 'container_id' | 'rack_id' | 'search' | 'rack_search' | 'item_color',
     value: string
   ) => {
     setItemForms((prev) => {
@@ -302,7 +511,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
         item_color: DEFAULT_REAGENT_COLOR
       }
       if (key === 'item_type') {
-        const nextType = value as 'container' | 'reagent' | 'other' | 'rack'
+        const nextType = value as 'container' | 'reagent' | 'other' | 'rack' | 'plate' | 'tube'
         return {
           ...prev,
           [shelfId]: {
@@ -313,7 +522,11 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                 ? DEFAULT_REAGENT_COLOR
                 : nextType === 'other'
                   ? DEFAULT_OTHER_COLOR
-                  : ''
+                  : nextType === 'plate'
+                    ? DEFAULT_PLATE_COLOR
+                    : nextType === 'tube'
+                      ? DEFAULT_TUBE_COLOR
+                      : ''
           }
         }
       }
@@ -600,10 +813,18 @@ export default function ColdStorageDetails({ id }: { id: string }) {
         container_id: form.item_type === 'container' ? selectedContainer?.id || form.container_id : null,
         rack_id: form.item_type === 'rack' ? form.rack_id : null,
         item_id: itemId,
-        lot_id: form.item_type === 'reagent' ? (form.lot_id || '').trim() || null : null,
+        lot_id: form.item_type === 'container' || form.item_type === 'rack'
+          ? null
+          : (form.lot_id || '').trim() || null,
         description: (form.description || '').trim() || null,
         quantity: form.item_type === 'rack' || form.item_type === 'container' ? null : Number.isNaN(quantity) ? null : quantity,
-        item_color: form.item_type === 'reagent' || form.item_type === 'other' ? form.item_color || null : null
+        item_color:
+          form.item_type === 'reagent' ||
+          form.item_type === 'other' ||
+          form.item_type === 'plate' ||
+          form.item_type === 'tube'
+            ? form.item_color || null
+            : null
       }
 
       let insertResult = await supabase.from('cold_storage_items').insert([payload]).select()
@@ -1547,6 +1768,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 <option value="container">Container</option>
                                 <option value="rack">Rack</option>
                                 <option value="reagent">Reagent</option>
+                                <option value="plate">Plate</option>
+                                <option value="tube">Tube</option>
                                 <option value="other">Other</option>
                               </select>
                               <div style={{ position: 'relative' }}>
@@ -1708,6 +1931,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 <option value="container">Container</option>
                                 <option value="rack">Rack</option>
                                 <option value="reagent">Reagent</option>
+                                <option value="plate">Plate</option>
+                                <option value="tube">Tube</option>
                                 <option value="other">Other</option>
                               </select>
                               <div style={{ position: 'relative' }}>
@@ -1820,7 +2045,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 {savingItem[shelf.id] ? 'Adding...' : 'Add Rack'}
                               </button>
                             </div>
-                          ) : form.item_type === 'reagent' ? (
+                          ) : form.item_type === 'reagent' || form.item_type === 'plate' || form.item_type === 'tube' ? (
                             <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr 1fr 1.4fr 0.7fr 0.8fr auto', gap: 8 }}>
                               <select
                                 value={form.item_type}
@@ -1829,12 +2054,20 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 <option value="container">Container</option>
                                 <option value="rack">Rack</option>
                                 <option value="reagent">Reagent</option>
+                                <option value="plate">Plate</option>
+                                <option value="tube">Tube</option>
                                 <option value="other">Other</option>
                               </select>
                               <input
                                 value={form.item_id}
                                 onChange={(e) => handleItemInput(shelf.id, 'item_id', e.target.value)}
-                                placeholder="Item"
+                                placeholder={
+                                  form.item_type === 'plate'
+                                    ? 'Plate ID'
+                                    : form.item_type === 'tube'
+                                      ? 'Tube ID'
+                                      : 'Item'
+                                }
                               />
                               <input
                                 value={form.lot_id}
@@ -1874,6 +2107,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 <option value="container">Container</option>
                                 <option value="rack">Rack</option>
                                 <option value="reagent">Reagent</option>
+                                <option value="plate">Plate</option>
+                                <option value="tube">Tube</option>
                                 <option value="other">Other</option>
                               </select>
                               <input
@@ -1934,7 +2169,13 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                           {shelf.items.length === 0 ? (
                             <div className="muted" style={{ fontSize: 13 }}>No items stored on this shelf.</div>
                           ) : (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+                                gap: 6
+                              }}
+                            >
                               {(itemOrderByShelf[shelf.id] || shelf.items.map((item: any) => item.id))
                                 .map((id) => shelf.items.find((item: any) => item.id === id))
                                 .filter(Boolean)
@@ -1964,34 +2205,34 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                       }}
                                       style={{
                                         position: 'relative',
-                                        padding: '14px 16px',
-                                        borderRadius: 12,
+                                        padding: '8px 10px',
+                                        borderRadius: 10,
                                         background: badgeColors.bg,
                                         border: `1px solid ${badgeColors.border}`,
                                         color: badgeColors.text,
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        minWidth: 132,
-                                        minHeight: 58,
+                                        minWidth: 110,
+                                        minHeight: 44,
                                         boxShadow:
                                           dragOverItem?.itemId === item.id
                                             ? dragOverItem.position === 'before'
                                               ? 'inset 3px 0 0 #3b82f6'
                                               : 'inset -3px 0 0 #3b82f6'
-                                            : '0 6px 18px rgba(15,23,42,0.08)'
+                                            : '0 4px 10px rgba(15,23,42,0.08)'
                                       }}
                                     >
                                       <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2 }}>
                                         <div>{item.item_id}</div>
                                         {item.item_type === 'container' && item.container_id && (
-                                          <div style={{ fontSize: 11, color: badgeColors.text, marginTop: 4 }}>
+                                          <div style={{ fontSize: 10, color: badgeColors.text, marginTop: 3 }}>
                                             {containerById[item.container_id]?.used ?? 0}/{containerById[item.container_id]?.total ?? '-'}
                                           </div>
                                         )}
-                                        {item.item_type === 'reagent' && item.lot_id && (
-                                          <div style={{ fontSize: 11, color: badgeColors.text, marginTop: 4 }}>
+                                        {item.item_type !== 'container' && item.item_type !== 'rack' && item.lot_id && (
+                                          <div style={{ fontSize: 10, color: badgeColors.text, marginTop: 3 }}>
                                             Lot: {item.lot_id}
                                           </div>
                                         )}
@@ -2039,18 +2280,67 @@ export default function ColdStorageDetails({ id }: { id: string }) {
             </>
           ) : (
             <div style={{ overflowX: 'auto' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                  Type
+                  <select
+                    value={itemFilters.type}
+                    onChange={(e) => setItemFilters((prev) => ({ ...prev, type: e.target.value }))}
+                  >
+                    <option value="all">All</option>
+                    {typeOptions.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                  Shelf
+                  <select
+                    value={itemFilters.shelf}
+                    onChange={(e) => setItemFilters((prev) => ({ ...prev, shelf: e.target.value }))}
+                  >
+                    <option value="all">All</option>
+                    {shelves.map((shelf) => (
+                      <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'grid', gap: 4, fontSize: 12, minWidth: 160 }}>
+                  Lot
+                  <input
+                    value={itemFilters.lot}
+                    onChange={(e) => setItemFilters((prev) => ({ ...prev, lot: e.target.value }))}
+                    placeholder={lotOptions.length > 0 ? 'Filter lots' : 'No lots'}
+                  />
+                </label>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    Showing {visibleItems.length} of {items.length}
+                  </div>
+                  <button className="btn" onClick={() => exportItemsToCsv('all')} disabled={exportingCsv || visibleItems.length === 0}>
+                    {exportingCsv ? 'Exporting...' : 'Download CSV (All)'}
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() => exportItemsToCsv('selected')}
+                    disabled={exportingCsv || selectedItemIds.length === 0}
+                  >
+                    Download CSV (Selected)
+                  </button>
+                </div>
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', background: '#f9fafb' }}>
                     <th style={{ padding: 8 }}>
                       <input
                         type="checkbox"
-                        checked={items.length > 0 && items.every((item: any) => selectedItems[item.id])}
+                        checked={visibleItems.length > 0 && visibleItems.every((item: any) => selectedItems[item.id])}
                         onChange={(e) => {
                           const checked = e.target.checked
                           setSelectedItems((prev) => {
                             const next = { ...prev }
-                            items.forEach((item: any) => {
+                            visibleItems.forEach((item: any) => {
                               next[item.id] = checked
                             })
                             return next
@@ -2058,18 +2348,46 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                         }}
                       />
                     </th>
-                    <th style={{ padding: 8 }}>Shelf</th>
-                    <th style={{ padding: 8 }}>Type</th>
-                    <th style={{ padding: 8 }}>Item ID</th>
-                    <th style={{ padding: 8 }}>Lot ID</th>
-                    <th style={{ padding: 8 }}>Description</th>
-                    <th style={{ padding: 8 }}>Quantity</th>
-                    <th style={{ padding: 8 }}>Status</th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('shelf')}>
+                        Shelf{sortIndicator('shelf')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('type')}>
+                        Type{sortIndicator('type')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('item_id')}>
+                        Item ID{sortIndicator('item_id')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('lot_id')}>
+                        Lot ID{sortIndicator('lot_id')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('description')}>
+                        Description{sortIndicator('description')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('quantity')}>
+                        Quantity{sortIndicator('quantity')}
+                      </button>
+                    </th>
+                    <th style={{ padding: 8 }}>
+                      <button className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => handleSort('status')}>
+                        Status{sortIndicator('status')}
+                      </button>
+                    </th>
                     <th style={{ padding: 8, textAlign: 'right' }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item: any) => (
+                  {visibleItems.map((item: any) => (
                     <tr key={item.id} style={{ borderTop: '1px solid #e5e7eb' }}>
                       <td style={{ padding: 8 }}>
                         <input
