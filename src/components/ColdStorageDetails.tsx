@@ -73,10 +73,15 @@ export default function ColdStorageDetails({ id }: { id: string }) {
   const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [dragOverShelfId, setDragOverShelfId] = useState<string | null>(null)
   const [dragOverItem, setDragOverItem] = useState<{ shelfId: string; itemId: string; position: 'before' | 'after' } | null>(null)
+  const [dragStackId, setDragStackId] = useState<string | null>(null)
   const [itemOrderByShelf, setItemOrderByShelf] = useState<Record<string, string[]>>({})
   const [activeShelfMenuId, setActiveShelfMenuId] = useState<string | null>(null)
   const [editingShelfId, setEditingShelfId] = useState<string | null>(null)
   const [openItemMenuId, setOpenItemMenuId] = useState<string | null>(null)
+  const [stackModeShelfId, setStackModeShelfId] = useState<string | null>(null)
+  const [stackSelection, setStackSelection] = useState<Set<string>>(new Set())
+  const [selectedStackId, setSelectedStackId] = useState<string | null>(null)
+  const [stackMenu, setStackMenu] = useState<{ stackId: string; shelfId: string } | null>(null)
   const [editingItem, setEditingItem] = useState<any | null>(null)
   const [itemEditForm, setItemEditForm] = useState({
     item_id: '',
@@ -482,6 +487,20 @@ export default function ColdStorageDetails({ id }: { id: string }) {
       return next
     })
   }, [items, shelves])
+
+  useEffect(() => {
+    if (!editingShelfId) {
+      setStackModeShelfId(null)
+      setStackSelection(new Set())
+      setSelectedStackId(null)
+      setStackMenu(null)
+      return
+    }
+    if (stackModeShelfId && stackModeShelfId !== editingShelfId) {
+      setStackModeShelfId(null)
+      setStackSelection(new Set())
+    }
+  }, [editingShelfId, stackModeShelfId])
 
   const handleShelfInput = (key: 'name' | 'position', value: string) => {
     setShelfForm((prev) => ({ ...prev, [key]: value }))
@@ -988,6 +1007,107 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     }
   }
 
+  const toggleStackItem = (itemId: string) => {
+    setStackSelection((prev) => {
+      const next = new Set(prev)
+      if (next.has(itemId)) {
+        next.delete(itemId)
+      } else {
+        next.add(itemId)
+      }
+      return next
+    })
+  }
+
+  const handleConfirmStack = async (shelfId: string) => {
+    if (stackSelection.size < 2) {
+      alert('Select at least two items to create a stack.')
+      return
+    }
+
+    const label = window.prompt('Stack label')
+    if (label == null || !label.trim()) return
+
+    const newStackId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const stackLabel = label.trim()
+
+    const currentOrder = itemOrderByShelf[shelfId] || items.filter((item) => item.shelf_id === shelfId).map((item) => item.id)
+    const stackIds = currentOrder.filter((id) => stackSelection.has(id))
+    const remainingOrder = currentOrder.filter((id) => !stackSelection.has(id))
+    const nextOrder = [...remainingOrder, ...stackIds]
+
+    try {
+      const { error } = await supabase
+        .from('cold_storage_items')
+        .update({ stack_id: newStackId, stack_label: stackLabel })
+        .in('id', stackIds)
+
+      if (error) throw error
+
+      setItems((prev) =>
+        prev.map((item) => (stackSelection.has(item.id) ? { ...item, stack_id: newStackId, stack_label: stackLabel } : item))
+      )
+      setItemOrderByShelf((prev) => ({ ...prev, [shelfId]: nextOrder }))
+      persistShelfOrder(shelfId, nextOrder)
+      setStackSelection(new Set())
+      setStackModeShelfId(null)
+    } catch (e) {
+      console.error('Failed to create stack:', e)
+      alert('Failed to create stack')
+    }
+  }
+
+  const handleUnstack = async (stackId: string) => {
+    const stackItems = items.filter((item) => item.stack_id === stackId)
+    if (stackItems.length === 0) return
+    const confirmUnstack = window.confirm('Unstack these items?')
+    if (!confirmUnstack) return
+
+    try {
+      const { error } = await supabase
+        .from('cold_storage_items')
+        .update({ stack_id: null, stack_label: null })
+        .in('id', stackItems.map((item) => item.id))
+
+      if (error) throw error
+
+      setItems((prev) =>
+        prev.map((item) => (item.stack_id === stackId ? { ...item, stack_id: null, stack_label: null } : item))
+      )
+      setStackMenu(null)
+      setSelectedStackId(null)
+    } catch (e) {
+      console.error('Failed to unstack items:', e)
+      alert('Failed to unstack items')
+    }
+  }
+
+  const handleRemoveFromStack = async (item: any) => {
+    if (!item?.stack_id) return
+    const stackId = item.stack_id
+    const remaining = items.filter((entry) => entry.stack_id === stackId && entry.id !== item.id)
+    const idsToClear = [item.id]
+    if (remaining.length <= 1 && remaining[0]) idsToClear.push(remaining[0].id)
+
+    try {
+      const { error } = await supabase
+        .from('cold_storage_items')
+        .update({ stack_id: null, stack_label: null })
+        .in('id', idsToClear)
+
+      if (error) throw error
+
+      setItems((prev) =>
+        prev.map((entry) => (idsToClear.includes(entry.id) ? { ...entry, stack_id: null, stack_label: null } : entry))
+      )
+    } catch (e) {
+      console.error('Failed to remove item from stack:', e)
+      alert('Failed to remove item from stack')
+    }
+  }
+
   const persistShelfOrder = async (shelfId?: string | null, order?: string[]) => {
     if (!shelfId || !order || order.length === 0) return
     try {
@@ -1002,6 +1122,52 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     } catch (e) {
       console.warn('Failed to persist shelf order', e)
     }
+  }
+
+  const handleMoveStackToShelf = async (stackId: string, shelfId: string) => {
+    const stackItems = items.filter((item) => item.stack_id === stackId)
+    if (stackItems.length === 0) return
+    const currentShelf = stackItems[0].shelf_id
+    if (currentShelf === shelfId) return
+
+    const stackItemIds = stackItems.map((item) => item.id)
+    const fromOrder = currentShelf ? (itemOrderByShelf[currentShelf] || []).filter((id) => !stackItemIds.includes(id)) : []
+    const toOrder = [...(itemOrderByShelf[shelfId] || []), ...stackItemIds]
+
+    try {
+      const { error } = await supabase
+        .from('cold_storage_items')
+        .update({ shelf_id: shelfId })
+        .in('id', stackItemIds)
+
+      if (error) throw error
+
+      setItems((prev) =>
+        prev.map((item) => (stackItemIds.includes(item.id) ? { ...item, shelf_id: shelfId } : item))
+      )
+      setItemOrderByShelf((prev) => ({
+        ...prev,
+        ...(currentShelf ? { [currentShelf]: fromOrder } : {}),
+        [shelfId]: toOrder
+      }))
+
+      await persistShelfOrder(currentShelf, fromOrder)
+      await persistShelfOrder(shelfId, toOrder)
+    } catch (e) {
+      console.error('Failed to move stack:', e)
+      alert('Failed to move stack')
+    }
+  }
+
+  const handleReorderStackWithinShelf = (shelfId: string, stackItemIds: string[], targetId: string, position: 'before' | 'after') => {
+    const currentOrder = [...(itemOrderByShelf[shelfId] || [])]
+    const filtered = currentOrder.filter((id) => !stackItemIds.includes(id))
+    const targetIndex = filtered.indexOf(targetId)
+    if (targetIndex === -1) return
+    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1
+    filtered.splice(insertIndex, 0, ...stackItemIds)
+    setItemOrderByShelf((prev) => ({ ...prev, [shelfId]: filtered }))
+    persistShelfOrder(shelfId, filtered)
   }
 
   const handleMoveItemToShelf = async (itemId: string, shelfId: string) => {
@@ -1046,6 +1212,22 @@ export default function ColdStorageDetails({ id }: { id: string }) {
   }
 
   const handleDropOnItem = async (shelfId: string, targetId: string, position: 'before' | 'after') => {
+    if (dragStackId) {
+      const stackItems = items.filter((item) => item.stack_id === dragStackId)
+      if (stackItems.length === 0) return
+      const stackItemIds = (itemOrderByShelf[shelfId] || [])
+        .filter((id) => stackItems.some((item) => item.id === id))
+      const currentShelf = stackItems[0]?.shelf_id
+
+      if (currentShelf === shelfId) {
+        handleReorderStackWithinShelf(shelfId, stackItemIds, targetId, position)
+      } else {
+        await handleMoveStackToShelf(dragStackId, shelfId)
+        handleReorderStackWithinShelf(shelfId, stackItemIds, targetId, position)
+      }
+      return
+    }
+
     if (!dragItemId) return
     const current = items.find((item) => item.id === dragItemId)
     if (!current) return
@@ -1749,13 +1931,49 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                           </div>
                         </div>
 
-                        {editingShelfId === shelf.id && (
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                            <button className="btn ghost" onClick={() => setEditingShelfId(null)}>
-                              Done editing
-                            </button>
-                          </div>
-                        )}
+                        {editingShelfId === shelf.id && (() => {
+                          const isStackMode = stackModeShelfId === shelf.id
+                          return (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                              <button
+                                className="btn ghost"
+                                onClick={() => {
+                                  setEditingShelfId(null)
+                                  setStackModeShelfId(null)
+                                  setStackSelection(new Set())
+                                  setSelectedStackId(null)
+                                  setStackMenu(null)
+                                }}
+                              >
+                                Done editing
+                              </button>
+                              <button
+                                className="btn"
+                                onClick={() => {
+                                  if (!isStackMode) {
+                                    setStackModeShelfId(shelf.id)
+                                    setStackSelection(new Set())
+                                  } else {
+                                    handleConfirmStack(shelf.id)
+                                  }
+                                }}
+                              >
+                                {isStackMode ? 'Confirm Stack' : 'Create Stack'}
+                              </button>
+                              {isStackMode && (
+                                <button
+                                  className="btn ghost"
+                                  onClick={() => {
+                                    setStackModeShelfId(null)
+                                    setStackSelection(new Set())
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })()}
 
                         {editingShelfId === shelf.id && (
                           <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>
@@ -2152,9 +2370,12 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                           onDragLeave={() => setDragOverShelfId((prev) => (prev === shelf.id ? null : prev))}
                           onDrop={(e) => {
                             e.preventDefault()
-                            if (dragItemId && !dragOverItem) {
+                            if (dragStackId && !dragOverItem) {
+                              handleMoveStackToShelf(dragStackId, shelf.id)
+                            } else if (dragItemId && !dragOverItem) {
                               handleMoveItemToShelf(dragItemId, shelf.id)
                             }
+                            setDragStackId(null)
                             setDragItemId(null)
                             setDragOverItem(null)
                             setDragOverShelfId(null)
@@ -2176,15 +2397,203 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                 gap: 6
                               }}
                             >
-                              {(itemOrderByShelf[shelf.id] || shelf.items.map((item: any) => item.id))
-                                .map((id) => shelf.items.find((item: any) => item.id === id))
-                                .filter(Boolean)
-                                .map((item: any) => {
+                              {(() => {
+                                const order = itemOrderByShelf[shelf.id] || shelf.items.map((item: any) => item.id)
+                                const orderedItems = order
+                                  .map((id) => shelf.items.find((item: any) => item.id === id))
+                                  .filter(Boolean)
+                                const stackItemsById = orderedItems.reduce<Record<string, any[]>>((acc, item: any) => {
+                                  if (!item.stack_id) return acc
+                                  if (!acc[item.stack_id]) acc[item.stack_id] = []
+                                  acc[item.stack_id].push(item)
+                                  return acc
+                                }, {})
+                                const seenStacks = new Set<string>()
+                                const grouped: Array<{ type: 'stack' | 'item'; stackId?: string; items?: any[]; item?: any }> = []
+
+                                orderedItems.forEach((item: any) => {
+                                  if (item.stack_id) {
+                                    if (seenStacks.has(item.stack_id)) return
+                                    seenStacks.add(item.stack_id)
+                                    grouped.push({ type: 'stack', stackId: item.stack_id, items: stackItemsById[item.stack_id] })
+                                  } else {
+                                    grouped.push({ type: 'item', item })
+                                  }
+                                })
+
+                                return grouped.map((group) => {
+                                  if (group.type === 'stack' && group.stackId && group.items) {
+                                    const stackItems = group.items
+                                    const primary = stackItems[0]
+                                    const badgeColors = getBadgeColors(primary)
+                                    const stackLabel = primary.stack_label || `${primary.item_id} ×${stackItems.length}`
+                                    const isStackSelected = selectedStackId === group.stackId
+                                    const isStackMode = stackModeShelfId === shelf.id
+
+                                    return (
+                                      <div
+                                        key={group.stackId}
+                                        draggable={isStackSelected}
+                                        onClick={() => {
+                                          if (isStackMode) return
+                                          setSelectedStackId((prev) => (prev === group.stackId ? null : group.stackId || null))
+                                        }}
+                                        onContextMenu={(e) => {
+                                          if (editingShelfId !== shelf.id) return
+                                          e.preventDefault()
+                                          setStackMenu({ stackId: group.stackId as string, shelfId: shelf.id })
+                                        }}
+                                        onDragStart={() => {
+                                          if (!isStackSelected) return
+                                          setDragStackId(group.stackId as string)
+                                          setDragItemId(null)
+                                        }}
+                                        onDragEnd={() => setDragStackId(null)}
+                                        onDragOver={(e) => {
+                                          e.preventDefault()
+                                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                                          const position = e.clientX - rect.left < rect.width / 2 ? 'before' : 'after'
+                                          const stackItemId = stackItems[0]?.id
+                                          if (stackItemId) {
+                                            setDragOverItem({ shelfId: shelf.id, itemId: stackItemId, position })
+                                          }
+                                        }}
+                                        onDragLeave={() => setDragOverItem((prev) => (prev?.shelfId === shelf.id ? null : prev))}
+                                        onDrop={(e) => {
+                                          e.preventDefault()
+                                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                                          const position = e.clientX - rect.left < rect.width / 2 ? 'before' : 'after'
+                                          const stackItemId = stackItems[0]?.id
+                                          if (stackItemId) {
+                                            handleDropOnItem(shelf.id, stackItemId, position)
+                                          }
+                                          setDragStackId(null)
+                                          setDragOverItem(null)
+                                          setDragOverShelfId(null)
+                                        }}
+                                        style={{
+                                          position: 'relative',
+                                          padding: '8px 10px',
+                                          borderRadius: 10,
+                                          background: badgeColors.bg,
+                                          border: `1px solid ${badgeColors.border}`,
+                                          color: badgeColors.text,
+                                          fontSize: 11,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          minWidth: 110,
+                                          minHeight: 44,
+                                          boxShadow: isStackSelected
+                                            ? '0 0 0 2px #3b82f6'
+                                            : '0 4px 10px rgba(15,23,42,0.08)'
+                                        }}
+                                      >
+                                        <div style={{
+                                          position: 'absolute',
+                                          inset: 4,
+                                          borderRadius: 8,
+                                          border: `1px solid ${badgeColors.border}`,
+                                          background: badgeColors.bg,
+                                          opacity: 0.5,
+                                          transform: 'translate(4px, 4px)'
+                                        }} />
+                                        <div style={{
+                                          position: 'absolute',
+                                          inset: 6,
+                                          borderRadius: 8,
+                                          border: `1px solid ${badgeColors.border}`,
+                                          background: badgeColors.bg,
+                                          opacity: 0.3,
+                                          transform: 'translate(8px, 8px)'
+                                        }} />
+                                        <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2, zIndex: 1 }}>
+                                          <div>{stackLabel}</div>
+                                          <div style={{ fontSize: 10, color: badgeColors.text, marginTop: 3 }}>
+                                            {stackItems.length} items
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                                            {stackItems.map((stackItem: any) => (
+                                              <button
+                                                key={stackItem.id}
+                                                className="btn ghost"
+                                                style={{
+                                                  padding: '2px 6px',
+                                                  minHeight: 0,
+                                                  height: 'auto',
+                                                  border: `1px solid ${badgeColors.border}`,
+                                                  borderRadius: 999,
+                                                  fontSize: 9,
+                                                  lineHeight: 1,
+                                                  background: '#ffffffcc',
+                                                  color: badgeColors.text
+                                                }}
+                                                title="Double click to pull out from stack"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                }}
+                                                onDoubleClick={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                  handleRemoveFromStack(stackItem)
+                                                }}
+                                              >
+                                                {stackItem.item_id}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        {stackMenu?.stackId === group.stackId && stackMenu?.shelfId === shelf.id && (
+                                          <div
+                                            style={{
+                                              position: 'absolute',
+                                              top: '100%',
+                                              left: 0,
+                                              marginTop: 6,
+                                              background: '#fff',
+                                              border: '1px solid #e5e7eb',
+                                              borderRadius: 8,
+                                              padding: 6,
+                                              zIndex: 30,
+                                              display: 'grid',
+                                              gap: 4,
+                                              minWidth: 120
+                                            }}
+                                          >
+                                            <button
+                                              className="btn ghost"
+                                              onClick={() => handleUnstack(group.stackId as string)}
+                                            >
+                                              Unstack
+                                            </button>
+                                            <button
+                                              className="btn ghost"
+                                              onClick={() => setStackMenu(null)}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  }
+
+                                  const item = group.item
+                                  if (!item) return null
                                   const badgeColors = getBadgeColors(item)
+                                  const isStackMode = stackModeShelfId === shelf.id
+                                  const isSelected = stackSelection.has(item.id)
+
                                   return (
                                     <div
                                       key={item.id}
-                                      draggable
+                                      draggable={!isStackMode}
+                                      onClick={() => {
+                                        if (isStackMode) {
+                                          toggleStackItem(item.id)
+                                        }
+                                      }}
+                                      onDoubleClick={() => handleRemoveFromStack(item)}
                                       onDragStart={() => setDragItemId(item.id)}
                                       onDragEnd={() => setDragItemId(null)}
                                       onDragOver={(e) => {
@@ -2221,7 +2630,9 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                             ? dragOverItem.position === 'before'
                                               ? 'inset 3px 0 0 #3b82f6'
                                               : 'inset -3px 0 0 #3b82f6'
-                                            : '0 4px 10px rgba(15,23,42,0.08)'
+                                            : isSelected
+                                              ? '0 0 0 2px #3b82f6'
+                                              : '0 4px 10px rgba(15,23,42,0.08)'
                                       }}
                                     >
                                       <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2 }}>
@@ -2268,7 +2679,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                       )}
                                     </div>
                                   )
-                                })}
+                                })
+                              })()}
                             </div>
                           )}
                         </div>
