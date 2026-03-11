@@ -81,6 +81,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
   const [stackModeShelfId, setStackModeShelfId] = useState<string | null>(null)
   const [stackSelection, setStackSelection] = useState<Set<string>>(new Set())
   const [selectedStackId, setSelectedStackId] = useState<string | null>(null)
+  const [hoveredStackId, setHoveredStackId] = useState<string | null>(null)
   const [stackMenu, setStackMenu] = useState<{ stackId: string; shelfId: string } | null>(null)
   const [editingItem, setEditingItem] = useState<any | null>(null)
   const [itemEditForm, setItemEditForm] = useState({
@@ -1025,13 +1026,9 @@ export default function ColdStorageDetails({ id }: { id: string }) {
       return
     }
 
-    const label = window.prompt('Stack label')
-    if (label == null || !label.trim()) return
-
     const newStackId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-    const stackLabel = label.trim()
 
     const currentOrder = itemOrderByShelf[shelfId] || items.filter((item) => item.shelf_id === shelfId).map((item) => item.id)
     const stackIds = currentOrder.filter((id) => stackSelection.has(id))
@@ -1041,13 +1038,13 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     try {
       const { error } = await supabase
         .from('cold_storage_items')
-        .update({ stack_id: newStackId, stack_label: stackLabel })
+        .update({ stack_id: newStackId, stack_label: null })
         .in('id', stackIds)
 
       if (error) throw error
 
       setItems((prev) =>
-        prev.map((item) => (stackSelection.has(item.id) ? { ...item, stack_id: newStackId, stack_label: stackLabel } : item))
+        prev.map((item) => (stackSelection.has(item.id) ? { ...item, stack_id: newStackId, stack_label: null } : item))
       )
       setItemOrderByShelf((prev) => ({ ...prev, [shelfId]: nextOrder }))
       persistShelfOrder(shelfId, nextOrder)
@@ -2426,9 +2423,9 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                     const stackItems = group.items
                                     const primary = stackItems[0]
                                     const badgeColors = getBadgeColors(primary)
-                                    const stackLabel = primary.stack_label || `${primary.item_id} ×${stackItems.length}`
                                     const isStackSelected = selectedStackId === group.stackId
                                     const isStackMode = stackModeShelfId === shelf.id
+                                    const isHovered = hoveredStackId === group.stackId
 
                                     return (
                                       <div
@@ -2449,6 +2446,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           setDragItemId(null)
                                         }}
                                         onDragEnd={() => setDragStackId(null)}
+                                        onMouseEnter={() => setHoveredStackId(group.stackId || null)}
+                                        onMouseLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                         onDragOver={(e) => {
                                           e.preventDefault()
                                           const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
@@ -2473,76 +2472,51 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         }}
                                         style={{
                                           position: 'relative',
-                                          padding: '8px 10px',
-                                          borderRadius: 10,
-                                          background: badgeColors.bg,
-                                          border: `1px solid ${badgeColors.border}`,
-                                          color: badgeColors.text,
-                                          fontSize: 11,
-                                          display: 'inline-flex',
+                                          display: 'flex',
+                                          flexDirection: 'column',
                                           alignItems: 'center',
-                                          justifyContent: 'center',
+                                          justifyContent: 'flex-start',
                                           minWidth: 110,
-                                          minHeight: 44,
-                                          boxShadow: isStackSelected
-                                            ? '0 0 0 2px #3b82f6'
-                                            : '0 4px 10px rgba(15,23,42,0.08)'
+                                          cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
-                                        <div style={{
-                                          position: 'absolute',
-                                          inset: 4,
-                                          borderRadius: 8,
-                                          border: `1px solid ${badgeColors.border}`,
-                                          background: badgeColors.bg,
-                                          opacity: 0.5,
-                                          transform: 'translate(4px, 4px)'
-                                        }} />
-                                        <div style={{
-                                          position: 'absolute',
-                                          inset: 6,
-                                          borderRadius: 8,
-                                          border: `1px solid ${badgeColors.border}`,
-                                          background: badgeColors.bg,
-                                          opacity: 0.3,
-                                          transform: 'translate(8px, 8px)'
-                                        }} />
-                                        <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2, zIndex: 1 }}>
-                                          <div>{stackLabel}</div>
-                                          <div style={{ fontSize: 10, color: badgeColors.text, marginTop: 3 }}>
-                                            {stackItems.length} items
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                                            {stackItems.map((stackItem: any) => (
-                                              <button
-                                                key={stackItem.id}
-                                                className="btn ghost"
-                                                style={{
-                                                  padding: '2px 6px',
-                                                  minHeight: 0,
-                                                  height: 'auto',
-                                                  border: `1px solid ${badgeColors.border}`,
-                                                  borderRadius: 999,
-                                                  fontSize: 9,
-                                                  lineHeight: 1,
-                                                  background: '#ffffffcc',
-                                                  color: badgeColors.text
-                                                }}
-                                                title="Double click to pull out from stack"
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                }}
-                                                onDoubleClick={(e) => {
-                                                  e.preventDefault()
-                                                  e.stopPropagation()
-                                                  handleRemoveFromStack(stackItem)
-                                                }}
-                                              >
-                                                {stackItem.item_id}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
+                                        {stackItems.map((stackItem: any, stackIndex: number) => {
+                                          const stackBadgeColors = getBadgeColors(stackItem)
+                                          return (
+                                            <div
+                                              key={stackItem.id}
+                                              title="Double click to pull out from stack"
+                                              onClick={(e) => e.stopPropagation()}
+                                              onDoubleClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                handleRemoveFromStack(stackItem)
+                                              }}
+                                              style={{
+                                                padding: '8px 10px',
+                                                borderRadius: 10,
+                                                background: stackBadgeColors.bg,
+                                                border: `1px solid ${stackBadgeColors.border}`,
+                                                color: stackBadgeColors.text,
+                                                fontSize: 11,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                minWidth: 110,
+                                                minHeight: 44,
+                                                marginTop: stackIndex === 0 ? 0 : isHovered ? 6 : -10,
+                                                boxShadow: isStackSelected
+                                                  ? '0 0 0 2px #3b82f6'
+                                                  : '0 3px 8px rgba(15,23,42,0.08)',
+                                                zIndex: stackItems.length - stackIndex
+                                              }}
+                                            >
+                                              <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2 }}>
+                                                <div>{stackItem.item_id}</div>
+                                              </div>
+                                            </div>
+                                          )
+                                        })}
                                         {stackMenu?.stackId === group.stackId && stackMenu?.shelfId === shelf.id && (
                                           <div
                                             style={{
