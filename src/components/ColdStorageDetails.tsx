@@ -70,6 +70,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     status: ''
   })
   const [savingBulk, setSavingBulk] = useState(false)
+  const [deletingSelected, setDeletingSelected] = useState(false)
   const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [dragOverShelfId, setDragOverShelfId] = useState<string | null>(null)
   const [dragOverItem, setDragOverItem] = useState<{ shelfId: string; itemId: string; position: 'before' | 'after' } | null>(null)
@@ -948,6 +949,39 @@ export default function ColdStorageDetails({ id }: { id: string }) {
       alert('Failed to bulk update items')
     } finally {
       setSavingBulk(false)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedItemIds.length === 0) return
+    const confirmDelete = window.confirm(`Delete ${selectedItemIds.length} selected item(s)?`)
+    if (!confirmDelete) return
+
+    setDeletingSelected(true)
+    try {
+      const { error } = await supabase
+        .from('cold_storage_items')
+        .delete()
+        .in('id', selectedItemIds)
+
+      if (error) throw error
+
+      const selectedSet = new Set(selectedItemIds)
+      setItems((prev) => prev.filter((item) => !selectedSet.has(item.id)))
+      setItemOrderByShelf((prev) => {
+        const next: Record<string, string[]> = {}
+        Object.entries(prev).forEach(([shelfId, order]) => {
+          next[shelfId] = order.filter((id) => !selectedSet.has(id))
+        })
+        return next
+      })
+      setOpenItemMenuId((prev) => (prev && selectedSet.has(prev) ? null : prev))
+      clearSelection()
+    } catch (e) {
+      console.error('Failed to delete selected items:', e)
+      alert('Failed to delete selected items')
+    } finally {
+      setDeletingSelected(false)
     }
   }
 
@@ -2870,6 +2904,14 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                     disabled={exportingCsv || selectedItemIds.length === 0}
                   >
                     Download CSV (Selected)
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={handleDeleteSelected}
+                    disabled={deletingSelected || selectedItemIds.length === 0}
+                    style={{ color: '#b91c1c', borderColor: '#fecaca' }}
+                  >
+                    {deletingSelected ? 'Deleting...' : 'Delete Selected'}
                   </button>
                 </div>
               </div>
