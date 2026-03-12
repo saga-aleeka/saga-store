@@ -2368,9 +2368,9 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                           onMouseLeave={() => setHoveredStackId(null)}
                           onDrop={(e) => {
                             e.preventDefault()
-                            if (dragStackId && !dragOverItem) {
+                            if (dragStackId) {
                               handleMoveStackToShelf(dragStackId, shelf.id)
-                            } else if (dragItemId && !dragOverItem) {
+                            } else if (dragItemId) {
                               handleMoveItemToShelf(dragItemId, shelf.id)
                             }
                             setHoveredStackId(null)
@@ -2465,6 +2465,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         onDragLeave={() => setDragOverItem((prev) => (prev?.shelfId === shelf.id ? null : prev))}
                                         onDrop={(e) => {
                                           e.preventDefault()
+                                          e.stopPropagation()
                                           const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
                                           const position = e.clientX - rect.left < rect.width / 2 ? 'before' : 'after'
                                           const stackItemId = stackItems[0]?.id
@@ -2500,8 +2501,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? stackIndex * 7 : stackIndex * 1
-                                          const xOffset = isHovered ? stackIndex * 18 : 0
+                                          const yOffset = isHovered ? -stackIndex * 10 : stackIndex * 1
+                                          const xOffset = isHovered ? -stackIndex * 18 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
@@ -2615,6 +2616,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                       onDragLeave={() => setDragOverItem((prev) => (prev?.itemId === item.id ? null : prev))}
                                       onDrop={(e) => {
                                         e.preventDefault()
+                                        e.stopPropagation()
                                         const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
                                         const position = e.clientX - rect.left < rect.width / 2 ? 'before' : 'after'
                                         handleDropOnItem(shelf.id, item.id, position)
