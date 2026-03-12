@@ -2430,7 +2430,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                     return (
                                       <div
                                         key={group.stackId}
-                                        draggable={isStackSelected}
+                                        draggable={!isStackMode}
                                         onClick={() => {
                                           if (isStackMode) return
                                           setSelectedStackId((prev) => (prev === group.stackId ? null : group.stackId || null))
@@ -2441,9 +2441,10 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           setStackMenu({ stackId: group.stackId as string, shelfId: shelf.id })
                                         }}
                                         onDragStart={() => {
-                                          if (!isStackSelected) return
+                                          if (isStackMode) return
                                           setDragStackId(group.stackId as string)
                                           setDragItemId(null)
+                                          setSelectedStackId(group.stackId as string)
                                         }}
                                         onDragEnd={() => setDragStackId(null)}
                                         onPointerEnter={() => setHoveredStackId(group.stackId || null)}
@@ -2486,18 +2487,25 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
+                                        <div
+                                          aria-hidden
+                                          style={{
+                                            position: 'absolute',
+                                            inset: -14,
+                                            zIndex: stackItems.length + 5,
+                                            pointerEvents: 'none'
+                                          }}
+                                        />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? stackIndex * 16 : stackIndex * 3
-                                          const xOffset = isHovered ? -stackIndex * 14 : 0
+                                          const yOffset = isHovered ? stackIndex * 14 : stackIndex * 3
+                                          const xOffset = isHovered ? stackIndex * 14 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
                                               title="Double click to pull out from stack"
                                               onPointerEnter={() => setHoveredStackId(group.stackId || null)}
-                                              onPointerLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                               onMouseEnter={() => setHoveredStackId(group.stackId || null)}
-                                              onMouseLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                               onClick={(e) => e.stopPropagation()}
                                               onDoubleClick={(e) => {
                                                 e.preventDefault()
@@ -2618,7 +2626,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         minWidth: 110,
                                         minHeight: 44,
                                         boxShadow:
-                                          dragOverItem?.itemId === item.id
+                                          dragOverItem && dragOverItem.itemId === item.id
                                             ? dragOverItem.position === 'before'
                                               ? 'inset 3px 0 0 #3b82f6'
                                               : 'inset -3px 0 0 #3b82f6'
