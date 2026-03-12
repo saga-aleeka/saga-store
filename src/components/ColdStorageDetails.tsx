@@ -1029,15 +1029,37 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     })
   }
 
+  const toggleStackGroup = (itemIds: string[]) => {
+    setStackSelection((prev) => {
+      const next = new Set(prev)
+      const allSelected = itemIds.every((id) => next.has(id))
+      if (allSelected) {
+        itemIds.forEach((id) => next.delete(id))
+      } else {
+        itemIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
   const handleConfirmStack = async (shelfId: string) => {
     if (stackSelection.size < 2) {
       alert('Select at least two items to create a stack.')
       return
     }
 
-    const newStackId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const selectedItems = items.filter((item) => stackSelection.has(item.id))
+    const selectedExistingStackIds = Array.from(new Set(selectedItems.map((item) => item.stack_id).filter(Boolean)))
+
+    if (selectedExistingStackIds.length > 1) {
+      alert('Select items from only one existing stack at a time.')
+      return
+    }
+
+    const targetStackId = selectedExistingStackIds[0]
+      || (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`)
 
     const currentOrder = itemOrderByShelf[shelfId] || items.filter((item) => item.shelf_id === shelfId).map((item) => item.id)
     const stackIds = currentOrder.filter((id) => stackSelection.has(id))
@@ -1047,13 +1069,13 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     try {
       const { error } = await supabase
         .from('cold_storage_items')
-        .update({ stack_id: newStackId, stack_label: null })
+        .update({ stack_id: targetStackId, stack_label: null })
         .in('id', stackIds)
 
       if (error) throw error
 
       setItems((prev) =>
-        prev.map((item) => (stackSelection.has(item.id) ? { ...item, stack_id: newStackId, stack_label: null } : item))
+        prev.map((item) => (stackSelection.has(item.id) ? { ...item, stack_id: targetStackId, stack_label: null } : item))
       )
       setItemOrderByShelf((prev) => ({ ...prev, [shelfId]: nextOrder }))
       persistShelfOrder(shelfId, nextOrder)
@@ -2437,6 +2459,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                     const badgeColors = getBadgeColors(primary)
                                     const isStackSelected = selectedStackId === group.stackId
                                     const isStackMode = stackModeShelfId === shelf.id
+                                    const isStackGroupSelected = stackItems.every((entry: any) => stackSelection.has(entry.id))
                                     const isHovered = hoveredStackId === group.stackId
                                     const collapsedSpread = 34
                                     const hoverSpread = 40
@@ -2449,7 +2472,10 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         key={group.stackId}
                                         draggable={!isStackMode}
                                         onClick={() => {
-                                          if (isStackMode) return
+                                          if (isStackMode) {
+                                            toggleStackGroup(stackItems.map((entry: any) => entry.id))
+                                            return
+                                          }
                                           setSelectedStackId((prev) => (prev === group.stackId ? null : group.stackId || null))
                                         }}
                                         onContextMenu={(e) => {
@@ -2501,7 +2527,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           height: 44,
                                           overflow: 'visible',
                                           isolation: 'isolate',
-                                          zIndex: isHovered ? 9999 : isStackSelected ? 200 : 1,
+                                          zIndex: isHovered ? 9999 : (isStackSelected || isStackGroupSelected) ? 200 : 1,
                                           alignSelf: 'start',
                                           gridRow: `span ${rowSpan}`,
                                           cursor: isStackMode ? 'default' : 'pointer'
@@ -2534,7 +2560,12 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                               onDragEnd={() => setDragStackId(null)}
                                               onPointerEnter={() => setHoveredStackId(group.stackId || null)}
                                               onMouseEnter={() => setHoveredStackId(group.stackId || null)}
-                                              onClick={(e) => e.stopPropagation()}
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (isStackMode) {
+                                                  toggleStackGroup(stackItems.map((entry: any) => entry.id))
+                                                }
+                                              }}
                                               onDoubleClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
@@ -2558,7 +2589,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 transform: `translate(${xOffset}px, ${yOffset}px)`,
                                                 willChange: 'transform',
                                                 transition: 'transform 180ms ease, box-shadow 140ms ease',
-                                                boxShadow: isStackSelected
+                                                boxShadow: (isStackSelected || isStackGroupSelected)
                                                   ? '0 0 0 2px #3b82f6'
                                                   : '0 3px 8px rgba(15,23,42,0.08)',
                                                 zIndex: stackItems.length - stackIndex,
