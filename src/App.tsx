@@ -15,7 +15,7 @@ import ColdStorageDetails from './components/ColdStorageDetails'
 import RackDetails from './components/RackDetails'
 import TagsManager from './components/TagsManager'
 import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
-import { supabase } from './lib/api'
+import { supabase, apiFetch } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
@@ -112,6 +112,11 @@ export default function App() {
   // sample selection for checkout
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
   const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
+  const [showBulkTagDrawer, setShowBulkTagDrawer] = useState(false)
+  const [tagsOptions, setTagsOptions] = useState<any[]>([])
+  const [loadingTagsOptions, setLoadingTagsOptions] = useState(false)
+  const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<Set<string>>(new Set())
+  const [applyingBulkTags, setApplyingBulkTags] = useState(false)
 
   const loadSamples = React.useCallback(async (activeRoute?: string) => {
     const routeToUse = activeRoute ?? route
@@ -764,6 +769,72 @@ export default function App() {
     URL.revokeObjectURL(url)
   }
 
+  const loadTagsOptions = async () => {
+    setLoadingTagsOptions(true)
+    try {
+      const res = await apiFetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to load tags')
+      const payload = await res.json()
+      const next = payload?.data || []
+      setTagsOptions(next)
+    } catch (e) {
+      console.error('Failed to load tags:', e)
+      setTagsOptions([])
+    } finally {
+      setLoadingTagsOptions(false)
+    }
+  }
+
+  const openBulkTagDrawer = async () => {
+    setSelectedBulkTagIds(new Set())
+    setShowBulkTagDrawer(true)
+    await loadTagsOptions()
+  }
+
+  const applyTagsToSelectedSamples = async () => {
+    const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
+    if (selectedSamples.length === 0) {
+      alert('No samples selected')
+      return
+    }
+    if (selectedBulkTagIds.size === 0) {
+      alert('Select at least one tag')
+      return
+    }
+
+    setApplyingBulkTags(true)
+    try {
+      const ops: Promise<Response>[] = []
+      selectedSamples.forEach((sample: any) => {
+        selectedBulkTagIds.forEach((tagId) => {
+          ops.push(
+            apiFetch('/api/sample-tags', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+            })
+          )
+        })
+      })
+
+      const results = await Promise.all(ops)
+      const failed = results.filter((r) => !r.ok)
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} tag operation(s) failed`)
+      }
+
+      await loadSamples(route)
+      setShowBulkTagDrawer(false)
+      setSelectedBulkTagIds(new Set())
+      alert(`Added tag(s) to ${selectedSamples.length} sample(s)`)
+    } catch (e: any) {
+      console.error('Failed to apply tags:', e)
+      alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
+    } finally {
+      setApplyingBulkTags(false)
+    }
+  }
+
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
     const parts = route.split('/')
@@ -1365,7 +1436,7 @@ export default function App() {
                   onClick={() => {
                     const pageIds = filteredSamples
                       .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
-                      .filter((s: any) => s.id && !s.is_checked_out && s.container_id)
+                      .filter((s: any) => s.id)
                       .map((s: any) => s.id)
                     setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
                   }}
@@ -1383,141 +1454,138 @@ export default function App() {
                   Deselect All
                 </button>
                 <div style={{flex: 1}} />
-                <button 
-                  className="btn"
-                  onClick={async () => {
-                    const selectedSamples = filteredSamples.filter((s: any) => selectedSampleIds.has(s.id))
-                    if (selectedSamples.length === 0) {
-                      alert('No samples selected')
-                      return
-                    }
-                    
-                    const user = getUser()
-                    if (!user) {
-                      alert('You must be signed in to checkout samples')
-                      return
-                    }
-                    
-                    setLoadingSamples(true)
-                    try {
-                      const history: Array<{sample_id: string, container_id: string, position: string}> = []
-                      
-                      for (const sample of selectedSamples) {
-                        if (sample.is_checked_out || !sample.container_id) continue
-                        
-                        // Save to history before checkout
-                        history.push({
-                          sample_id: sample.sample_id,
-                          container_id: sample.container_id,
-                          position: sample.position
-                        })
-                        
-                        const { error } = await supabase
-                          .from('samples')
-                          .update({
-                            is_checked_out: true,
-                            checked_out_at: new Date().toISOString(),
-                            checked_out_by: user.initials,
-                            previous_container_id: sample.container_id,
-                            previous_position: sample.position,
-                            container_id: null,
-                            position: null
-                          })
-                          .eq('id', sample.id)
-                        
-                        if (error) {
-                          console.error('Checkout error:', error)
-                          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+                {selectedSampleIds.size > 0 && (
+                  <>
+                    <button 
+                      className="btn"
+                      onClick={async () => {
+                        const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
+                        if (selectedSamples.length === 0) {
+                          alert('No samples selected')
                           return
                         }
-                      }
-                      
-                      setCheckoutHistory([...checkoutHistory, ...history])
-                      setSelectedSampleIds(new Set())
-                      
-                      // Reload samples
-                      const isArchiveRoute = route === '#/archive'
-                      const { data } = await supabase
-                        .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
-                        .eq('is_archived', isArchiveRoute)
-                        .order('updated_at', { ascending: false })
-                      
-                      if (data) setSamples(data)
-                      
-                      alert(`Checked out ${history.length} sample(s)`)
-                    } catch (err: any) {
-                      console.error('Checkout error:', err)
-                      alert(`Failed to checkout samples: ${err.message}`)
-                    } finally {
-                      setLoadingSamples(false)
-                    }
-                  }}
-                  disabled={loadingSamples || selectedSampleIds.size === 0}
-                  style={{background: '#10b981', color: 'white', fontSize: 13}}
-                >
-                  Checkout Selected ({selectedSampleIds.size})
-                </button>
-                <button 
-                  className="btn"
-                  onClick={async () => {
-                    if (checkoutHistory.length === 0) {
-                      alert('No checkout history to undo')
-                      return
-                    }
-                    
-                    setLoadingSamples(true)
-                    try {
-                      for (const item of checkoutHistory) {
-                        // Find sample by sample_id
-                        const sample = samples?.find((s: any) => s.sample_id === item.sample_id)
-                        if (!sample) continue
                         
-                        const { error } = await supabase
-                          .from('samples')
-                          .update({
-                            container_id: item.container_id,
-                            position: item.position,
-                            is_checked_out: false,
-                            checked_out_at: null,
-                            checked_out_by: null,
-                            previous_container_id: null,
-                            previous_position: null
-                          })
-                          .eq('id', sample.id)
-                        
-                        if (error) {
-                          console.error('Undo checkout error:', error)
-                          alert(`Failed to undo checkout for ${item.sample_id}: ${error.message}`)
+                        const user = getUser()
+                        if (!user) {
+                          alert('You must be signed in to checkout samples')
                           return
                         }
-                      }
-                      
-                      setCheckoutHistory([])
-                      
-                      // Reload samples
-                      const isArchiveRoute = route === '#/archive'
-                      const { data } = await supabase
-                        .from('samples')
-                        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
-                        .eq('is_archived', isArchiveRoute)
-                        .order('updated_at', { ascending: false })
-                      
-                      if (data) setSamples(data)
-                      
-                      alert('Checkout undone successfully')
-                    } catch (err: any) {
-                      console.error('Undo checkout error:', err)
-                      alert(`Failed to undo checkout: ${err.message}`)
-                    } finally {
-                      setLoadingSamples(false)
-                    }
-                  }}
-                  disabled={loadingSamples || checkoutHistory.length === 0}
-                  style={{background: '#f59e0b', color: 'white', fontSize: 13}}
-                >
-                  Undo Checkout ({checkoutHistory.length})
-                </button>
+                        
+                        setLoadingSamples(true)
+                        try {
+                          const history: Array<{sample_id: string, container_id: string, position: string}> = []
+                          
+                          for (const sample of selectedSamples) {
+                            if (sample.is_checked_out || !sample.container_id) continue
+                            
+                            history.push({
+                              sample_id: sample.sample_id,
+                              container_id: sample.container_id,
+                              position: sample.position
+                            })
+                            
+                            const { error } = await supabase
+                              .from('samples')
+                              .update({
+                                is_checked_out: true,
+                                checked_out_at: new Date().toISOString(),
+                                checked_out_by: user.initials,
+                                previous_container_id: sample.container_id,
+                                previous_position: sample.position,
+                                container_id: null,
+                                position: null
+                              })
+                              .eq('id', sample.id)
+                            
+                            if (error) {
+                              console.error('Checkout error:', error)
+                              alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+                              return
+                            }
+                          }
+
+                          if (history.length === 0) {
+                            alert('No selected samples can be checked out')
+                            return
+                          }
+                          
+                          setCheckoutHistory([...checkoutHistory, ...history])
+                          setSelectedSampleIds(new Set())
+                          await loadSamples(route)
+                          
+                          alert(`Checked out ${history.length} sample(s)`)
+                        } catch (err: any) {
+                          console.error('Checkout error:', err)
+                          alert(`Failed to checkout samples: ${err.message}`)
+                        } finally {
+                          setLoadingSamples(false)
+                        }
+                      }}
+                      disabled={loadingSamples}
+                      style={{background: '#10b981', color: 'white', fontSize: 13}}
+                    >
+                      Checkout Selected ({selectedSampleIds.size})
+                    </button>
+                    <button 
+                      className="btn"
+                      onClick={async () => {
+                        const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
+                        const undoCandidates = selectedSamples.filter((s: any) => s.is_checked_out && s.previous_container_id)
+                        if (undoCandidates.length === 0) {
+                          alert('No selected checked-out samples can be restored')
+                          return
+                        }
+                        
+                        setLoadingSamples(true)
+                        try {
+                          for (const sample of undoCandidates) {
+                            const { error } = await supabase
+                              .from('samples')
+                              .update({
+                                container_id: sample.previous_container_id,
+                                position: sample.previous_position,
+                                is_checked_out: false,
+                                checked_out_at: null,
+                                checked_out_by: null,
+                                previous_container_id: null,
+                                previous_position: null
+                              })
+                              .eq('id', sample.id)
+                            
+                            if (error) {
+                              console.error('Undo checkout error:', error)
+                              alert(`Failed to undo checkout for ${sample.sample_id}: ${error.message}`)
+                              return
+                            }
+                          }
+
+                          setSelectedSampleIds(new Set())
+                          setCheckoutHistory([])
+                          await loadSamples(route)
+                          
+                          alert(`Undo checkout completed for ${undoCandidates.length} sample(s)`)
+                        } catch (err: any) {
+                          console.error('Undo checkout error:', err)
+                          alert(`Failed to undo checkout: ${err.message}`)
+                        } finally {
+                          setLoadingSamples(false)
+                        }
+                      }}
+                      disabled={loadingSamples}
+                      style={{background: '#f59e0b', color: 'white', fontSize: 13}}
+                    >
+                      Undo Checkout ({selectedSampleIds.size})
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={openBulkTagDrawer}
+                      disabled={loadingSamples}
+                      style={{background: '#2563eb', color: 'white', fontSize: 13}}
+                    >
+                      Add Tag(s)
+                    </button>
+                  </>
+                )}
                 <button
                   className="btn ghost"
                   onClick={() => {
@@ -1682,12 +1750,12 @@ export default function App() {
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: 40}}>
                         <input
                           type="checkbox"
-                          checked={filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).length > 0 && 
-                                   filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).every((s: any) => selectedSampleIds.has(s.id))}
+                          checked={filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).length > 0 && 
+                                   filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).every((s: any) => selectedSampleIds.has(s.id))}
                           onChange={(e) => {
                             const pageIds = filteredSamples
                               .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
-                              .filter((s: any) => !s.is_checked_out && s.container_id)
+                              .filter((s: any) => s.id)
                               .map((s: any) => s.id)
                             if (e.target.checked) {
                               setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
@@ -1777,7 +1845,6 @@ export default function App() {
                             <input
                               type="checkbox"
                               checked={selectedSampleIds.has(s.id)}
-                              disabled={s.is_checked_out || !s.container_id}
                               onChange={(e) => {
                                 const newSelected = new Set(selectedSampleIds)
                                 if (e.target.checked) {
@@ -1946,6 +2013,62 @@ export default function App() {
                 >
                   Next
                 </button>
+              </div>
+            )}
+
+            {showBulkTagDrawer && (
+              <div className="drawer-overlay" onClick={() => setShowBulkTagDrawer(false)}>
+                <div className="drawer" onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0 }}>Add Tag(s) to Selected Samples</h3>
+                    <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)}>Close</button>
+                  </div>
+                  <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+                    {selectedSampleIds.size} sample(s) selected
+                  </div>
+                  <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8 }}>
+                    {loadingTagsOptions && <div className="muted">Loading tags...</div>}
+                    {!loadingTagsOptions && tagsOptions.length === 0 && <div className="muted">No tags available.</div>}
+                    {!loadingTagsOptions && tagsOptions.map((tag: any) => {
+                      const checked = selectedBulkTagIds.has(tag.id)
+                      const color = tag.color || '#94a3b8'
+                      return (
+                        <label key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedBulkTagIds((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(tag.id)) next.delete(tag.id)
+                                else next.add(tag.id)
+                                return next
+                              })
+                            }}
+                          />
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                background: color,
+                                display: 'inline-block'
+                              }}
+                            />
+                            <span>{tag.name}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)} disabled={applyingBulkTags}>Cancel</button>
+                    <button className="btn" onClick={applyTagsToSelectedSamples} disabled={applyingBulkTags || selectedBulkTagIds.size === 0}>
+                      {applyingBulkTags ? 'Applying...' : 'Apply Tags'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
