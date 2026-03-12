@@ -2429,8 +2429,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                     const isStackSelected = selectedStackId === group.stackId
                                     const isStackMode = stackModeShelfId === shelf.id
                                     const isHovered = hoveredStackId === group.stackId
-                                    const collapsedSpread = 20
-                                    const hoverSpread = 48
+                                    const collapsedSpread = 34
+                                    const hoverSpread = 40
                                     const stackBaseHeight = 44
                                     const nonHoverHeight = stackBaseHeight + Math.max(0, stackItems.length - 1) * collapsedSpread
                                     const rowSpan = Math.max(1, Math.ceil(nonHoverHeight / stackBaseHeight))
@@ -2509,11 +2509,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const centerIndex = (stackItems.length - 1) / 2
-                                          const yOffset = isHovered
-                                            ? (stackIndex - centerIndex) * hoverSpread
-                                            : stackIndex * collapsedSpread
-                                          const xOffset = isHovered ? 20 : 0
+                                          const yOffset = stackIndex * (isHovered ? hoverSpread : collapsedSpread)
+                                          const xOffset = 0
                                           return (
                                             <div
                                               key={stackItem.id}
@@ -2543,7 +2540,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 background: stackBadgeColors.bg,
                                                 border: `1px solid ${stackBadgeColors.border}`,
                                                 color: stackBadgeColors.text,
-                                                fontSize: 11,
+                                                fontSize: 12,
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -2559,7 +2556,16 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 pointerEvents: 'auto'
                                               }}
                                             >
-                                              <div style={{ textAlign: 'center', fontWeight: 600, lineHeight: 1.2 }}>
+                                              <div
+                                                style={{
+                                                  textAlign: 'center',
+                                                  fontWeight: 600,
+                                                  lineHeight: 1.2,
+                                                  background: 'rgba(255,255,255,0.7)',
+                                                  padding: '1px 6px',
+                                                  borderRadius: 6
+                                                }}
+                                              >
                                                 <div>{stackItem.item_id}</div>
                                               </div>
                                             </div>
