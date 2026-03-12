@@ -2036,16 +2036,18 @@ export default function App() {
                         <label
                           key={tag.id}
                           style={{
-                            display: 'flex',
+                            display: 'grid',
+                            gridTemplateColumns: 'auto 1fr',
                             alignItems: 'center',
-                            justifyContent: 'flex-start',
                             gap: 8,
                             width: '100%',
                             textAlign: 'left',
-                            color: '#111827'
+                            color: '#111827',
+                            justifyItems: 'start'
                           }}
                         >
                           <input
+                            className="toggle-input"
                             type="checkbox"
                             checked={checked}
                             onChange={() => {
@@ -2057,7 +2059,7 @@ export default function App() {
                               })
                             }}
                           />
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, color: '#111827' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, color: '#111827', width: '100%', textAlign: 'left' }}>
                             <span
                               style={{
                                 width: 10,
