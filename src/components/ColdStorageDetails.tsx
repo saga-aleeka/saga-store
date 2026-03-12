@@ -2501,8 +2501,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? -stackIndex * 10 : stackIndex * 1
-                                          const xOffset = isHovered ? -stackIndex * 18 : 0
+                                          const yOffset = isHovered ? stackIndex * 7 : stackIndex * 1
+                                          const xOffset = isHovered ? stackIndex * 18 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
