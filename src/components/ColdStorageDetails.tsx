@@ -2365,6 +2365,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                             setDragOverShelfId(shelf.id)
                           }}
                           onDragLeave={() => setDragOverShelfId((prev) => (prev === shelf.id ? null : prev))}
+                          onMouseLeave={() => setHoveredStackId(null)}
                           onDrop={(e) => {
                             e.preventDefault()
                             if (dragStackId && !dragOverItem) {
@@ -2372,6 +2373,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                             } else if (dragItemId && !dragOverItem) {
                               handleMoveItemToShelf(dragItemId, shelf.id)
                             }
+                            setHoveredStackId(null)
                             setDragStackId(null)
                             setDragItemId(null)
                             setDragOverItem(null)
@@ -2498,12 +2500,20 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? stackIndex * 14 : stackIndex * 3
-                                          const xOffset = isHovered ? stackIndex * 14 : 0
+                                          const yOffset = isHovered ? stackIndex * 7 : stackIndex * 1
+                                          const xOffset = isHovered ? stackIndex * 18 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
                                               title="Double click to pull out from stack"
+                                              draggable={!isStackMode}
+                                              onDragStart={() => {
+                                                if (isStackMode) return
+                                                setDragStackId(group.stackId as string)
+                                                setDragItemId(null)
+                                                setSelectedStackId(group.stackId as string)
+                                              }}
+                                              onDragEnd={() => setDragStackId(null)}
                                               onPointerEnter={() => setHoveredStackId(group.stackId || null)}
                                               onMouseEnter={() => setHoveredStackId(group.stackId || null)}
                                               onClick={(e) => e.stopPropagation()}
