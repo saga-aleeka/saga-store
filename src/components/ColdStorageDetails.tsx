@@ -426,6 +426,15 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     return `${hex}${alpha}`
   }
 
+  const getReadableTextColor = (hex: string) => {
+    if (!hex.startsWith('#') || hex.length !== 7) return '#111827'
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    return luminance > 0.58 ? '#111827' : '#ffffff'
+  }
+
   const containerById = containers.reduce<Record<string, any>>((acc, container) => {
     acc[container.id] = container
     return acc
@@ -2501,8 +2510,13 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         />
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? stackIndex * 7 : stackIndex * 1
-                                          const xOffset = isHovered ? stackIndex * 18 : 0
+                                          const centerIndex = (stackItems.length - 1) / 2
+                                          const collapsedSpread = 2
+                                          const hoverSpread = 12
+                                          const yOffset = (stackIndex - centerIndex) * (isHovered ? hoverSpread : collapsedSpread)
+                                          const xOffset = isHovered ? 10 : 0
+                                          const solidBg = stackBadgeColors.border
+                                          const stackTextColor = getReadableTextColor(solidBg)
                                           return (
                                             <div
                                               key={stackItem.id}
@@ -2529,9 +2543,9 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 left: 0,
                                                 padding: '8px 10px',
                                                 borderRadius: 10,
-                                                background: stackBadgeColors.bg,
+                                                background: solidBg,
                                                 border: `1px solid ${stackBadgeColors.border}`,
-                                                color: stackBadgeColors.text,
+                                                color: stackTextColor,
                                                 fontSize: 11,
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
