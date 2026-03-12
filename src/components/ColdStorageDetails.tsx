@@ -2479,18 +2479,20 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           minHeight: 44,
                                           height: 44,
                                           overflow: 'visible',
-                                          zIndex: isHovered ? 60 : isStackSelected ? 30 : 1,
+                                          zIndex: isHovered ? 200 : isStackSelected ? 40 : 1,
                                           cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const yOffset = isHovered ? stackIndex * 18 : stackIndex * 2
-                                          const xOffset = isHovered ? -stackIndex * 10 : 0
+                                          const yOffset = isHovered ? stackIndex * 16 : stackIndex * 3
+                                          const xOffset = isHovered ? -stackIndex * 14 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
                                               title="Double click to pull out from stack"
+                                              onMouseEnter={() => setHoveredStackId(group.stackId || null)}
+                                              onMouseLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                               onClick={(e) => e.stopPropagation()}
                                               onDoubleClick={(e) => {
                                                 e.preventDefault()
@@ -2513,7 +2515,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 minWidth: 110,
                                                 minHeight: 44,
                                                 transform: `translate(${xOffset}px, ${yOffset}px)`,
-                                                transition: 'transform 140ms ease, box-shadow 120ms ease',
+                                                transition: 'transform 180ms ease, box-shadow 140ms ease',
                                                 boxShadow: isStackSelected
                                                   ? '0 0 0 2px #3b82f6'
                                                   : '0 3px 8px rgba(15,23,42,0.08)',
