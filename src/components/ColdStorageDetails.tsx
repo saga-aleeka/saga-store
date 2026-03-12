@@ -1239,6 +1239,39 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     persistShelfOrder(shelfId, filtered)
   }
 
+  const handleReorderWithinStack = (shelfId: string, itemId: string, targetId: string, position: 'before' | 'after') => {
+    if (itemId === targetId) return
+    const dragged = items.find((item) => item.id === itemId)
+    const target = items.find((item) => item.id === targetId)
+    if (!dragged || !target) return
+    if (!dragged.stack_id || dragged.stack_id !== target.stack_id) return
+
+    const currentOrder = [...(itemOrderByShelf[shelfId] || [])]
+    const stackId = dragged.stack_id
+    const stackMembers = new Set(
+      items.filter((item) => item.shelf_id === shelfId && item.stack_id === stackId).map((item) => item.id)
+    )
+
+    const stackOrder = currentOrder.filter((id) => stackMembers.has(id))
+    const withoutDragged = stackOrder.filter((id) => id !== itemId)
+    const targetIndex = withoutDragged.indexOf(targetId)
+    if (targetIndex === -1) return
+
+    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1
+    withoutDragged.splice(insertIndex, 0, itemId)
+
+    let stackCursor = 0
+    const nextOrder = currentOrder.map((id) => {
+      if (!stackMembers.has(id)) return id
+      const nextId = withoutDragged[stackCursor]
+      stackCursor += 1
+      return nextId
+    })
+
+    setItemOrderByShelf((prev) => ({ ...prev, [shelfId]: nextOrder }))
+    persistShelfOrder(shelfId, nextOrder)
+  }
+
   const handleDropOnItem = async (shelfId: string, targetId: string, position: 'before' | 'after') => {
     if (dragStackId) {
       const stackItems = items.filter((item) => item.stack_id === dragStackId)
@@ -2551,15 +2584,45 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                               key={stackItem.id}
                                               title="Double click to pull out from stack"
                                               draggable={!isStackMode}
-                                              onDragStart={() => {
+                                              onDragStart={(e) => {
                                                 if (isStackMode) return
-                                                setDragStackId(group.stackId as string)
-                                                setDragItemId(null)
+                                                e.stopPropagation()
+                                                setDragItemId(stackItem.id)
+                                                setDragStackId(null)
                                                 setSelectedStackId(group.stackId as string)
                                               }}
-                                              onDragEnd={() => setDragStackId(null)}
+                                              onDragEnd={() => {
+                                                setDragItemId(null)
+                                                setDragStackId(null)
+                                              }}
                                               onPointerEnter={() => setHoveredStackId(group.stackId || null)}
                                               onMouseEnter={() => setHoveredStackId(group.stackId || null)}
+                                              onDragOver={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                                                const position = e.clientY - rect.top < rect.height / 2 ? 'before' : 'after'
+                                                setDragOverItem({ shelfId: shelf.id, itemId: stackItem.id, position })
+                                              }}
+                                              onDragLeave={() =>
+                                                setDragOverItem((prev) => (prev?.itemId === stackItem.id ? null : prev))
+                                              }
+                                              onDrop={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                                                const position = e.clientY - rect.top < rect.height / 2 ? 'before' : 'after'
+                                                const dragged = dragItemId ? items.find((item) => item.id === dragItemId) : null
+                                                if (dragItemId && dragged?.stack_id && dragged.stack_id === stackItem.stack_id) {
+                                                  handleReorderWithinStack(shelf.id, dragItemId, stackItem.id, position)
+                                                } else {
+                                                  handleDropOnItem(shelf.id, stackItem.id, position)
+                                                }
+                                                setDragItemId(null)
+                                                setDragStackId(null)
+                                                setDragOverItem(null)
+                                                setDragOverShelfId(null)
+                                              }}
                                               onClick={(e) => {
                                                 e.stopPropagation()
                                                 if (isStackMode) {
