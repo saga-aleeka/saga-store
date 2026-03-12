@@ -2026,14 +2026,25 @@ export default function App() {
                   <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
                     {selectedSampleIds.size} sample(s) selected
                   </div>
-                  <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8 }}>
+                  <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8, textAlign: 'left' }}>
                     {loadingTagsOptions && <div className="muted">Loading tags...</div>}
                     {!loadingTagsOptions && tagsOptions.length === 0 && <div className="muted">No tags available.</div>}
                     {!loadingTagsOptions && tagsOptions.map((tag: any) => {
                       const checked = selectedBulkTagIds.has(tag.id)
                       const color = tag.color || '#94a3b8'
                       return (
-                        <label key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label
+                          key={tag.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-start',
+                            gap: 8,
+                            width: '100%',
+                            textAlign: 'left',
+                            color: '#111827'
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={checked}
@@ -2046,7 +2057,7 @@ export default function App() {
                               })
                             }}
                           />
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, color: '#111827' }}>
                             <span
                               style={{
                                 width: 10,
@@ -2056,7 +2067,7 @@ export default function App() {
                                 display: 'inline-block'
                               }}
                             />
-                            <span>{tag.name}</span>
+                            <span style={{ color: '#111827', fontWeight: 600 }}>{tag.name}</span>
                           </span>
                         </label>
                       )
