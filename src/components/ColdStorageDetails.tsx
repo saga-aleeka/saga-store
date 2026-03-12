@@ -421,9 +421,18 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     'IDT Plates': '#06b6d4'
   }
 
-  const addAlpha = (hex: string, alpha: string) => {
-    if (!hex.startsWith('#') || hex.length !== 7) return hex
-    return `${hex}${alpha}`
+  const tintHex = (hex: string, mixWithWhite = 0.86) => {
+    if (!hex.startsWith('#') || hex.length !== 7) return '#e2e8f0'
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    const t = Math.min(1, Math.max(0, mixWithWhite))
+    const tr = Math.round(r * (1 - t) + 255 * t)
+    const tg = Math.round(g * (1 - t) + 255 * t)
+    const tb = Math.round(b * (1 - t) + 255 * t)
+    return `#${tr.toString(16).padStart(2, '0')}${tg.toString(16).padStart(2, '0')}${tb
+      .toString(16)
+      .padStart(2, '0')}`
   }
 
   const containerById = containers.reduce<Record<string, any>>((acc, container) => {
@@ -439,30 +448,30 @@ export default function ColdStorageDetails({ id }: { id: string }) {
   const getBadgeColors = (item: any) => {
     if (item.item_type === 'container') {
       const container = containerById[item.container_id]
-      if (container?.is_rnd) return { border: '#06b6d4', bg: addAlpha('#06b6d4', '22'), text: '#0f766e' }
+      if (container?.is_rnd) return { border: '#06b6d4', bg: tintHex('#06b6d4'), text: '#0f766e' }
       const base = SAMPLE_TYPE_COLORS[container?.type] || '#94a3b8'
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     if (item.item_type === 'rack') {
       const rack = rackById[item.rack_id]
       const base = SAMPLE_TYPE_COLORS[rack?.name] || '#94a3b8'
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     if (item.item_type === 'reagent') {
       const base = item.item_color || DEFAULT_REAGENT_COLOR
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     if (item.item_type === 'other') {
       const base = item.item_color || DEFAULT_OTHER_COLOR
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     if (item.item_type === 'plate') {
       const base = item.item_color || DEFAULT_PLATE_COLOR
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     if (item.item_type === 'tube') {
       const base = item.item_color || DEFAULT_TUBE_COLOR
-      return { border: base, bg: addAlpha(base, '22'), text: base }
+      return { border: base, bg: tintHex(base), text: base }
     }
     return { border: '#e5e7eb', bg: '#ffffff', text: '#0f172a' }
   }
@@ -2561,7 +2570,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                   textAlign: 'center',
                                                   fontWeight: 600,
                                                   lineHeight: 1.2,
-                                                  background: 'rgba(255,255,255,0.7)',
+                                                  background: '#ffffff',
                                                   padding: '1px 6px',
                                                   borderRadius: 6
                                                 }}
