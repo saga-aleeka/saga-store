@@ -2393,6 +2393,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                               style={{
                                 display: 'grid',
                                 gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+                                gridAutoRows: '44px',
                                 gap: 6
                               }}
                             >
@@ -2428,6 +2429,11 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                     const isStackSelected = selectedStackId === group.stackId
                                     const isStackMode = stackModeShelfId === shelf.id
                                     const isHovered = hoveredStackId === group.stackId
+                                    const collapsedSpread = 20
+                                    const hoverSpread = 48
+                                    const stackBaseHeight = 44
+                                    const nonHoverHeight = stackBaseHeight + Math.max(0, stackItems.length - 1) * collapsedSpread
+                                    const rowSpan = Math.max(1, Math.ceil(nonHoverHeight / stackBaseHeight))
 
                                     return (
                                       <div
@@ -2487,6 +2493,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           overflow: 'visible',
                                           isolation: 'isolate',
                                           zIndex: isHovered ? 9999 : isStackSelected ? 200 : 1,
+                                          alignSelf: 'start',
+                                          gridRow: `span ${rowSpan}`,
                                           cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
@@ -2502,10 +2510,10 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
                                           const centerIndex = (stackItems.length - 1) / 2
-                                          const collapsedSpread = 10
-                                          const hoverSpread = 14
-                                          const yOffset = (stackIndex - centerIndex) * (isHovered ? hoverSpread : collapsedSpread)
-                                          const xOffset = isHovered ? 12 : 6
+                                          const yOffset = isHovered
+                                            ? (stackIndex - centerIndex) * hoverSpread
+                                            : stackIndex * collapsedSpread
+                                          const xOffset = isHovered ? 20 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
