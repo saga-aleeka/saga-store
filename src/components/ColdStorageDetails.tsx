@@ -2446,6 +2446,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           setDragItemId(null)
                                         }}
                                         onDragEnd={() => setDragStackId(null)}
+                                        onPointerEnter={() => setHoveredStackId(group.stackId || null)}
+                                        onPointerLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                         onMouseEnter={() => setHoveredStackId(group.stackId || null)}
                                         onMouseLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                         onDragOver={(e) => {
@@ -2479,7 +2481,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           minHeight: 44,
                                           height: 44,
                                           overflow: 'visible',
-                                          zIndex: isHovered ? 200 : isStackSelected ? 40 : 1,
+                                          isolation: 'isolate',
+                                          zIndex: isHovered ? 9999 : isStackSelected ? 200 : 1,
                                           cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
@@ -2491,6 +2494,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                             <div
                                               key={stackItem.id}
                                               title="Double click to pull out from stack"
+                                              onPointerEnter={() => setHoveredStackId(group.stackId || null)}
+                                              onPointerLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                               onMouseEnter={() => setHoveredStackId(group.stackId || null)}
                                               onMouseLeave={() => setHoveredStackId((prev) => (prev === group.stackId ? null : prev))}
                                               onClick={(e) => e.stopPropagation()}
@@ -2515,6 +2520,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 minWidth: 110,
                                                 minHeight: 44,
                                                 transform: `translate(${xOffset}px, ${yOffset}px)`,
+                                                willChange: 'transform',
                                                 transition: 'transform 180ms ease, box-shadow 140ms ease',
                                                 boxShadow: isStackSelected
                                                   ? '0 0 0 2px #3b82f6'
