@@ -2479,12 +2479,14 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                           minHeight: 44,
                                           height: 44,
                                           overflow: 'visible',
+                                          zIndex: isHovered ? 60 : isStackSelected ? 30 : 1,
                                           cursor: isStackMode ? 'default' : 'pointer'
                                         }}
                                       >
                                         {stackItems.map((stackItem: any, stackIndex: number) => {
                                           const stackBadgeColors = getBadgeColors(stackItem)
-                                          const baseOffset = isHovered ? 8 : 2
+                                          const yOffset = isHovered ? stackIndex * 18 : stackIndex * 2
+                                          const xOffset = isHovered ? -stackIndex * 10 : 0
                                           return (
                                             <div
                                               key={stackItem.id}
@@ -2510,7 +2512,8 @@ export default function ColdStorageDetails({ id }: { id: string }) {
                                                 justifyContent: 'center',
                                                 minWidth: 110,
                                                 minHeight: 44,
-                                                transform: `translateY(${stackIndex * baseOffset}px)`,
+                                                transform: `translate(${xOffset}px, ${yOffset}px)`,
+                                                transition: 'transform 140ms ease, box-shadow 120ms ease',
                                                 boxShadow: isStackSelected
                                                   ? '0 0 0 2px #3b82f6'
                                                   : '0 3px 8px rgba(15,23,42,0.08)',
