@@ -848,10 +848,6 @@ export default function App() {
       alert('No samples selected')
       return
     }
-    if (selectedBulkTagIds.size === 0) {
-      alert('Select at least one tag')
-      return
-    }
 
     setApplyingBulkTags(true)
     try {
