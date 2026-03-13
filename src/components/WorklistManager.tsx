@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { supabase } from '../lib/api'
+import { supabase, apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 
 interface WorklistSample {
+  id?: string
   sample_id: string
   container_id?: string
   container_name?: string
@@ -20,6 +21,26 @@ interface WorklistSample {
   cold_storage_id?: string
   cold_storage_name?: string
   shelf_item_type?: string
+}
+
+const TAG_COLOR_PALETTE = [
+  '#0ea5e9',
+  '#14b8a6',
+  '#22c55e',
+  '#f97316',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#84cc16',
+  '#06b6d4'
+]
+
+const pickRandomTagColor = (existingColors: string[]) => {
+  const used = new Set(existingColors.map((c) => String(c || '').toLowerCase()))
+  const available = TAG_COLOR_PALETTE.filter((c) => !used.has(c.toLowerCase()))
+  const choices = available.length > 0 ? available : TAG_COLOR_PALETTE
+  return choices[Math.floor(Math.random() * choices.length)]
 }
 
 // Helper function to detect sample type from container name or sample ID
@@ -58,7 +79,27 @@ export default function WorklistManager() {
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [sortState, setSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
+  const [batchTagName, setBatchTagName] = useState('')
+  const [tags, setTags] = useState<any[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+  const [selectedTagIdToLoad, setSelectedTagIdToLoad] = useState('')
+  const [loadingTaggedWorklist, setLoadingTaggedWorklist] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadTags = async () => {
+    setLoadingTags(true)
+    try {
+      const res = await apiFetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to load tags')
+      const payload = await res.json()
+      setTags(payload?.data || [])
+    } catch (e) {
+      console.error('Failed to load tags:', e)
+      setTags([])
+    } finally {
+      setLoadingTags(false)
+    }
+  }
 
   // Load worklist from sessionStorage on mount (persists during navigation)
   useEffect(() => {
@@ -72,6 +113,10 @@ export default function WorklistManager() {
         sessionStorage.removeItem('saga_worklist')
       }
     }
+  }, [])
+
+  useEffect(() => {
+    loadTags()
   }, [])
 
   // Save worklist to sessionStorage whenever it changes
@@ -249,6 +294,7 @@ export default function WorklistManager() {
           : shelfUnit?.name || shelfDetails?.name || null
 
         return {
+          id: sample?.id,
           sample_id: id,
           container_id: sample?.container_id,
           container_name: sample?.containers?.name,
@@ -283,6 +329,56 @@ export default function WorklistManager() {
         return sampleIds.indexOf(a.sample_id) - sampleIds.indexOf(b.sample_id)
       })
 
+      const requestedTagName = batchTagName.trim()
+      if (requestedTagName) {
+        let tagId: string | null = null
+        const existingTag = tags.find((t: any) => String(t.name || '').toLowerCase() === requestedTagName.toLowerCase())
+
+        if (existingTag?.id) {
+          tagId = existingTag.id
+        } else {
+          const createRes = await apiFetch('/api/tags', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: requestedTagName,
+              color: pickRandomTagColor(tags.map((t: any) => t?.color))
+            })
+          })
+
+          if (!createRes.ok) {
+            throw new Error('Failed to create batch tag')
+          }
+
+          const createPayload = await createRes.json()
+          tagId = createPayload?.data?.id || null
+          await loadTags()
+        }
+
+        if (tagId) {
+          const sampleRows = data || []
+          const matchedSamples = sampleRows.filter((s: any) =>
+            sampleIds.some((id) => String(s.sample_id || '').trim().toUpperCase() === id.trim().toUpperCase())
+          )
+
+          const tagOps = matchedSamples
+            .filter((s: any) => s?.id)
+            .map((s: any) =>
+              apiFetch('/api/sample-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_id: s.id, tag_id: tagId })
+              })
+            )
+
+          const tagResults = await Promise.all(tagOps)
+          const failed = tagResults.filter((r) => !r.ok)
+          if (failed.length > 0) {
+            console.warn(`Failed to tag ${failed.length} sample(s)`)
+          }
+        }
+      }
+
       setWorklist(sortedWorklist)
       setSelectedSamples(new Set())
     } catch (err: any) {
@@ -291,6 +387,111 @@ export default function WorklistManager() {
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const loadWorklistFromTag = async () => {
+    if (!selectedTagIdToLoad) {
+      alert('Select a tag to load')
+      return
+    }
+
+    setLoadingTaggedWorklist(true)
+    setLoading(true)
+    try {
+      const { data: links, error: linksError } = await supabase
+        .from('sample_tags')
+        .select('sample_id')
+        .eq('tag_id', selectedTagIdToLoad)
+
+      if (linksError) throw linksError
+
+      const uniqueSampleRowIds = Array.from(new Set((links || []).map((l: any) => l.sample_id).filter(Boolean)))
+      if (uniqueSampleRowIds.length === 0) {
+        setWorklist([])
+        setSelectedSamples(new Set())
+        alert('No samples found for this tag')
+        return
+      }
+
+      const { data: taggedSamples, error: samplesError } = await supabase
+        .from('samples')
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
+        .in('id', uniqueSampleRowIds)
+
+      if (samplesError) throw samplesError
+
+      const sampleIds = (taggedSamples || []).map((s: any) => s.sample_id).filter(Boolean)
+      const { data: shelfItemsData, error: shelfItemsError } = await supabase
+        .from('cold_storage_items')
+        .select(
+          `id,
+          item_id,
+          item_type,
+          shelf_id,
+          cold_storage_id,
+          cold_storage_shelves: cold_storage_shelves!cold_storage_items_shelf_id_fkey(
+            id,
+            name,
+            cold_storage_id,
+            cold_storage_units: cold_storage_units!cold_storage_shelves_cold_storage_id_fkey(id, name)
+          )`
+        )
+        .or(sampleIds.map(id => `item_id.ilike.${id}`).join(','))
+
+      if (shelfItemsError) {
+        console.warn('Shelf item lookup error:', shelfItemsError)
+      }
+
+      const shelfItemsById = new Map(
+        (shelfItemsData || []).map((item: any) => [String(item.item_id || '').toUpperCase(), item])
+      )
+
+      const worklistData: WorklistSample[] = sampleIds.map((id) => {
+        const sample = (taggedSamples || []).find((s: any) => String(s.sample_id || '').trim().toUpperCase() === id.trim().toUpperCase())
+        const shelfItem = shelfItemsById.get(id.trim().toUpperCase())
+        const hasContainer = sample?.container_id != null
+        const isActuallyCheckedOut = sample?.is_checked_out && !hasContainer
+        const shelfDetails = shelfItem?.cold_storage_shelves
+        const shelfUnit = shelfDetails?.cold_storage_units
+        const shelfLocation = shelfUnit?.name && shelfDetails?.name
+          ? `${shelfUnit.name} / ${shelfDetails.name}`
+          : shelfUnit?.name || shelfDetails?.name || null
+
+        return {
+          id: sample?.id,
+          sample_id: id,
+          container_id: sample?.container_id,
+          container_name: sample?.containers?.name,
+          container_location: formatContainerLocation(sample?.containers) || shelfLocation,
+          position: sample?.position,
+          is_checked_out: isActuallyCheckedOut,
+          checked_out_at: isActuallyCheckedOut ? sample?.checked_out_at : null,
+          previous_container_id: sample?.previous_container_id,
+          previous_position: sample?.previous_position,
+          sample_type: sample?.containers?.name
+            ? detectSampleType(id, sample?.containers?.name)
+            : shelfItem?.item_type === 'plate'
+              ? 'Plate'
+              : shelfItem?.item_type === 'tube'
+                ? 'Tube'
+                : detectSampleType(id, undefined),
+          shelf_id: shelfDetails?.id || shelfItem?.shelf_id,
+          shelf_name: shelfDetails?.name,
+          cold_storage_id: shelfItem?.cold_storage_id || shelfDetails?.cold_storage_id,
+          cold_storage_name: shelfUnit?.name,
+          shelf_item_type: shelfItem?.item_type
+        }
+      })
+
+      setWorklist(worklistData)
+      setSelectedSamples(new Set())
+    } catch (e: any) {
+      console.error('Failed to load tagged worklist:', e)
+      alert(`Failed to load tagged worklist: ${e?.message || 'Unknown error'}`)
+    } finally {
+      setLoadingTaggedWorklist(false)
+      setLoading(false)
     }
   }
 
@@ -549,6 +750,18 @@ export default function WorklistManager() {
       </div>
 
       <div style={{marginBottom: 24, padding: 16, background: '#f9fafb', borderRadius: 8, border: '2px dashed #d1d5db'}}>
+        <div style={{marginBottom: 10, display: 'grid', gap: 6}}>
+          <label style={{fontSize: 13, fontWeight: 600}}>Optional batch tag name</label>
+          <input
+            value={batchTagName}
+            onChange={(e) => setBatchTagName(e.target.value)}
+            placeholder="Example: 2026_Stability_Study"
+            style={{padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 8, background: '#fff'}}
+          />
+          <div className="muted" style={{fontSize: 12}}>
+            If provided, this tag is created (if needed) and applied to all matched samples after upload.
+          </div>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -562,6 +775,29 @@ export default function WorklistManager() {
           <div style={{fontSize: 16, fontWeight: 500, marginBottom: 4}}>Click to upload CSV worklist</div>
           <div className="muted" style={{fontSize: 14}}>Accepted formats: .csv, .txt</div>
         </label>
+      </div>
+
+      <div style={{marginBottom: 20, padding: 12, background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8}}>
+        <div style={{fontSize: 14, fontWeight: 600}}>Load Existing Tagged Worklist</div>
+        <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
+          <select
+            value={selectedTagIdToLoad}
+            onChange={(e) => setSelectedTagIdToLoad(e.target.value)}
+            disabled={loadingTags || loadingTaggedWorklist}
+            style={{minWidth: 260}}
+          >
+            <option value="">Select tag</option>
+            {tags.map((tag: any) => (
+              <option key={tag.id} value={tag.id}>{tag.name}</option>
+            ))}
+          </select>
+          <button className="btn" onClick={loadWorklistFromTag} disabled={!selectedTagIdToLoad || loadingTaggedWorklist}>
+            {loadingTaggedWorklist ? 'Loading...' : 'Load Tag Worklist'}
+          </button>
+          <button className="btn ghost" onClick={loadTags} disabled={loadingTags}>
+            {loadingTags ? 'Refreshing...' : 'Refresh Tags'}
+          </button>
+        </div>
       </div>
 
       {loading && <div className="muted">Loading...</div>}

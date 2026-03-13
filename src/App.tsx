@@ -1092,8 +1092,23 @@ export default function App() {
                     if (tagsOptions.length === 0) await loadTagsOptions()
                     setShowContainerTagFilter((prev) => !prev)
                   }}
+                  title="Filter containers by tags"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    minWidth: 34,
+                    padding: 0,
+                    border: containerTagFilters.length > 0 ? '1px solid #3b82f6' : '1px solid #d1d5db',
+                    background: containerTagFilters.length > 0 ? '#eff6ff' : '#fff',
+                    color: containerTagFilters.length > 0 ? '#1d4ed8' : '#6b7280',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
-                  Tag Filter {containerTagFilters.length > 0 ? `(${containerTagFilters.length})` : ''}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M3 5H21L14 13V20L10 18V13L3 5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  </svg>
                 </button>
                 {showContainerTagFilter && (
                   <div
@@ -1825,16 +1840,22 @@ export default function App() {
                                 }}
                                 style={{
                                   marginLeft: 8,
-                                  height: 'auto',
-                                  padding: '2px 6px',
-                                  fontSize: 12,
+                                  width: 26,
+                                  height: 26,
+                                  minWidth: 26,
+                                  padding: 0,
                                   border: activeFilterCount > 0 ? '1px solid #3b82f6' : '1px solid #d1d5db',
                                   color: activeFilterCount > 0 ? '#1d4ed8' : '#374151',
-                                  background: activeFilterCount > 0 ? '#eff6ff' : '#fff'
+                                  background: activeFilterCount > 0 ? '#eff6ff' : '#fff',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
                                 }}
                                 title={`Filter ${col.label}`}
                               >
-                                v
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                  <path d="M3 5H21L14 13V20L10 18V13L3 5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                                </svg>
                               </button>
                             )}
                             {sampleFilterMenu === col.key && col.filterable && (
