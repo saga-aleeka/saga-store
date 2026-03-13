@@ -69,6 +69,10 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<Set<string>>(new Set())
   const [applyingBulkTags, setApplyingBulkTags] = useState(false)
   const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#94a3b8')
+  const [newTagHighlight, setNewTagHighlight] = useState(true)
+  const [creatingTag, setCreatingTag] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
@@ -172,8 +176,64 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
 
   const openBulkTagDrawer = async () => {
     setSelectedBulkTagIds(new Set())
+    setNewTagName('')
+    setNewTagColor('#94a3b8')
+    setNewTagHighlight(true)
     setShowBulkTagDrawer(true)
     await loadTagsOptions()
+  }
+
+  const createTagFromModal = async () => {
+    const name = newTagName.trim()
+    if (!name) {
+      alert('Tag name is required')
+      return
+    }
+
+    setCreatingTag(true)
+    try {
+      const res = await apiFetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          color: newTagColor || '#94a3b8',
+          highlight: newTagHighlight
+        })
+      })
+
+      if (!res.ok) {
+        let detail = ''
+        try {
+          const data = await res.clone().json()
+          detail = data?.error || JSON.stringify(data)
+        } catch {
+          detail = await res.text()
+        }
+        throw new Error(detail || `Request failed (${res.status})`)
+      }
+
+      const payload = await res.json()
+      const created = payload?.data
+      await loadTagsOptions()
+
+      if (created?.id) {
+        setSelectedBulkTagIds((prev) => {
+          const next = new Set(prev)
+          next.add(created.id)
+          return next
+        })
+      }
+
+      setNewTagName('')
+      setNewTagColor('#94a3b8')
+      setNewTagHighlight(true)
+    } catch (e: any) {
+      console.error('Failed to create tag from worklist modal:', e)
+      alert(`Failed to create tag: ${e?.message || 'Unknown error'}`)
+    } finally {
+      setCreatingTag(false)
+    }
   }
 
   const applyTagsToSelectedSamples = async () => {
@@ -1228,18 +1288,63 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
                   <p className="muted" style={{margin: 0}}>
                     Add selected tags to {selectedRowsWithDbId.length} selected worklist sample(s).
                   </p>
+                  <div style={{border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, display: 'grid', gap: 8}}>
+                    <div style={{fontSize: 13, fontWeight: 600, color: '#374151'}}>Create tag</div>
+                    <div style={{display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center'}}>
+                      <input
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Tag name"
+                        style={{marginTop: 0}}
+                      />
+                      <input
+                        type="color"
+                        value={newTagColor}
+                        onChange={(e) => setNewTagColor(e.target.value)}
+                        style={{width: 40, height: 32, padding: 0, border: 'none', background: 'transparent', marginTop: 0}}
+                        aria-label="Tag color"
+                      />
+                      <button className="btn" onClick={createTagFromModal} disabled={creatingTag || !newTagName.trim()}>
+                        {creatingTag ? 'Creating...' : 'Create'}
+                      </button>
+                    </div>
+                    <label style={{display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start'}}>
+                      <input
+                        className="toggle-input"
+                        type="checkbox"
+                        checked={newTagHighlight}
+                        onChange={(e) => setNewTagHighlight(e.target.checked)}
+                      />
+                      <span>Highlight tag</span>
+                    </label>
+                  </div>
                   {loadingTagsOptions ? (
                     <div className="muted">Loading tags...</div>
                   ) : tagsOptions.length === 0 ? (
                     <div className="muted">No tags available.</div>
                   ) : (
-                    <div style={{maxHeight: 280, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10}}>
+                    <div style={{maxHeight: 280, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, display: 'grid', gap: 8, textAlign: 'left'}}>
                       {tagsOptions.map((tag: any) => {
                         const checked = selectedBulkTagIds.has(tag.id)
                         return (
-                          <label key={tag.id} style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer'}}>
+                          <label
+                            key={tag.id}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'auto 1fr',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              textAlign: 'left',
+                              color: '#111827',
+                              justifyItems: 'start',
+                              cursor: 'pointer'
+                            }}
+                          >
                             <input
                               type="checkbox"
+                              style={{width: 'auto', margin: 0, marginTop: 0, justifySelf: 'start'}}
                               checked={checked}
                               onChange={() => {
                                 setSelectedBulkTagIds((prev) => {
@@ -1250,17 +1355,19 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
                                 })
                               }}
                             />
-                            <span
-                              style={{
-                                display: 'inline-block',
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                background: tag.color || '#9ca3af',
-                                border: '1px solid rgba(0,0,0,0.15)'
-                              }}
-                            />
-                            <span>{tag.name}</span>
+                            <span style={{display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start', width: '100%', textAlign: 'left'}}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 999,
+                                  background: tag.color || '#9ca3af',
+                                  border: '1px solid rgba(0,0,0,0.15)'
+                                }}
+                              />
+                              <span style={{color: '#111827', fontWeight: 600}}>{tag.name}</span>
+                            </span>
                           </label>
                         )
                       })}
