@@ -109,6 +109,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
+  const [sampleStatusFilters, setSampleStatusFilters] = useState<string[]>([])
+  const [sampleTagFilters, setSampleTagFilters] = useState<string[]>([])
+  const [sampleFilterMenu, setSampleFilterMenu] = useState<string | null>(null)
+  const [showContainerTagFilter, setShowContainerTagFilter] = useState(false)
+  const [containerTagFilters, setContainerTagFilters] = useState<string[]>([])
   // sample selection for checkout
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
   const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
@@ -390,6 +395,13 @@ export default function App() {
         const hasTrainingSamples = (c.samples || []).some((s: any) => s.is_training && !s.is_archived)
         if (!c.training && !hasTrainingSamples) return false
       }
+      if (containerTagFilters.length > 0) {
+        const selectedTagIds = new Set(containerTagFilters)
+        const hasSelectedTag = (c.samples || []).some((s: any) =>
+          (s.sample_tags || []).some((st: any) => selectedTagIds.has(st?.tag_id || st?.tags?.id))
+        )
+        if (!hasSelectedTag) return false
+      }
       return true
     })
     
@@ -413,7 +425,7 @@ export default function App() {
     }
     
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery, route])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, containerTagFilters, searchQuery, route])
 
   useEffect(() => {
     async function onUpdated(e: any){
@@ -422,12 +434,12 @@ export default function App() {
         const [activeRes, archivedRes, racksRes, coldRes] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
             .eq('archived', false)
             .order('created_at', { ascending: false }),
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
             .eq('archived', true)
             .order('created_at', { ascending: false }),
           supabase
@@ -475,7 +487,7 @@ export default function App() {
         const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
             .eq('archived', true)
             .order('created_at', { ascending: false }),
           supabase
@@ -524,7 +536,7 @@ export default function App() {
         const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
             .eq('archived', false)
             .order('created_at', { ascending: false }),
           supabase
@@ -573,6 +585,23 @@ export default function App() {
     return samples
   }, [samples, route])
 
+  const availableSampleTypes = React.useMemo(() => {
+    const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
+    const allTypesInSamples = samplesForTypeFilters.length
+      ? Array.from(
+          new Set(
+            samplesForTypeFilters.map((s: any) =>
+              s.is_checked_out && s.previous_containers?.type
+                ? s.previous_containers.type
+                : (s.containers?.type || 'Sample Type')
+            )
+          )
+        ).filter((type) => type !== 'Sample Type')
+      : []
+
+    return typeOrder.filter((type) => allTypesInSamples.includes(type))
+  }, [samplesForTypeFilters])
+
   // Apply search filter and type filter to samples
   const filteredSamples = React.useMemo(() => {
     if (!samples) return []
@@ -591,6 +620,20 @@ export default function App() {
         return sampleTypeFilters.includes(containerType)
       })
       console.log(`After type filter (${sampleTypeFilters.join(', ')}): ${filtered.length} samples`)
+    }
+
+    if (sampleStatusFilters.length > 0) {
+      filtered = filtered.filter((s: any) => {
+        const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
+        return sampleStatusFilters.includes(status)
+      })
+    }
+
+    if (sampleTagFilters.length > 0) {
+      const selectedTagIds = new Set(sampleTagFilters)
+      filtered = filtered.filter((s: any) =>
+        (s.sample_tags || []).some((st: any) => selectedTagIds.has(st?.tag_id || st?.tags?.id))
+      )
     }
     
     // Apply search filter
@@ -717,7 +760,7 @@ export default function App() {
 
     console.log(`Final filtered count: ${filtered.length}`)
     return filtered
-  }, [samples, searchQuery, sampleTypeFilters, sampleSort.key, sampleSort.direction])
+  }, [samples, searchQuery, sampleTypeFilters, sampleStatusFilters, sampleTagFilters, sampleSort.key, sampleSort.direction])
 
   const downloadSamplesCsv = (rows: any[], filename: string) => {
     if (!rows.length) {
@@ -1038,8 +1081,67 @@ export default function App() {
               </div>
             </div>
             {/* Filters */}
-            <div style={{marginTop:8}}>
-              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+            <div style={{marginTop:8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10}}>
+              <div style={{flex: 1}}>
+                <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+              </div>
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="btn ghost"
+                  onClick={async () => {
+                    if (tagsOptions.length === 0) await loadTagsOptions()
+                    setShowContainerTagFilter((prev) => !prev)
+                  }}
+                >
+                  Tag Filter {containerTagFilters.length > 0 ? `(${containerTagFilters.length})` : ''}
+                </button>
+                {showContainerTagFilter && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 38,
+                      zIndex: 30,
+                      background: '#fff',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 8,
+                      padding: 8,
+                      minWidth: 240,
+                      maxHeight: 300,
+                      overflowY: 'auto',
+                      boxShadow: '0 10px 24px rgba(15,23,42,0.12)'
+                    }}
+                  >
+                    {tagsOptions.length === 0 && <div className="muted">No tags available</div>}
+                    {tagsOptions.map((tag: any) => {
+                      const checked = containerTagFilters.includes(tag.id)
+                      return (
+                        <label key={tag.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <input
+                            type="checkbox"
+                            className="toggle-input"
+                            checked={checked}
+                            onChange={() => {
+                              setContainerTagFilters((prev) =>
+                                prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                              )
+                              setContainersCurrentPage(1)
+                            }}
+                          />
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 999, background: tag.color || '#94a3b8', display: 'inline-block' }} />
+                            <span>{tag.name}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                      <button className="btn ghost" onClick={() => { setContainerTagFilters([]); setContainersCurrentPage(1) }}>Clear</button>
+                      <button className="btn ghost" onClick={() => setShowContainerTagFilter(false)}>Done</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
               <div style={{
@@ -1632,110 +1734,6 @@ export default function App() {
               </div>
             </div>
             
-            {/* Sample Type Filters */}
-            {(() => {
-              // Use the same order as ContainerFilters
-              const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
-                          {!loadingSamples && filteredSamples && filteredSamples.length > samplesPerPage && (
-                            <div style={{
-                              display: 'flex',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              gap: 8,
-                              marginTop: 12
-                            }}>
-                              <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                style={{
-                                  padding: '6px 12px',
-                                  background: currentPage === 1 ? '#f3f4f6' : 'white',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: 6,
-                                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                                  fontSize: 13,
-                                  color: currentPage === 1 ? '#9ca3af' : '#374151'
-                                }}
-                              >
-                                Previous
-                              </button>
-                              <span className="muted" style={{fontSize: 13}}>
-                                Page {currentPage} of {Math.ceil(filteredSamples.length / samplesPerPage)}
-                              </span>
-                              <button
-                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredSamples.length / samplesPerPage), p + 1))}
-                                disabled={currentPage >= Math.ceil(filteredSamples.length / samplesPerPage)}
-                                style={{
-                                  padding: '6px 12px',
-                                  background: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#f3f4f6' : 'white',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: 6,
-                                  cursor: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
-                                  fontSize: 13,
-                                  color: currentPage >= Math.ceil(filteredSamples.length / samplesPerPage) ? '#9ca3af' : '#374151'
-                                }}
-                              >
-                                Next
-                              </button>
-                            </div>
-                          )}
-              const allTypesInSamples = samplesForTypeFilters.length ? Array.from(new Set(samplesForTypeFilters.map((s: any) => {
-                // For checked out samples, use previous container type; otherwise use current container type
-                return s.is_checked_out && s.previous_containers?.type
-                  ? s.previous_containers.type
-                  : (s.containers?.type || 'Sample Type')
-              }))).filter(type => type !== 'Sample Type') : []
-              
-              // Filter to only types present in the samples, but maintain the defined order
-              const availableSampleTypes = typeOrder.filter(type => allTypesInSamples.includes(type))
-              
-              if (availableSampleTypes.length > 0) {
-                return (
-                  <div style={{marginTop: 12, marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
-                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center'}}>
-                      {availableSampleTypes.map(type => {
-                        const active = sampleTypeFilters.includes(type)
-                        const color = SAMPLE_TYPE_COLORS[type] || '#6b7280'
-                        const inactiveBg = `${color}22`
-                        const activeBg = color
-                        const style = active 
-                          ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${color}33`, border: 'none' } 
-                          : { background: inactiveBg, color: color, border: 'none' }
-                        
-                        return (
-                          <button
-                            key={type}
-                            onClick={() => {
-                              if (active) {
-                                setSampleTypeFilters(sampleTypeFilters.filter(t => t !== type))
-                              } else {
-                                setSampleTypeFilters([...sampleTypeFilters, type])
-                              }
-                              setCurrentPage(1)
-                            }}
-                            style={{
-                              ...style,
-                              padding: '6px 12px',
-                              borderRadius: 9999,
-                              fontSize: 14,
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              outline: 'none'
-                            }}
-                          >
-                            {type}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              }
-              return null
-            })()}
-            
             {loadingSamples && (
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: 'white' }}>
                 <TableSkeleton rows={6} columns={8} />
@@ -1768,18 +1766,25 @@ export default function App() {
                         />
                       </th>
                       {([
-                        { label: 'Sample ID', key: 'sample_id' },
-                        { label: 'Type', key: 'type' },
-                        { label: 'Storage Path', key: 'storage_path' },
-                        { label: 'Container', key: 'container' },
-                        { label: 'Position', key: 'position' },
-                        { label: 'Status', key: 'status' },
-                        { label: 'Tags', key: 'tags' }
-                      ] as Array<{ label: string; key: string }>).map((col) => {
+                        { label: 'Sample ID', key: 'sample_id', filterable: false },
+                        { label: 'Type', key: 'type', filterable: true },
+                        { label: 'Storage Path', key: 'storage_path', filterable: false },
+                        { label: 'Container', key: 'container', filterable: false },
+                        { label: 'Position', key: 'position', filterable: false },
+                        { label: 'Status', key: 'status', filterable: true },
+                        { label: 'Tags', key: 'tags', filterable: true }
+                      ] as Array<{ label: string; key: string; filterable: boolean }>).map((col) => {
                         const isActive = sampleSort.key === col.key
                         const direction = isActive ? sampleSort.direction : 'asc'
+                        const activeFilterCount = col.key === 'type'
+                          ? sampleTypeFilters.length
+                          : col.key === 'status'
+                            ? sampleStatusFilters.length
+                            : col.key === 'tags'
+                              ? sampleTagFilters.length
+                              : 0
                         return (
-                          <th key={col.key} style={{padding: 12, textAlign: 'left', fontWeight: 600}}>
+                          <th key={col.key} style={{padding: 12, textAlign: 'left', fontWeight: 600, position: 'relative'}}>
                             <button
                               onClick={() => {
                                 setSampleSort((prev) => {
@@ -1808,6 +1813,136 @@ export default function App() {
                                 {direction === 'asc' ? '▲' : '▼'}
                               </span>
                             </button>
+                            {col.filterable && (
+                              <button
+                                className="btn ghost"
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  if (col.key === 'tags' || tagsOptions.length === 0) {
+                                    await loadTagsOptions()
+                                  }
+                                  setSampleFilterMenu((prev) => (prev === col.key ? null : col.key))
+                                }}
+                                style={{
+                                  marginLeft: 8,
+                                  height: 'auto',
+                                  padding: '2px 6px',
+                                  fontSize: 12,
+                                  border: activeFilterCount > 0 ? '1px solid #3b82f6' : '1px solid #d1d5db',
+                                  color: activeFilterCount > 0 ? '#1d4ed8' : '#374151',
+                                  background: activeFilterCount > 0 ? '#eff6ff' : '#fff'
+                                }}
+                                title={`Filter ${col.label}`}
+                              >
+                                v
+                              </button>
+                            )}
+                            {sampleFilterMenu === col.key && col.filterable && (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: 38,
+                                  left: 8,
+                                  zIndex: 30,
+                                  background: '#fff',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: 8,
+                                  padding: 8,
+                                  minWidth: 220,
+                                  maxHeight: 260,
+                                  overflowY: 'auto',
+                                  boxShadow: '0 10px 24px rgba(15,23,42,0.12)'
+                                }}
+                              >
+                                {col.key === 'type' && (
+                                  <div style={{ display: 'grid', gap: 6 }}>
+                                    {availableSampleTypes.map((type) => {
+                                      const checked = sampleTypeFilters.includes(type)
+                                      return (
+                                        <label key={type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <input
+                                            type="checkbox"
+                                            className="toggle-input"
+                                            checked={checked}
+                                            onChange={() => {
+                                              setSampleTypeFilters((prev) =>
+                                                prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+                                              )
+                                              setCurrentPage(1)
+                                            }}
+                                          />
+                                          <span>{type}</span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                                {col.key === 'status' && (
+                                  <div style={{ display: 'grid', gap: 6 }}>
+                                    {['In Storage', 'Checked Out'].map((status) => {
+                                      const checked = sampleStatusFilters.includes(status)
+                                      return (
+                                        <label key={status} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <input
+                                            type="checkbox"
+                                            className="toggle-input"
+                                            checked={checked}
+                                            onChange={() => {
+                                              setSampleStatusFilters((prev) =>
+                                                prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+                                              )
+                                              setCurrentPage(1)
+                                            }}
+                                          />
+                                          <span>{status}</span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                                {col.key === 'tags' && (
+                                  <div style={{ display: 'grid', gap: 6 }}>
+                                    {tagsOptions.length === 0 && <div className="muted">No tags available</div>}
+                                    {tagsOptions.map((tag: any) => {
+                                      const checked = sampleTagFilters.includes(tag.id)
+                                      return (
+                                        <label key={tag.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', gap: 8 }}>
+                                          <input
+                                            type="checkbox"
+                                            className="toggle-input"
+                                            checked={checked}
+                                            onChange={() => {
+                                              setSampleTagFilters((prev) =>
+                                                prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                                              )
+                                              setCurrentPage(1)
+                                            }}
+                                          />
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ width: 10, height: 10, borderRadius: 999, background: tag.color || '#94a3b8', display: 'inline-block' }} />
+                                            <span>{tag.name}</span>
+                                          </span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                                  <button
+                                    className="btn ghost"
+                                    onClick={() => {
+                                      if (col.key === 'type') setSampleTypeFilters([])
+                                      if (col.key === 'status') setSampleStatusFilters([])
+                                      if (col.key === 'tags') setSampleTagFilters([])
+                                      setCurrentPage(1)
+                                    }}
+                                  >
+                                    Clear
+                                  </button>
+                                  <button className="btn ghost" onClick={() => setSampleFilterMenu(null)}>Done</button>
+                                </div>
+                              </div>
+                            )}
                           </th>
                         )
                       })}
