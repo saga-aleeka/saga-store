@@ -14,10 +14,19 @@ module.exports = async function handler(req: any, res: any) {
     const user = getUserFromRequest(req)
 
     if (req.method === 'GET') {
-      const { data, error } = await supabaseAdmin
+      const includeArchived = req.query?.includeArchived === '1' || req.query?.includeArchived === 'true'
+
+      let query = supabaseAdmin
         .from('tags')
-        .select('id, name, color, highlight, created_at, updated_at')
+        .select('id, name, color, highlight, archived, created_at, updated_at')
+        .order('archived', { ascending: true })
         .order('name', { ascending: true })
+
+      if (!includeArchived) {
+        query = query.eq('archived', false)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Failed to fetch tags:', error)
@@ -34,13 +43,14 @@ module.exports = async function handler(req: any, res: any) {
       const name = String(body?.name || '').trim()
       const color = String(body?.color || '#94a3b8').trim() || '#94a3b8'
       const highlight = body?.highlight !== undefined ? !!body.highlight : true
+      const archived = body?.archived !== undefined ? !!body.archived : false
 
       if (!name) return res.status(400).json({ error: 'name_required' })
 
       const { data: created, error } = await supabaseAdmin
         .from('tags')
-        .insert({ name, color, highlight, created_by: user.initials || null })
-        .select('id, name, color, highlight, created_at, updated_at')
+        .insert({ name, color, highlight, archived, created_by: user.initials || null })
+        .select('id, name, color, highlight, archived, created_at, updated_at')
         .single()
 
       if (error) {
@@ -55,7 +65,7 @@ module.exports = async function handler(req: any, res: any) {
         entityId: created.id,
         action: 'created',
         entityName: created.name,
-        metadata: { tag_id: created.id, tag_name: created.name, color: created.color }
+        metadata: { tag_id: created.id, tag_name: created.name, color: created.color, archived: created.archived }
       })
 
       return res.status(201).json({ data: created })
@@ -70,7 +80,7 @@ module.exports = async function handler(req: any, res: any) {
 
       const { data: before } = await supabaseAdmin
         .from('tags')
-        .select('id, name, color, highlight')
+        .select('id, name, color, highlight, archived')
         .eq('id', tagId)
         .single()
 
@@ -78,13 +88,14 @@ module.exports = async function handler(req: any, res: any) {
       if (name) updates.name = name
       if (color) updates.color = color
       if (body?.highlight !== undefined) updates.highlight = !!body.highlight
+      if (body?.archived !== undefined) updates.archived = !!body.archived
       updates.updated_at = new Date().toISOString()
 
       const { data: updated, error } = await supabaseAdmin
         .from('tags')
         .update(updates)
         .eq('id', tagId)
-        .select('id, name, color, highlight, created_at, updated_at')
+        .select('id, name, color, highlight, archived, created_at, updated_at')
         .single()
 
       if (error) {
@@ -100,7 +111,7 @@ module.exports = async function handler(req: any, res: any) {
         action: 'updated',
         entityName: updated.name,
         changes: { before, after: updated },
-        metadata: { tag_id: updated.id, tag_name: updated.name, color: updated.color }
+        metadata: { tag_id: updated.id, tag_name: updated.name, color: updated.color, archived: updated.archived }
       })
 
       return res.status(200).json({ data: updated })
@@ -112,7 +123,7 @@ module.exports = async function handler(req: any, res: any) {
 
       const { data: existing } = await supabaseAdmin
         .from('tags')
-        .select('id, name, color, highlight')
+        .select('id, name, color, highlight, archived')
         .eq('id', tagId)
         .single()
 
@@ -134,7 +145,7 @@ module.exports = async function handler(req: any, res: any) {
           entityId: existing.id,
           action: 'deleted',
           entityName: existing.name,
-          metadata: { tag_id: existing.id, tag_name: existing.name, color: existing.color }
+          metadata: { tag_id: existing.id, tag_name: existing.name, color: existing.color, archived: existing.archived }
         })
       }
 

@@ -32,6 +32,7 @@ export default function TagsManager() {
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('#94a3b8')
   const [editHighlight, setEditHighlight] = useState(true)
+  const [editArchived, setEditArchived] = useState(false)
 
   const readErrorDetail = async (res: Response) => {
     try {
@@ -51,7 +52,7 @@ export default function TagsManager() {
   const loadTags = async () => {
     setLoading(true)
     try {
-      const res = await apiFetch('/api/tags')
+      const res = await apiFetch('/api/tags?includeArchived=1')
       if (!res.ok) {
         const detail = await readErrorDetail(res)
         throw new Error(`Failed to load tags (${res.status}): ${detail || res.statusText}`)
@@ -105,6 +106,7 @@ export default function TagsManager() {
     setEditName(tag.name || '')
     setEditColor(tag.color || '#94a3b8')
     setEditHighlight(tag.highlight !== undefined ? !!tag.highlight : true)
+    setEditArchived(!!tag.archived)
   }
 
   const cancelEdit = () => {
@@ -112,6 +114,7 @@ export default function TagsManager() {
     setEditName('')
     setEditColor('#94a3b8')
     setEditHighlight(true)
+    setEditArchived(false)
   }
 
   const saveEdit = async () => {
@@ -124,7 +127,7 @@ export default function TagsManager() {
       const res = await apiFetch('/api/tags', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingId, name, color: editColor || '#94a3b8', highlight: editHighlight })
+        body: JSON.stringify({ id: editingId, name, color: editColor || '#94a3b8', highlight: editHighlight, archived: editArchived })
       })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
@@ -168,7 +171,7 @@ export default function TagsManager() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
           <h2 style={{ margin: 0 }}>Tags</h2>
-          <div className="muted" style={{ marginTop: 4 }}>Create, edit, and delete sample tags.</div>
+          <div className="muted" style={{ marginTop: 4 }}>Create, edit, archive, and delete sample tags.</div>
         </div>
       </div>
 
@@ -217,7 +220,7 @@ export default function TagsManager() {
         {!loading && tags.length > 0 && (
           <div>
             {tags.map((tag) => (
-              <div key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderTop: '1px solid #e5e7eb' }}>
+              <div key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderTop: '1px solid #e5e7eb', opacity: tag.archived ? 0.72 : 1 }}>
                 <div style={{ width: 16, height: 16, borderRadius: 9999, background: tag.color || '#94a3b8' }} />
                 <div style={{ flex: 1 }}>
                   {editingId === tag.id ? (
@@ -250,6 +253,15 @@ export default function TagsManager() {
                         />
                         <span style={{ fontSize: 12, fontWeight: 600 }}>Highlight samples</span>
                       </label>
+                      <label className="toggle-row" style={{ gap: 6 }}>
+                        <input
+                          className="toggle-input"
+                          type="checkbox"
+                          checked={editArchived}
+                          onChange={(e) => setEditArchived(e.target.checked)}
+                        />
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>Archived</span>
+                      </label>
                       <button className="btn" onClick={saveEdit} disabled={saving || !editName.trim()}>
                         Save
                       </button>
@@ -263,6 +275,18 @@ export default function TagsManager() {
                       <span className="muted" style={{ fontSize: 12 }}>{tag.color}</span>
                       <span className="muted" style={{ fontSize: 12 }}>
                         {tag.highlight === false ? 'No highlight' : 'Highlights'}
+                      </span>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: tag.archived ? '#e5e7eb' : '#dcfce7',
+                          color: tag.archived ? '#4b5563' : '#166534'
+                        }}
+                      >
+                        {tag.archived ? 'Archived' : 'Active'}
                       </span>
                     </div>
                   )}

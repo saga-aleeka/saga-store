@@ -829,7 +829,15 @@ export default function App() {
   }
 
   const openBulkTagDrawer = async () => {
-    setSelectedBulkTagIds(new Set())
+    const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
+    const existingTagIds = new Set<string>()
+    selectedSamples.forEach((sample: any) => {
+      ;(sample.sample_tags || []).forEach((st: any) => {
+        const tagId = st?.tag_id || st?.tags?.id
+        if (tagId) existingTagIds.add(tagId)
+      })
+    })
+    setSelectedBulkTagIds(existingTagIds)
     setShowBulkTagDrawer(true)
     await loadTagsOptions()
   }
@@ -848,15 +856,37 @@ export default function App() {
     setApplyingBulkTags(true)
     try {
       const ops: Promise<Response>[] = []
+      const activeTagIds = new Set(tagsOptions.map((tag: any) => tag.id))
       selectedSamples.forEach((sample: any) => {
-        selectedBulkTagIds.forEach((tagId) => {
-          ops.push(
-            apiFetch('/api/sample-tags', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
-            })
-          )
+        const currentTagIds = new Set(
+          (sample.sample_tags || [])
+            .map((st: any) => st?.tag_id || st?.tags?.id)
+            .filter(Boolean)
+        )
+
+        activeTagIds.forEach((tagId) => {
+          const shouldHave = selectedBulkTagIds.has(tagId)
+          const currentlyHas = currentTagIds.has(tagId)
+
+          if (shouldHave && !currentlyHas) {
+            ops.push(
+              apiFetch('/api/sample-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+              })
+            )
+          }
+
+          if (!shouldHave && currentlyHas) {
+            ops.push(
+              apiFetch('/api/sample-tags', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+              })
+            )
+          }
         })
       })
 
@@ -869,7 +899,7 @@ export default function App() {
       await loadSamples(route)
       setShowBulkTagDrawer(false)
       setSelectedBulkTagIds(new Set())
-      alert(`Added tag(s) to ${selectedSamples.length} sample(s)`)
+      alert(`Updated tag assignments for ${selectedSamples.length} sample(s)`)
     } catch (e: any) {
       console.error('Failed to apply tags:', e)
       alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
@@ -2176,11 +2206,11 @@ export default function App() {
               <div className="drawer-overlay" onClick={() => setShowBulkTagDrawer(false)}>
                 <div className="drawer" onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0 }}>Add Tag(s) to Selected Samples</h3>
+                    <h3 style={{ margin: 0 }}>Manage Tag(s) on Selected Samples</h3>
                     <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)}>Close</button>
                   </div>
                   <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-                    {selectedSampleIds.size} sample(s) selected
+                    {selectedSampleIds.size} sample(s) selected. Checked tags will be kept or added; unchecked tags will be removed.
                   </div>
                   <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8, textAlign: 'left' }}>
                     {loadingTagsOptions && <div className="muted">Loading tags...</div>}
@@ -2233,8 +2263,8 @@ export default function App() {
                   </div>
                   <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)} disabled={applyingBulkTags}>Cancel</button>
-                    <button className="btn" onClick={applyTagsToSelectedSamples} disabled={applyingBulkTags || selectedBulkTagIds.size === 0}>
-                      {applyingBulkTags ? 'Applying...' : 'Apply Tags'}
+                    <button className="btn" onClick={applyTagsToSelectedSamples} disabled={applyingBulkTags}>
+                      {applyingBulkTags ? 'Applying...' : 'Save Tag Changes'}
                     </button>
                   </div>
                 </div>

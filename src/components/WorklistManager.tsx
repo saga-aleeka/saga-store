@@ -175,7 +175,13 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   }
 
   const openBulkTagDrawer = async () => {
-    setSelectedBulkTagIds(new Set())
+    const existingTagIds = new Set<string>()
+    selectedRowsWithDbId.forEach((sample) => {
+      ;(sample.tags || []).forEach((tag) => {
+        if (tag?.id) existingTagIds.add(tag.id)
+      })
+    })
+    setSelectedBulkTagIds(existingTagIds)
     setNewTagName('')
     setNewTagColor('#94a3b8')
     setNewTagHighlight(true)
@@ -241,23 +247,37 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
       alert('No selected worklist samples with database IDs')
       return
     }
-    if (selectedBulkTagIds.size === 0) {
-      alert('Select at least one tag')
-      return
-    }
 
     setApplyingBulkTags(true)
     try {
       const ops: Promise<Response>[] = []
+      const activeTagIds = new Set(tagsOptions.map((tag: any) => tag.id))
       selectedRowsWithDbId.forEach((sample) => {
-        selectedBulkTagIds.forEach((tagId) => {
-          ops.push(
-            apiFetch('/api/sample-tags', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
-            })
-          )
+        const currentTagIds = new Set((sample.tags || []).map((tag) => tag.id).filter(Boolean))
+
+        activeTagIds.forEach((tagId) => {
+          const shouldHave = selectedBulkTagIds.has(tagId)
+          const currentlyHas = currentTagIds.has(tagId)
+
+          if (shouldHave && !currentlyHas) {
+            ops.push(
+              apiFetch('/api/sample-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+              })
+            )
+          }
+
+          if (!shouldHave && currentlyHas) {
+            ops.push(
+              apiFetch('/api/sample-tags', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+              })
+            )
+          }
         })
       })
 
@@ -272,15 +292,13 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
 
       setWorklist((prev) => prev.map((row) => {
         if (!selectedSamples.has(row.sample_id)) return row
-        const existing = row.tags || []
-        const mergedMap = new Map(existing.map((t) => [t.id, t]))
-        selectedTags.forEach((tag) => mergedMap.set(tag.id, tag))
-        return { ...row, tags: Array.from(mergedMap.values()) }
+        const preservedInactiveTags = (row.tags || []).filter((tag) => !activeTagIds.has(tag.id))
+        return { ...row, tags: [...preservedInactiveTags, ...selectedTags] }
       }))
 
       setShowBulkTagDrawer(false)
       setSelectedBulkTagIds(new Set())
-      alert(`Added tag(s) to ${selectedRowsWithDbId.length} sample(s)`)
+      alert(`Updated tag assignments for ${selectedRowsWithDbId.length} sample(s)`)
     } catch (e: any) {
       console.error('Failed to apply tags:', e)
       alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
@@ -1281,12 +1299,12 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
             <div className="drawer-overlay" onClick={() => setShowBulkTagDrawer(false)}>
               <div className="drawer" onClick={(e) => e.stopPropagation()} style={{maxWidth: 460}}>
                 <div className="drawer-header">
-                  <h3>Bulk Add Tag(s)</h3>
+                  <h3>Manage Tag(s)</h3>
                   <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)}>Close</button>
                 </div>
                 <div className="drawer-body" style={{display: 'grid', gap: 12}}>
                   <p className="muted" style={{margin: 0}}>
-                    Add selected tags to {selectedRowsWithDbId.length} selected worklist sample(s).
+                    Checked tags will be kept or added; unchecked active tags will be removed from {selectedRowsWithDbId.length} selected worklist sample(s).
                   </p>
                   <div style={{border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, display: 'grid', gap: 8}}>
                     <div style={{fontSize: 13, fontWeight: 600, color: '#374151'}}>Create tag</div>
@@ -1378,9 +1396,9 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
                     <button
                       className="btn"
                       onClick={applyTagsToSelectedSamples}
-                      disabled={applyingBulkTags || selectedBulkTagIds.size === 0 || selectedRowsWithDbId.length === 0}
+                      disabled={applyingBulkTags || selectedRowsWithDbId.length === 0}
                     >
-                      {applyingBulkTags ? 'Applying...' : 'Apply Tags'}
+                      {applyingBulkTags ? 'Applying...' : 'Save Tag Changes'}
                     </button>
                   </div>
                 </div>
