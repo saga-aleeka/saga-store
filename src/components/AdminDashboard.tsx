@@ -3,6 +3,7 @@ import { getApiUrl, apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
 import { AuditLogSkeleton, TableSkeleton } from './LoadingSkeleton'
+import WorklistManager from './WorklistManager'
 
 // Helper to format audit log descriptions with container names and positions
 function formatAuditDescription(audit: any, containerNames: Map<string, string>): string {
@@ -356,7 +357,7 @@ function useFetch<T>(url: string){
 
 export default function AdminDashboard(){
 
-  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'>('import')
+  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'|'worklist'>('import')
 
   // Pagination state for audit logs
   const [auditPage, setAuditPage] = useState(1)
@@ -457,10 +458,20 @@ export default function AdminDashboard(){
       <h2>Admin Dashboard</h2>
       <div style={{display:'flex',gap:8,marginTop:12,marginBottom:12}}>
         <button className={tab==='import'? 'btn':'btn ghost'} onClick={() => setTab('import')}>Mass Import</button>
+        <button className={tab==='worklist'? 'btn':'btn ghost'} onClick={() => setTab('worklist')}>Worklist Manager</button>
         <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
         <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
         <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
       </div>
+
+      {tab === 'worklist' && (
+        <div>
+          <p className="muted" style={{marginBottom: 12}}>
+            Admin tools for bulk editing uploaded worklist samples, including bulk Add Tag(s).
+          </p>
+          <WorklistManager adminMode />
+        </div>
+      )}
 
       {tab === 'import' && (
         <div>

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { supabase } from '../lib/api'
+import { supabase, apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
 
 interface WorklistSample {
+  id?: string
   sample_id: string
   container_id?: string
   container_name?: string
@@ -20,6 +21,10 @@ interface WorklistSample {
   cold_storage_id?: string
   cold_storage_name?: string
   shelf_item_type?: string
+  is_training?: boolean
+  is_archived?: boolean
+  is_rnd?: boolean
+  tags?: Array<{ id: string; name: string; color?: string }>
 }
 
 // Helper function to detect sample type from container name or sample ID
@@ -51,13 +56,19 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   return 'Unknown'
 }
 
-export default function WorklistManager() {
+export default function WorklistManager({ adminMode = false }: { adminMode?: boolean }) {
   const [worklist, setWorklist] = useState<WorklistSample[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [sortState, setSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
+  const [showBulkTagDrawer, setShowBulkTagDrawer] = useState(false)
+  const [tagsOptions, setTagsOptions] = useState<any[]>([])
+  const [loadingTagsOptions, setLoadingTagsOptions] = useState(false)
+  const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<Set<string>>(new Set())
+  const [applyingBulkTags, setApplyingBulkTags] = useState(false)
+  const [bulkUpdating, setBulkUpdating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
@@ -131,7 +142,7 @@ export default function WorklistManager() {
     for (const chunk of idChunks) {
       const { data, error } = await supabase
         .from('samples')
-        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
         .in('sample_id', chunk)
 
       if (error) throw error
@@ -139,6 +150,115 @@ export default function WorklistManager() {
     }
 
     return merged
+  }
+
+  const selectedWorklistRows = worklist.filter((sample) => selectedSamples.has(sample.sample_id))
+  const selectedRowsWithDbId = selectedWorklistRows.filter((sample) => !!sample.id)
+
+  const loadTagsOptions = async () => {
+    setLoadingTagsOptions(true)
+    try {
+      const res = await apiFetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to load tags')
+      const payload = await res.json()
+      setTagsOptions(payload?.data || [])
+    } catch (e) {
+      console.error('Failed to load tags:', e)
+      setTagsOptions([])
+    } finally {
+      setLoadingTagsOptions(false)
+    }
+  }
+
+  const openBulkTagDrawer = async () => {
+    setSelectedBulkTagIds(new Set())
+    setShowBulkTagDrawer(true)
+    await loadTagsOptions()
+  }
+
+  const applyTagsToSelectedSamples = async () => {
+    if (selectedRowsWithDbId.length === 0) {
+      alert('No selected worklist samples with database IDs')
+      return
+    }
+    if (selectedBulkTagIds.size === 0) {
+      alert('Select at least one tag')
+      return
+    }
+
+    setApplyingBulkTags(true)
+    try {
+      const ops: Promise<Response>[] = []
+      selectedRowsWithDbId.forEach((sample) => {
+        selectedBulkTagIds.forEach((tagId) => {
+          ops.push(
+            apiFetch('/api/sample-tags', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
+            })
+          )
+        })
+      })
+
+      const results = await Promise.all(ops)
+      const failed = results.filter((r) => !r.ok)
+      if (failed.length > 0) throw new Error(`${failed.length} tag operation(s) failed`)
+
+      const selectedTagSet = new Set(Array.from(selectedBulkTagIds))
+      const selectedTags = tagsOptions
+        .filter((tag: any) => selectedTagSet.has(tag.id))
+        .map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color }))
+
+      setWorklist((prev) => prev.map((row) => {
+        if (!selectedSamples.has(row.sample_id)) return row
+        const existing = row.tags || []
+        const mergedMap = new Map(existing.map((t) => [t.id, t]))
+        selectedTags.forEach((tag) => mergedMap.set(tag.id, tag))
+        return { ...row, tags: Array.from(mergedMap.values()) }
+      }))
+
+      setShowBulkTagDrawer(false)
+      setSelectedBulkTagIds(new Set())
+      alert(`Added tag(s) to ${selectedRowsWithDbId.length} sample(s)`)
+    } catch (e: any) {
+      console.error('Failed to apply tags:', e)
+      alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
+    } finally {
+      setApplyingBulkTags(false)
+    }
+  }
+
+  const bulkUpdateSelectedSamples = async (updates: Record<string, any>, successLabel: string) => {
+    if (selectedRowsWithDbId.length === 0) {
+      alert('No selected worklist samples with database IDs')
+      return
+    }
+
+    setBulkUpdating(true)
+    try {
+      const ids = selectedRowsWithDbId.map((sample) => sample.id as string)
+      const idChunks = chunkArray(ids, 250)
+      for (const chunk of idChunks) {
+        const { error } = await supabase
+          .from('samples')
+          .update(updates)
+          .in('id', chunk)
+        if (error) throw error
+      }
+
+      setWorklist((prev) => prev.map((row) => {
+        if (!selectedSamples.has(row.sample_id)) return row
+        return { ...row, ...updates }
+      }))
+
+      alert(`${successLabel} for ${selectedRowsWithDbId.length} sample(s)`)
+    } catch (e: any) {
+      console.error('Bulk update failed:', e)
+      alert(`Bulk update failed: ${e?.message || 'Unknown error'}`)
+    } finally {
+      setBulkUpdating(false)
+    }
   }
 
   const fetchShelfItemsByIds = async (sampleIds: string[]) => {
@@ -365,7 +485,14 @@ export default function WorklistManager() {
           shelf_name: shelfDetails?.name,
           cold_storage_id: shelfItem?.cold_storage_id || shelfDetails?.cold_storage_id,
           cold_storage_name: shelfUnit?.name,
-          shelf_item_type: shelfItem?.item_type
+          shelf_item_type: shelfItem?.item_type,
+          is_training: !!sample?.is_training,
+          is_archived: !!sample?.is_archived,
+          is_rnd: !!sample?.is_rnd,
+          tags: (sample?.sample_tags || [])
+            .map((st: any) => st.tags)
+            .filter(Boolean)
+            .map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color }))
         }
       })
 
@@ -494,6 +621,7 @@ export default function WorklistManager() {
         if (updated) {
           return {
             ...item,
+            id: updated.id,
             container_id: updated.container_id,
             container_name: updated.containers?.name,
             container_location: formatContainerLocation(updated.containers),
@@ -501,7 +629,14 @@ export default function WorklistManager() {
             is_checked_out: updated.is_checked_out,
             checked_out_at: updated.checked_out_at,
             previous_container_id: updated.previous_container_id,
-            previous_position: updated.previous_position
+            previous_position: updated.previous_position,
+            is_training: !!updated.is_training,
+            is_archived: !!updated.is_archived,
+            is_rnd: !!updated.is_rnd,
+            tags: (updated.sample_tags || [])
+              .map((st: any) => st.tags)
+              .filter(Boolean)
+              .map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color }))
           }
         }
         return item
@@ -596,6 +731,7 @@ export default function WorklistManager() {
         if (updated) {
           return {
             ...item,
+            id: updated.id,
             container_id: updated.container_id,
             container_name: updated.containers?.name,
             container_location: formatContainerLocation(updated.containers),
@@ -603,7 +739,14 @@ export default function WorklistManager() {
             is_checked_out: updated.is_checked_out,
             checked_out_at: updated.checked_out_at,
             previous_container_id: updated.previous_container_id,
-            previous_position: updated.previous_position
+            previous_position: updated.previous_position,
+            is_training: !!updated.is_training,
+            is_archived: !!updated.is_archived,
+            is_rnd: !!updated.is_rnd,
+            tags: (updated.sample_tags || [])
+              .map((st: any) => st.tags)
+              .filter(Boolean)
+              .map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color }))
           }
         }
         return item
@@ -828,6 +971,53 @@ export default function WorklistManager() {
             </button>
           </div>
 
+          {adminMode && (
+            <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb'}}>
+              <div style={{fontSize: 13, fontWeight: 600, color: '#374151'}}>Admin bulk edit</div>
+              <button
+                className="btn"
+                onClick={openBulkTagDrawer}
+                disabled={loading || applyingBulkTags || bulkUpdating || selectedSamples.size === 0}
+                style={{background: '#2563eb', color: 'white'}}
+              >
+                Add Tag(s)
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => bulkUpdateSelectedSamples({ is_training: true }, 'Marked as training')}
+                disabled={loading || applyingBulkTags || bulkUpdating || selectedSamples.size === 0}
+              >
+                Mark Training
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => bulkUpdateSelectedSamples({ is_training: false }, 'Unmarked training')}
+                disabled={loading || applyingBulkTags || bulkUpdating || selectedSamples.size === 0}
+              >
+                Unmark Training
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => bulkUpdateSelectedSamples({ is_archived: true }, 'Archived')}
+                disabled={loading || applyingBulkTags || bulkUpdating || selectedSamples.size === 0}
+                style={{color: '#991b1b'}}
+              >
+                Archive
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => bulkUpdateSelectedSamples({ is_archived: false }, 'Unarchived')}
+                disabled={loading || applyingBulkTags || bulkUpdating || selectedSamples.size === 0}
+                style={{color: '#166534'}}
+              >
+                Unarchive
+              </button>
+              <div className="muted" style={{fontSize: 12}}>
+                Selected with DB record: {selectedRowsWithDbId.length}
+              </div>
+            </div>
+          )}
+
           <div style={{marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'}}>
             <div className="muted">
               Showing {filteredWorklist.length} of {worklist.length} samples • 
@@ -1026,6 +1216,70 @@ export default function WorklistManager() {
               </tbody>
             </table>
           </div>
+
+          {showBulkTagDrawer && (
+            <div className="drawer-overlay" onClick={() => setShowBulkTagDrawer(false)}>
+              <div className="drawer" onClick={(e) => e.stopPropagation()} style={{maxWidth: 460}}>
+                <div className="drawer-header">
+                  <h3>Bulk Add Tag(s)</h3>
+                  <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)}>Close</button>
+                </div>
+                <div className="drawer-body" style={{display: 'grid', gap: 12}}>
+                  <p className="muted" style={{margin: 0}}>
+                    Add selected tags to {selectedRowsWithDbId.length} selected worklist sample(s).
+                  </p>
+                  {loadingTagsOptions ? (
+                    <div className="muted">Loading tags...</div>
+                  ) : tagsOptions.length === 0 ? (
+                    <div className="muted">No tags available.</div>
+                  ) : (
+                    <div style={{maxHeight: 280, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10}}>
+                      {tagsOptions.map((tag: any) => {
+                        const checked = selectedBulkTagIds.has(tag.id)
+                        return (
+                          <label key={tag.id} style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer'}}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setSelectedBulkTagIds((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(tag.id)) next.delete(tag.id)
+                                  else next.add(tag.id)
+                                  return next
+                                })
+                              }}
+                            />
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                background: tag.color || '#9ca3af',
+                                border: '1px solid rgba(0,0,0,0.15)'
+                              }}
+                            />
+                            <span>{tag.name}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div style={{display: 'flex', justifyContent: 'flex-end', gap: 8}}>
+                    <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)} disabled={applyingBulkTags}>Cancel</button>
+                    <button
+                      className="btn"
+                      onClick={applyTagsToSelectedSamples}
+                      disabled={applyingBulkTags || selectedBulkTagIds.size === 0 || selectedRowsWithDbId.length === 0}
+                    >
+                      {applyingBulkTags ? 'Applying...' : 'Apply Tags'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
         )
       })()}
