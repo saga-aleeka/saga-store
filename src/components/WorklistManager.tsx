@@ -60,6 +60,119 @@ export default function WorklistManager() {
   const [sortState, setSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
+    if (chunkSize <= 0) return [items]
+    const chunks: T[][] = []
+    for (let i = 0; i < items.length; i += chunkSize) {
+      chunks.push(items.slice(i, i + chunkSize))
+    }
+    return chunks
+  }
+
+  const splitDelimitedLine = (line: string, delimiter: string): string[] => {
+    const values: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      const next = line[i + 1]
+
+      if (char === '"') {
+        // Handle escaped double quote: ""
+        if (inQuotes && next === '"') {
+          current += '"'
+          i++
+          continue
+        }
+        inQuotes = !inQuotes
+        continue
+      }
+
+      if (!inQuotes && char === delimiter) {
+        values.push(current.trim())
+        current = ''
+        continue
+      }
+
+      current += char
+    }
+
+    values.push(current.trim())
+    return values
+  }
+
+  const pickDelimiter = (headerLine: string): string => {
+    const delimiters = [',', ';', '\t']
+    let best = ','
+    let bestCount = -1
+
+    for (const delimiter of delimiters) {
+      const count = splitDelimitedLine(headerLine, delimiter).length
+      if (count > bestCount) {
+        bestCount = count
+        best = delimiter
+      }
+    }
+
+    return best
+  }
+
+  const normalizeHeader = (header: string): string =>
+    header.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  const fetchSamplesByIds = async (sampleIds: string[]) => {
+    const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+    if (uniqueIds.length === 0) return []
+
+    const idChunks = chunkArray(uniqueIds, 250)
+    const merged: any[] = []
+
+    for (const chunk of idChunks) {
+      const { data, error } = await supabase
+        .from('samples')
+        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
+        .in('sample_id', chunk)
+
+      if (error) throw error
+      if (data?.length) merged.push(...data)
+    }
+
+    return merged
+  }
+
+  const fetchShelfItemsByIds = async (sampleIds: string[]) => {
+    const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+    if (uniqueIds.length === 0) return []
+
+    const idChunks = chunkArray(uniqueIds, 250)
+    const merged: any[] = []
+
+    for (const chunk of idChunks) {
+      const { data, error } = await supabase
+        .from('cold_storage_items')
+        .select(
+          `id,
+          item_id,
+          item_type,
+          shelf_id,
+          cold_storage_id,
+          cold_storage_shelves: cold_storage_shelves!cold_storage_items_shelf_id_fkey(
+            id,
+            name,
+            cold_storage_id,
+            cold_storage_units: cold_storage_units!cold_storage_shelves_cold_storage_id_fkey(id, name)
+          )`
+        )
+        .in('item_id', chunk)
+
+      if (error) throw error
+      if (data?.length) merged.push(...data)
+    }
+
+    return merged
+  }
+
   // Load worklist from sessionStorage on mount (persists during navigation)
   useEffect(() => {
     const savedWorklist = sessionStorage.getItem('saga_worklist')
@@ -89,32 +202,30 @@ export default function WorklistManager() {
     
     // Parse header to find SampleID, Source_TubeID, and Source_PlateID columns
     const headerLine = lines[0]
-    const headers = headerLine.split(/[,\t]/).map(h => h.trim())
+    const delimiter = pickDelimiter(headerLine)
+    const headers = splitDelimitedLine(headerLine, delimiter)
+    const normalizedHeaders = headers.map(normalizeHeader)
     
     // Find sample ID column - try various common names
-    const sampleIdIndex = headers.findIndex(h => 
-      /^sample.*id$/i.test(h) || 
-      h.toLowerCase() === 'sampleid' ||
-      h.toLowerCase() === 'internal_id' ||
-      h.toLowerCase().replace(/[^a-z0-9]/g, '') === 'internalid' ||
-      h.toLowerCase() === 'barcode' ||
-      h.toLowerCase() === 'specimen'
+    const sampleIdIndex = normalizedHeaders.findIndex(h => 
+      /^sample.*id$/i.test(h) ||
+      h === 'sampleid' ||
+      h === 'internalid' ||
+      h === 'internalno' ||
+      h === 'barcode' ||
+      h === 'specimen'
     )
     
     // Find Source_TubeID column - try various common names
-    const sourceTubeIndex = headers.findIndex(h => 
-      /^source.*tube.*id$/i.test(h) || 
-      h.toLowerCase() === 'source_tubeid' ||
-      h.toLowerCase() === 'sourcetubeid' ||
-      h.toLowerCase().replace(/[\s_]/g, '') === 'sourcetubeid'
+    const sourceTubeIndex = normalizedHeaders.findIndex(h => 
+      /^source.*tube.*id$/i.test(h) ||
+      h === 'sourcetubeid'
     )
 
     // Find Source_PlateID column - try various common names
-    const sourcePlateIndex = headers.findIndex(h =>
+    const sourcePlateIndex = normalizedHeaders.findIndex(h =>
       /^source.*plate.*id$/i.test(h) ||
-      h.toLowerCase() === 'source_plateid' ||
-      h.toLowerCase() === 'sourceplateid' ||
-      h.toLowerCase().replace(/[\s_]/g, '') === 'sourceplateid'
+      h === 'sourceplateid'
     )
     
     if (sampleIdIndex === -1 && sourceTubeIndex === -1 && sourcePlateIndex === -1) {
@@ -129,7 +240,7 @@ export default function WorklistManager() {
       const line = lines[i].trim()
       if (!line) continue
       
-      const parts = line.split(/[,\t]/).map(p => p.trim())
+      const parts = splitDelimitedLine(line, delimiter)
       
       // Try to get value from SampleID column first, then Source_TubeID, then Source_PlateID, then first column
       let sampleId = ''
@@ -195,35 +306,17 @@ export default function WorklistManager() {
       // or use a case-insensitive approach.
       
       // First, try to fetch all samples that match (case-insensitive, including archived)
-      const { data, error } = await supabase
-        .from('samples')
-        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const data = await fetchSamplesByIds(sampleIds)
       
-      if (error) {
-        console.error('Database error:', error)
-        alert(`Database error: ${error.message}\n\nPlease make sure the database migration has been run. See db/migrations/2025-11-13-add-checkout-fields.sql`)
+      if (!data) {
+        alert('Database error: failed to load samples')
         return
       }
 
-      const { data: shelfItemsData, error: shelfItemsError } = await supabase
-        .from('cold_storage_items')
-        .select(
-          `id,
-          item_id,
-          item_type,
-          shelf_id,
-          cold_storage_id,
-          cold_storage_shelves: cold_storage_shelves!cold_storage_items_shelf_id_fkey(
-            id,
-            name,
-            cold_storage_id,
-            cold_storage_units: cold_storage_units!cold_storage_shelves_cold_storage_id_fkey(id, name)
-          )`
-        )
-        .or(sampleIds.map(id => `item_id.ilike.${id}`).join(','))
-
-      if (shelfItemsError) {
+      let shelfItemsData: any[] = []
+      try {
+        shelfItemsData = await fetchShelfItemsByIds(sampleIds)
+      } catch (shelfItemsError) {
         console.warn('Shelf item lookup error:', shelfItemsError)
       }
 
@@ -329,16 +422,20 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get current sample data to save previous positions (case-insensitive)
-      const { data: currentSamples, error: fetchError } = await supabase
-        .from('samples')
-        .select('id, sample_id, container_id, position, is_checked_out')
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
-      
-      if (fetchError) {
-        console.error('Error fetching samples:', fetchError)
-        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
-        return
-      }
+      const currentSamples = await (async () => {
+        const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+        const chunks = chunkArray(uniqueIds, 250)
+        const merged: any[] = []
+        for (const chunk of chunks) {
+          const { data, error } = await supabase
+            .from('samples')
+            .select('id, sample_id, container_id, position, is_checked_out')
+            .in('sample_id', chunk)
+          if (error) throw error
+          if (data?.length) merged.push(...data)
+        }
+        return merged
+      })()
       
       // Filter to samples that can be checked out:
       // - Must not already be checked out, OR
@@ -387,10 +484,7 @@ export default function WorklistManager() {
       }
 
       // Refresh worklist with case-insensitive query
-      const { data: refreshed } = await supabase
-        .from('samples')
-        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const refreshed = await fetchSamplesByIds(sampleIds)
       
       // Update worklist state with case-insensitive matching
       setWorklist(prev => prev.map(item => {
@@ -429,16 +523,20 @@ export default function WorklistManager() {
     setLoading(true)
     try {
       // Get samples with previous position data (case-insensitive)
-      const { data: samples, error: fetchError } = await supabase
-        .from('samples')
-        .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
-      
-      if (fetchError) {
-        console.error('Error fetching samples:', fetchError)
-        alert(`Error: ${fetchError.message}\n\nMake sure the database migration has been run.`)
-        return
-      }
+      const samples = await (async () => {
+        const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+        const chunks = chunkArray(uniqueIds, 250)
+        const merged: any[] = []
+        for (const chunk of chunks) {
+          const { data, error } = await supabase
+            .from('samples')
+            .select('id, sample_id, previous_container_id, previous_position, is_checked_out')
+            .in('sample_id', chunk)
+          if (error) throw error
+          if (data?.length) merged.push(...data)
+        }
+        return merged
+      })()
       
       const checkedOutSamples = samples?.filter((s: any) => s.is_checked_out) || []
       
@@ -489,10 +587,7 @@ export default function WorklistManager() {
       }
 
       // Refresh worklist with case-insensitive query
-      const { data: refreshed } = await supabase
-        .from('samples')
-        .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT})`)
-        .or(sampleIds.map(id => `sample_id.ilike.${id}`).join(','))
+      const refreshed = await fetchSamplesByIds(sampleIds)
       
       setWorklist(prev => prev.map(item => {
         const updated = refreshed?.find(s => 
