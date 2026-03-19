@@ -144,10 +144,13 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
     const merged: any[] = []
 
     for (const chunk of idChunks) {
+      // Build case-insensitive OR query for each sample ID
+      const orConditions = chunk.map(id => `sample_id.ilike.${id}`).join(',')
+      
       const { data, error } = await supabase
         .from('samples')
         .select(`*, containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))`)
-        .in('sample_id', chunk)
+        .or(orConditions)
 
       if (error) throw error
       if (data?.length) merged.push(...data)
@@ -347,6 +350,9 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
     const merged: any[] = []
 
     for (const chunk of idChunks) {
+      // Build case-insensitive OR query for each item ID
+      const orConditions = chunk.map(id => `item_id.ilike.${id}`).join(',')
+      
       const { data, error } = await supabase
         .from('cold_storage_items')
         .select(
@@ -362,7 +368,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
             cold_storage_units: cold_storage_units!cold_storage_shelves_cold_storage_id_fkey(id, name)
           )`
         )
-        .in('item_id', chunk)
+        .or(orConditions)
 
       if (error) throw error
       if (data?.length) merged.push(...data)

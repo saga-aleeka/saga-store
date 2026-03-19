@@ -5,21 +5,14 @@ import ContainerCard from './components/ContainerCard'
 import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
 import ContainerCreateDrawer from './components/ContainerCreateDrawer'
-import RackCreateDrawer from './components/RackCreateDrawer'
 import LoginModal from './components/LoginModal'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
 import SampleHistory from './components/SampleHistory'
-import ColdStorageList from './components/ColdStorageList'
-import ColdStorageDetails from './components/ColdStorageDetails'
-import RackDetails from './components/RackDetails'
-import TagsManager from './components/TagsManager'
-import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
-import { supabase, apiFetch } from './lib/api'
+import { supabase } from './lib/api'
 import { getUser } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
-import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -49,17 +42,6 @@ function readableTextColor(hex: string){
   }catch(e){ return '#ffffff' }
 }
 
-function buildDisplayLocation(container: any, rackMap: Map<string, any>, coldMap: Map<string, any>){
-  const rack = container?.racks || (container?.rack_id ? rackMap.get(container.rack_id) : null)
-  const coldStorage = rack?.cold_storage_units
-    || (container?.cold_storage_id ? coldMap.get(container.cold_storage_id) : null)
-    || (rack?.cold_storage_id ? coldMap.get(rack.cold_storage_id) : null)
-
-  const parts = [coldStorage?.name, rack?.name, container?.rack_position].filter(Boolean)
-  if (parts.length) return parts.join(' / ')
-  return container?.location || ''
-}
-
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
 const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
 const _mode = (import.meta as any).env?.MODE ?? (import.meta as any).MODE ?? 'development'
@@ -87,10 +69,6 @@ export default function App() {
   const [loadingArchived, setLoadingArchived] = useState(false)
   const [samples, setSamples] = useState<any[] | null>(null)
   const [loadingSamples, setLoadingSamples] = useState(false)
-  const [samplesCount, setSamplesCount] = useState<number | null>(null)
-  const [shelfItems, setShelfItems] = useState<any[]>([])
-  const [shelves, setShelves] = useState<any[]>([])
-  const [coldStorageUnits, setColdStorageUnits] = useState<any[]>([])
   // filters
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [availableOnly, setAvailableOnly] = useState(false)
@@ -98,10 +76,6 @@ export default function App() {
   // pagination for samples
   const [samplesPerPage, setSamplesPerPage] = useState(24)
   const [currentPage, setCurrentPage] = useState(1)
-  const [sampleSort, setSampleSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
-    key: 'created_at',
-    direction: 'desc'
-  })
   // pagination for containers
   const [containersPerPage, setContainersPerPage] = useState(24)
   const [containersCurrentPage, setContainersCurrentPage] = useState(1)
@@ -109,97 +83,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
-  const [sampleStatusFilters, setSampleStatusFilters] = useState<string[]>([])
-  const [sampleTagFilters, setSampleTagFilters] = useState<string[]>([])
-  const [sampleFilterMenu, setSampleFilterMenu] = useState<string | null>(null)
-  const [showContainerTagFilter, setShowContainerTagFilter] = useState(false)
-  const [containerTagFilters, setContainerTagFilters] = useState<string[]>([])
   // sample selection for checkout
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
   const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
-  const [showBulkTagDrawer, setShowBulkTagDrawer] = useState(false)
-  const [tagsOptions, setTagsOptions] = useState<any[]>([])
-  const [loadingTagsOptions, setLoadingTagsOptions] = useState(false)
-  const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<Set<string>>(new Set())
-  const [applyingBulkTags, setApplyingBulkTags] = useState(false)
-
-  const loadSamples = React.useCallback(async (activeRoute?: string) => {
-    const routeToUse = activeRoute ?? route
-    setLoadingSamples(true)
-    try{
-      const isArchiveRoute = routeToUse === '#/archive'
-      
-      // Load ALL samples using pagination to bypass 1000 row limit
-      const pageSize = 1000
-      let allSamples: any[] = []
-      let page = 0
-      let hasMore = true
-      
-      console.log('Starting to load all samples...')
-      
-      while (hasMore) {
-        const from = page * pageSize
-        const to = from + pageSize - 1
-        
-        const query = supabase
-          .from('samples')
-          .select(`
-            *, 
-            containers:containers!samples_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
-            previous_containers:containers!samples_previous_container_id_fkey(${CONTAINER_LOCATION_SELECT}),
-            sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))
-          `)
-          .eq('is_archived', isArchiveRoute ? true : false)
-          .order('created_at', { ascending: false })
-
-        const { data, error } = await query.range(from, to)
-        
-        if (error) throw error
-        
-        if (!data || data.length === 0) {
-          hasMore = false
-        } else {
-          allSamples.push(...data)
-          console.log(`Loaded page ${page + 1}: ${data.length} samples (total so far: ${allSamples.length})`)
-          page++
-          
-          // If we got fewer than pageSize, we've reached the end
-          if (data.length < pageSize) {
-            hasMore = false
-          }
-        }
-        
-        // Safety check to prevent infinite loops
-        if (page > 200) { // max 200k samples
-          console.warn('Reached maximum page limit (200 pages)')
-          hasMore = false
-        }
-      }
-      
-      console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
-      setSamples(allSamples)
-      setCurrentPage(1) // Reset to first page when reloading
-    }catch(e){
-      console.warn('failed to load samples', e)
-      setSamples([])
-    }finally{ setLoadingSamples(false) }
-  }, [route])
-
-  useEffect(() => {
-    if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') {
-      loadSamples(route)
-    }
-  }, [route, loadSamples])
-
-  useEffect(() => {
-    const onSamplesUpdated = () => {
-      if (route === '#/samples' || route === '#/archive' || route === '#/rnd/samples') {
-        loadSamples(route)
-      }
-    }
-    window.addEventListener('samples-updated', onSamplesUpdated)
-    return () => window.removeEventListener('samples-updated', onSamplesUpdated)
-  }, [route, loadSamples])
 
   // Reset to page 1 when search changes
   useEffect(() => {
@@ -217,9 +103,9 @@ export default function App() {
     setContainersCurrentPage(1)
   }, [route])
 
-  // Clear sample selection and checkout history when navigating away from samples pages
+  // Clear sample selection and checkout history when navigating away from samples page
   useEffect(() => {
-    if (route !== '#/samples' && route !== '#/rnd/samples') {
+    if (route !== '#/samples') {
       setSelectedSampleIds(new Set())
       setCheckoutHistory([])
     }
@@ -277,7 +163,7 @@ export default function App() {
         
         if (!mounted) return
         if (error) throw error
-        if (samplesCount === null) setSamplesCount(count || 0)
+        if (!samples) setSamples(new Array(count || 0))
       } catch(e) {
         console.warn('failed to load samples count', e)
       }
@@ -288,85 +174,43 @@ export default function App() {
     loadSamplesCount()
     
     return () => { mounted = false }
-  }, [route, containers, archivedContainers, samplesCount])
+  }, [route])
 
   useEffect(() => {
+    // load containers when on containers route
     let mounted = true
-    async function loadShelfItems() {
-      try {
-        const [{ data: itemData }, { data: shelfData }, { data: unitData }] = await Promise.all([
-          supabase
-            .from('cold_storage_items')
-            .select('id, item_id, item_type, lot_id, description, shelf_id, cold_storage_id')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('cold_storage_shelves')
-            .select('id, name, cold_storage_id')
-            .order('name', { ascending: true }),
-          supabase
-            .from('cold_storage_units')
-            .select('id, name')
-            .order('name', { ascending: true })
-        ])
-
+    async function load(){
+      setLoadingContainers(true)
+      try{
+        const { data, error } = await supabase
+          .from('containers')
+          .select('*, samples!samples_container_id_fkey(*)')
+          .eq('archived', false)
+          .order('updated_at', { ascending: false })
+        
         if (!mounted) return
-        setShelfItems(itemData || [])
-        setShelves(shelfData || [])
-        setColdStorageUnits(unitData || [])
-      } catch (e) {
-        console.warn('Failed to load shelf items for search:', e)
-        if (!mounted) return
-        setShelfItems([])
-        setShelves([])
-        setColdStorageUnits([])
-      }
+        if (error) throw error
+        
+        // Count all samples (including archived) for each container
+        const containersWithCounts = (data ?? []).map((c: any) => {
+          const sampleCount = (c.samples || []).length
+          console.log(`Container ${c.name}: ${sampleCount} samples (including archived)`, c.samples)
+          return {
+            ...c,
+            used: sampleCount
+          }
+        })
+        
+        setContainers(containersWithCounts)
+      }catch(e){
+        console.warn('failed to load containers', e)
+        if (mounted) setContainers([])
+      }finally{ if (mounted) setLoadingContainers(false) }
     }
 
-    loadShelfItems()
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  const samplesCountDisplay = samplesCount ?? (samples?.length ?? 0)
-
-  const shelfById = React.useMemo(() => {
-    return shelves.reduce<Record<string, any>>((acc, shelf) => {
-      acc[shelf.id] = shelf
-      return acc
-    }, {})
-  }, [shelves])
-
-  const unitById = React.useMemo(() => {
-    return coldStorageUnits.reduce<Record<string, any>>((acc, unit) => {
-      acc[unit.id] = unit
-      return acc
-    }, {})
-  }, [coldStorageUnits])
-
-  const shelfItemMatches = React.useMemo(() => {
-    if (!searchQuery.trim()) return []
-    const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
-    if (terms.length === 0) return []
-
-    return shelfItems.filter((item) => {
-      const shelf = shelfById[item.shelf_id]
-      const unitId = item.cold_storage_id || shelf?.cold_storage_id
-      const unit = unitById[unitId]
-      const searchText = [
-        item.item_id,
-        item.item_type,
-        item.lot_id,
-        item.description,
-        shelf?.name,
-        unit?.name
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return terms.some((term) => searchText.includes(term))
-    })
-  }, [searchQuery, shelfItems, shelfById, unitById])
+    if (route === '#/containers') load()
+    return () => { mounted = false }
+  }, [route])
 
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
@@ -376,8 +220,6 @@ export default function App() {
       if (selectedTypes && selectedTypes.length){
         if (!selectedTypes.includes(c.type)) return false
       }
-      if (route === '#/rnd' && !c.is_rnd) return false
-      if (route === '#/containers' && c.is_rnd) return false
       // available only
       if (availableOnly){
         const used = Number(c.used || 0)
@@ -395,13 +237,6 @@ export default function App() {
         const hasTrainingSamples = (c.samples || []).some((s: any) => s.is_training && !s.is_archived)
         if (!c.training && !hasTrainingSamples) return false
       }
-      if (containerTagFilters.length > 0) {
-        const selectedTagIds = new Set(containerTagFilters)
-        const hasSelectedTag = (c.samples || []).some((s: any) =>
-          (s.sample_tags || []).some((st: any) => selectedTagIds.has(st?.tag_id || st?.tags?.id))
-        )
-        if (!hasSelectedTag) return false
-      }
       return true
     })
     
@@ -409,8 +244,7 @@ export default function App() {
     if (searchQuery.trim()) {
       const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
       filtered = filtered.filter((c: any) => {
-        const locationText = getContainerLocationSearchText(c)
-        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''} ${locationText || ''}`.toLowerCase()
+        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
         
         // Check if container info matches
         const containerMatches = terms.some(term => containerSearchText.includes(term))
@@ -425,39 +259,29 @@ export default function App() {
     }
     
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, containerTagFilters, searchQuery, route])
+  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
 
   useEffect(() => {
     async function onUpdated(e: any){
       // refresh both lists when a container is updated (might be archived/unarchived)
       try {
-        const [activeRes, archivedRes, racksRes, coldRes] = await Promise.all([
+        const [activeRes, archivedRes] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select('*, samples!samples_container_id_fkey(*)')
             .eq('archived', false)
-            .order('created_at', { ascending: false }),
+            .order('updated_at', { ascending: false }),
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select('*, samples!samples_container_id_fkey(*)')
             .eq('archived', true)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('racks')
-            .select('id, name, cold_storage_id'),
-          supabase
-            .from('cold_storage_units')
-            .select('id, name')
+            .order('updated_at', { ascending: false })
         ])
-
-        const rackMap = new Map((racksRes.data || []).map((r: any) => [r.id, r]))
-        const coldMap = new Map((coldRes.data || []).map((c: any) => [c.id, c]))
         
         if (activeRes.data) {
           const containersWithCounts = activeRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length,
-            display_location: buildDisplayLocation(c, rackMap, coldMap)
+            used: (c.samples || []).length
           }))
           setContainers(containersWithCounts)
         }
@@ -465,8 +289,7 @@ export default function App() {
         if (archivedRes.data) {
           const containersWithCounts = archivedRes.data.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length,
-            display_location: buildDisplayLocation(c, rackMap, coldMap)
+            used: (c.samples || []).length
           }))
           setArchivedContainers(containersWithCounts)
         }
@@ -484,19 +307,11 @@ export default function App() {
     async function load(){
       setLoadingArchived(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
-            .eq('archived', true)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('racks')
-            .select('id, name, cold_storage_id'),
-          supabase
-            .from('cold_storage_units')
-            .select('id, name')
-        ])
+        const { data, error } = await supabase
+          .from('containers')
+          .select('*, samples!samples_container_id_fkey(*)')
+          .eq('archived', true)
+          .order('updated_at', { ascending: false })
         
         if (!mounted) return
         if (error) {
@@ -507,13 +322,9 @@ export default function App() {
         console.log('Loaded archived containers:', data)
         
         // Count all samples (including archived) for each container
-        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
-        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
-
         const containersWithCounts = (data ?? []).map((c: any) => ({
           ...c,
-          used: (c.samples || []).length,
-          display_location: buildDisplayLocation(c, rackMap, coldMap)
+          used: (c.samples || []).length
         }))
         
         setArchivedContainers(containersWithCounts)
@@ -528,79 +339,71 @@ export default function App() {
   }, [route])
 
   useEffect(() => {
-    // load active containers when on containers or R&D route
+    // load samples when on samples route or archive route
     let mounted = true
-    async function load(){
-      setLoadingContainers(true)
+    async function loadSamples(){
+      setLoadingSamples(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
-            .eq('archived', false)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('racks')
-            .select('id, name, cold_storage_id'),
-          supabase
-            .from('cold_storage_units')
-            .select('id, name')
-        ])
-
-        if (!mounted) return
-        if (error) {
-          console.error('Failed to load containers:', error)
-          throw error
+        const isArchiveRoute = route === '#/archive'
+        
+        // Load ALL samples using pagination to bypass 1000 row limit
+        const pageSize = 1000
+        let allSamples: any[] = []
+        let page = 0
+        let hasMore = true
+        
+        console.log('Starting to load all samples...')
+        
+        while (hasMore) {
+          const from = page * pageSize
+          const to = from + pageSize - 1
+          
+          const { data, error } = await supabase
+            .from('samples')
+            .select(`
+              *, 
+              containers!samples_container_id_fkey(id, name, location, type),
+              previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
+            `)
+            .eq('is_archived', isArchiveRoute ? true : false)
+            .order('created_at', { ascending: false })
+            .range(from, to)
+          
+          if (error) throw error
+          
+          if (!data || data.length === 0) {
+            hasMore = false
+          } else {
+            allSamples.push(...data)
+            console.log(`Loaded page ${page + 1}: ${data.length} samples (total so far: ${allSamples.length})`)
+            page++
+            
+            // If we got fewer than pageSize, we've reached the end
+            if (data.length < pageSize) {
+              hasMore = false
+            }
+          }
+          
+          // Safety check to prevent infinite loops
+          if (page > 200) { // max 200k samples
+            console.warn('Reached maximum page limit (200 pages)')
+            hasMore = false
+          }
         }
-
-        const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
-        const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
-
-        const containersWithCounts = (data ?? []).map((c: any) => ({
-          ...c,
-          used: (c.samples || []).length,
-          display_location: buildDisplayLocation(c, rackMap, coldMap)
-        }))
-
-        setContainers(containersWithCounts)
+        
+        if (!mounted) return
+        console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
+        setSamples(allSamples)
+        setCurrentPage(1) // Reset to first page when reloading
       }catch(e){
-        console.warn('failed to load containers', e)
-        if (mounted) setContainers([])
-      }finally{ if (mounted) setLoadingContainers(false) }
+        console.warn('failed to load samples', e)
+        if (mounted) setSamples([])
+      }finally{ if (mounted) setLoadingSamples(false) }
     }
 
-    if (route === '#/containers' || route === '#/rnd') load()
+    if (route === '#/samples' || route === '#/archive') loadSamples()
     return () => { mounted = false }
   }, [route])
-
-  const samplesForTypeFilters = React.useMemo(() => {
-    if (!samples) return []
-    if (route === '#/rnd/samples') {
-      return samples.filter((s: any) => {
-        if (!s) return false
-        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-        return !!containerData?.is_rnd
-      })
-    }
-    return samples
-  }, [samples, route])
-
-  const availableSampleTypes = React.useMemo(() => {
-    const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
-    const allTypesInSamples = samplesForTypeFilters.length
-      ? Array.from(
-          new Set(
-            samplesForTypeFilters.map((s: any) =>
-              s.is_checked_out && s.previous_containers?.type
-                ? s.previous_containers.type
-                : (s.containers?.type || 'Sample Type')
-            )
-          )
-        ).filter((type) => type !== 'Sample Type')
-      : []
-
-    return typeOrder.filter((type) => allTypesInSamples.includes(type))
-  }, [samplesForTypeFilters])
 
   // Apply search filter and type filter to samples
   const filteredSamples = React.useMemo(() => {
@@ -608,7 +411,7 @@ export default function App() {
     
     console.log(`Total samples loaded: ${samples.length}`)
     
-    let filtered = samples.filter((s: any) => !!s)
+    let filtered = samples
     
     // Apply type filter
     if (sampleTypeFilters.length > 0) {
@@ -621,20 +424,6 @@ export default function App() {
       })
       console.log(`After type filter (${sampleTypeFilters.join(', ')}): ${filtered.length} samples`)
     }
-
-    if (sampleStatusFilters.length > 0) {
-      filtered = filtered.filter((s: any) => {
-        const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
-        return sampleStatusFilters.includes(status)
-      })
-    }
-
-    if (sampleTagFilters.length > 0) {
-      const selectedTagIds = new Set(sampleTagFilters)
-      filtered = filtered.filter((s: any) =>
-        (s.sample_tags || []).some((st: any) => selectedTagIds.has(st?.tag_id || st?.tags?.id))
-      )
-    }
     
     // Apply search filter
     if (searchQuery.trim()) {
@@ -644,265 +433,19 @@ export default function App() {
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
         // Include both current and previous container info for checked out samples
-        const containerData = s.containers || s.previous_containers
-        const containerName = containerData?.name || ''
-        const containerLocation = getContainerLocationSearchText(containerData) || containerData?.location || ''
-        const containerType = containerData?.type || ''
-        const tagText = (s.sample_tags || [])
-          .map((t: any) => t.tags?.name)
-          .filter(Boolean)
-          .join(' ')
-        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText} ${tagText}`.toLowerCase()
+        const containerName = s.containers?.name || s.previous_containers?.name || ''
+        const containerLocation = s.containers?.location || s.previous_containers?.location || ''
+        const containerType = s.containers?.type || s.previous_containers?.type || ''
+        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
         const matches = terms.some(term => searchText.includes(term))
         return matches
       })
       console.log(`After search filter: ${filtered.length} samples`)
     }
     
-    if (route === '#/rnd/samples') {
-      filtered = filtered.filter((s: any) => {
-        if (!s) return false
-        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-        return !!containerData?.is_rnd
-      })
-    }
-
-    if (sampleSort.key) {
-      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-      const direction = sampleSort.direction === 'asc' ? 1 : -1
-      const compareText = (a: string, b: string) => collator.compare(a || '', b || '') * direction
-      const keyCache = new WeakMap<any, {
-        sampleId: string
-        type: string
-        inv: string
-        rack: string
-        container: string
-        position: string
-        status: string
-        tags: string
-      }>()
-
-      filtered.forEach((s: any, index: number) => {
-        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-        const sampleId = s.sample_id || ''
-        const type = containerData?.type || 'Sample Type'
-        const inv = containerData?.racks?.cold_storage_units?.name || containerData?.cold_storage_units?.name || ''
-        const rack = containerData?.racks?.name || ''
-        const container = containerData?.name || s.container_id || ''
-        const position = s.position || ''
-        const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
-        const tags = (s.sample_tags || [])
-          .map((t: any) => t.tags?.name)
-          .filter(Boolean)
-          .join(', ')
-        keyCache.set(s, {
-          sampleId,
-          type,
-          inv,
-          rack,
-          container,
-          position,
-          status,
-          tags
-        })
-      })
-
-      filtered = [...filtered].sort((a: any, b: any) => {
-        const aKey = keyCache.get(a)
-        const bKey = keyCache.get(b)
-        if (!aKey || !bKey) return 0
-
-        if (sampleSort.key === 'sample_id') {
-          return compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'type') {
-          const typeCompare = compareText(aKey.type, bKey.type)
-          return typeCompare !== 0 ? typeCompare : compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'storage_path') {
-          const invCompare = compareText(aKey.inv, bKey.inv)
-          if (invCompare !== 0) return invCompare
-
-          const rackCompare = compareText(aKey.rack, bKey.rack)
-          if (rackCompare !== 0) return rackCompare
-
-          const posCompare = compareText(aKey.position, bKey.position)
-          if (posCompare !== 0) return posCompare
-
-          return compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'container') {
-          const nameCompare = compareText(aKey.container, bKey.container)
-          return nameCompare !== 0 ? nameCompare : compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'position') {
-          const posCompare = compareText(aKey.position, bKey.position)
-          return posCompare !== 0 ? posCompare : compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'status') {
-          const statusCompare = compareText(aKey.status, bKey.status)
-          return statusCompare !== 0 ? statusCompare : compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        if (sampleSort.key === 'tags') {
-          const tagsCompare = compareText(aKey.tags, bKey.tags)
-          return tagsCompare !== 0 ? tagsCompare : compareText(aKey.sampleId, bKey.sampleId)
-        }
-
-        return compareText(aKey.sampleId, bKey.sampleId)
-      })
-    }
-
     console.log(`Final filtered count: ${filtered.length}`)
     return filtered
-  }, [samples, searchQuery, sampleTypeFilters, sampleStatusFilters, sampleTagFilters, sampleSort.key, sampleSort.direction])
-
-  const downloadSamplesCsv = (rows: any[], filename: string) => {
-    if (!rows.length) {
-      alert('No samples to export')
-      return
-    }
-
-    const escapeCsv = (value: any) => {
-      const str = String(value ?? '')
-      if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`
-      return str
-    }
-
-    const header = ['Sample ID', 'Type', 'Storage Path', 'Container', 'Position', 'Status', 'Tags']
-    const lines = [header.join(',')]
-
-    rows.forEach((s: any) => {
-      const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-      const containerName = containerData?.name || s.container_id || '-'
-      const containerLocation = formatContainerLocation(containerData) || containerData?.location || '-'
-      const containerType = s.is_checked_out && s.previous_containers?.type
-        ? s.previous_containers.type
-        : (s.containers?.type || 'Sample Type')
-      const status = s.is_checked_out ? 'Checked Out' : 'In Storage'
-      const tags = (s.sample_tags || [])
-        .map((t: any) => t.tags?.name)
-        .filter(Boolean)
-        .join('; ')
-
-      lines.push([
-        escapeCsv(s.sample_id || ''),
-        escapeCsv(containerType),
-        escapeCsv(containerLocation),
-        escapeCsv(containerName),
-        escapeCsv(s.position || ''),
-        escapeCsv(status),
-        escapeCsv(tags)
-      ].join(','))
-    })
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
-
-  const loadTagsOptions = async () => {
-    setLoadingTagsOptions(true)
-    try {
-      const res = await apiFetch('/api/tags')
-      if (!res.ok) throw new Error('Failed to load tags')
-      const payload = await res.json()
-      const next = payload?.data || []
-      setTagsOptions(next)
-    } catch (e) {
-      console.error('Failed to load tags:', e)
-      setTagsOptions([])
-    } finally {
-      setLoadingTagsOptions(false)
-    }
-  }
-
-  const openBulkTagDrawer = async () => {
-    const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
-    const existingTagIds = new Set<string>()
-    selectedSamples.forEach((sample: any) => {
-      ;(sample.sample_tags || []).forEach((st: any) => {
-        const tagId = st?.tag_id || st?.tags?.id
-        if (tagId) existingTagIds.add(tagId)
-      })
-    })
-    setSelectedBulkTagIds(existingTagIds)
-    setShowBulkTagDrawer(true)
-    await loadTagsOptions()
-  }
-
-  const applyTagsToSelectedSamples = async () => {
-    const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
-    if (selectedSamples.length === 0) {
-      alert('No samples selected')
-      return
-    }
-
-    setApplyingBulkTags(true)
-    try {
-      const ops: Promise<Response>[] = []
-      const activeTagIds = new Set(tagsOptions.map((tag: any) => tag.id))
-      selectedSamples.forEach((sample: any) => {
-        const currentTagIds = new Set(
-          (sample.sample_tags || [])
-            .map((st: any) => st?.tag_id || st?.tags?.id)
-            .filter(Boolean)
-        )
-
-        activeTagIds.forEach((tagId) => {
-          const shouldHave = selectedBulkTagIds.has(tagId)
-          const currentlyHas = currentTagIds.has(tagId)
-
-          if (shouldHave && !currentlyHas) {
-            ops.push(
-              apiFetch('/api/sample-tags', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
-              })
-            )
-          }
-
-          if (!shouldHave && currentlyHas) {
-            ops.push(
-              apiFetch('/api/sample-tags', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sample_id: sample.id, tag_id: tagId })
-              })
-            )
-          }
-        })
-      })
-
-      const results = await Promise.all(ops)
-      const failed = results.filter((r) => !r.ok)
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} tag operation(s) failed`)
-      }
-
-      await loadSamples(route)
-      setShowBulkTagDrawer(false)
-      setSelectedBulkTagIds(new Set())
-      alert(`Updated tag assignments for ${selectedSamples.length} sample(s)`)
-    } catch (e: any) {
-      console.error('Failed to apply tags:', e)
-      alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
-    } finally {
-      setApplyingBulkTags(false)
-    }
-  }
+  }, [samples, searchQuery, sampleTypeFilters])
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -918,7 +461,7 @@ export default function App() {
 
     return (
       <div className="app">
-        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <WorklistContainerView 
             containerId={id} 
@@ -936,39 +479,9 @@ export default function App() {
     const sampleId = decodeURIComponent(parts[2])
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <SampleHistory sampleId={sampleId} onBack={() => { window.location.hash = '#/samples' }} />
-        </div>
-      </div>
-    )
-  }
-
-  // cold storage detail route: #/cold-storage/:id
-  if (route.startsWith('#/cold-storage/') && route.split('/').length >= 3) {
-    const parts = route.split('/')
-    const idWithQuery = decodeURIComponent(parts[2])
-    const id = idWithQuery.split('?')[0]
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{marginTop:18}}>
-          <ColdStorageDetails id={id} />
-        </div>
-      </div>
-    )
-  }
-
-  // rack detail route: #/racks/:id
-  if (route.startsWith('#/racks/') && route.split('/').length >= 3) {
-    const parts = route.split('/')
-    const idWithQuery = decodeURIComponent(parts[2])
-    const id = idWithQuery.split('?')[0]
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{marginTop:18}}>
-          <RackDetails id={id} />
         </div>
       </div>
     )
@@ -981,31 +494,9 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
-        </div>
-      </div>
-    )
-  }
-
-  if (route === '#/cold-storage') {
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{marginTop:18}}>
-          <ColdStorageList />
-        </div>
-      </div>
-    )
-  }
-
-  if (route === '#/tags') {
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{marginTop:18}}>
-          <TagsManager />
         </div>
       </div>
     )
@@ -1014,7 +505,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>
@@ -1022,263 +513,57 @@ export default function App() {
     )
   }
 
-  if (route === '#/new-storage') {
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{ marginTop: 18 }}>
-          <ContainerCreateDrawer
-            onClose={() => { window.location.hash = '#/cold-storage' }}
-            initialMode="storage"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (route === '#/new-rack') {
-    return (
-      <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div style={{ marginTop: 18 }}>
-          <RackCreateDrawer onClose={() => { window.location.hash = '#/cold-storage' }} />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {!user && (
         <LoginModal onSuccess={(u:any) => setUser(u)} />
       )}
 
       <div style={{marginTop:18}}>
-        {(route === '#/containers' || route === '#/rnd') && (
+        {route === '#/containers' && (
           <>
-            {route === '#/rnd' && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                <button
-                  className="btn"
-                  style={{ background: '#3b82f6', color: 'white', fontSize: 13 }}
-                  onClick={() => { window.location.hash = '#/rnd' }}
-                >
-                  R&amp;D Containers
-                </button>
-                <button
-                  className="btn ghost"
-                  style={{ fontSize: 13 }}
-                  onClick={() => { window.location.hash = '#/rnd/samples' }}
-                >
-                  R&amp;D Samples
-                </button>
-              </div>
-            )}
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
               <div className="muted">
                 Showing {filteredContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, filteredContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, filteredContainers.length)} of ${filteredContainers.length}` : '...'} active containers
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-                <button className="btn" onClick={() => { window.location.hash = '#/new' }}>
-                  New Container
-                </button>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                <select
-                  value={containersPerPage}
-                  onChange={(e) => {
-                    const nextSize = parseInt(e.target.value, 10)
-                    setContainersPerPage(nextSize)
-                    setContainersCurrentPage(1)
-                  }}
-                  style={{
-                    padding: '4px 10px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    background: 'white'
-                  }}
-                >
-                  {[24, 48, 96].map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
+                {[24, 48, 96].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setContainersPerPage(size)
+                      setContainersCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: containersPerPage === size ? '#3b82f6' : 'white',
+                      color: containersPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: containersPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
             </div>
             {/* Filters */}
-            <div style={{marginTop:8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10}}>
-              <div style={{flex: 1}}>
-                <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
-              </div>
-              <div style={{ position: 'relative' }}>
-                <button
-                  className="btn ghost"
-                  onClick={async () => {
-                    if (tagsOptions.length === 0) await loadTagsOptions()
-                    setShowContainerTagFilter((prev) => !prev)
-                  }}
-                  title="Filter containers by tags"
-                  style={{
-                    width: 34,
-                    height: 34,
-                    minWidth: 34,
-                    padding: 0,
-                    border: containerTagFilters.length > 0 ? '1px solid #3b82f6' : '1px solid #d1d5db',
-                    background: containerTagFilters.length > 0 ? '#eff6ff' : '#fff',
-                    color: containerTagFilters.length > 0 ? '#1d4ed8' : '#6b7280',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M3 5H21L14 13V20L10 18V13L3 5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {showContainerTagFilter && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 38,
-                      zIndex: 30,
-                      background: '#fff',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 8,
-                      padding: 8,
-                      minWidth: 240,
-                      maxHeight: 300,
-                      overflowY: 'auto',
-                      boxShadow: '0 10px 24px rgba(15,23,42,0.12)'
-                    }}
-                  >
-                    {tagsOptions.length === 0 && <div className="muted">No tags available</div>}
-                    {tagsOptions.map((tag: any) => {
-                      const checked = containerTagFilters.includes(tag.id)
-                      return (
-                        <label key={tag.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <input
-                            type="checkbox"
-                            className="toggle-input"
-                            checked={checked}
-                            onChange={() => {
-                              setContainerTagFilters((prev) =>
-                                prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
-                              )
-                              setContainersCurrentPage(1)
-                            }}
-                          />
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: 999, background: tag.color || '#94a3b8', display: 'inline-block' }} />
-                            <span>{tag.name}</span>
-                          </span>
-                        </label>
-                      )
-                    })}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                      <button className="btn ghost" onClick={() => { setContainerTagFilters([]); setContainersCurrentPage(1) }}>Clear</button>
-                      <button className="btn ghost" onClick={() => setShowContainerTagFilter(false)}>Done</button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div style={{marginTop:8}}>
+              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
             </div>
-            {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 12
-              }}>
-                <button
-                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={containersCurrentPage === 1}
-                  style={{
-                    padding: '6px 12px',
-                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
-                    fontSize: 13,
-                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
-                  }}
-                >
-                  Previous
-                </button>
-                <span className="muted" style={{fontSize: 13}}>
-                  Page {containersCurrentPage} of {Math.ceil(filteredContainers.length / containersPerPage)}
-                </span>
-                <button
-                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(filteredContainers.length / containersPerPage), p + 1))}
-                  disabled={containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage)}
-                  style={{
-                    padding: '6px 12px',
-                    background: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    cursor: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
-                    fontSize: 13,
-                    color: containersCurrentPage >= Math.ceil(filteredContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            )}
             <div className="container-list">
-              {loadingContainers && [...Array(6)].map((_, i) => (
-                <ContainerCardSkeleton key={`container-skeleton-${i}`} />
-              ))}
+              {loadingContainers && <div className="muted">Loading containers...</div>}
               {!loadingContainers && filteredContainers && filteredContainers.length === 0 && <div className="muted">No active containers</div>}
               {!loadingContainers && filteredContainers && filteredContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
-                <ContainerCard
-                  key={c.id}
-                  id={c.id}
-                  name={c.name}
-                  type={c.type}
-                  temperature={c.temperature}
-                  layout={c.layout}
-                  occupancy={{used:c.used,total:c.total}}
-                  updatedAt={c.updated_at}
-                  location={c.display_location || c.location}
-                  training={c.training}
-                  is_rnd={c.is_rnd}
-                  cold_storage_id={c.cold_storage_id}
-                  rack_id={c.rack_id}
-                  rack_position={c.rack_position}
-                  returnTo={route === '#/rnd' ? 'rnd' : undefined}
-                />
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} />
               ))}
             </div>
-            {searchQuery.trim() && shelfItemMatches.length > 0 && (
-              <div style={{ marginTop: 16, border: '1px solid #e5e7eb', borderRadius: 8, background: 'white' }}>
-                <div style={{ padding: 12, borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Shelf items matching search</div>
-                <div style={{ padding: 12, display: 'grid', gap: 8 }}>
-                  {shelfItemMatches.map((item) => {
-                    const shelf = shelfById[item.shelf_id]
-                    const unitId = item.cold_storage_id || shelf?.cold_storage_id
-                    const unit = unitById[unitId]
-                    return (
-                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{item.item_id}</div>
-                          <div className="muted" style={{ fontSize: 12 }}>
-                            {(item.item_type || 'item').toUpperCase()} • {unit?.name || 'Unknown unit'} {shelf?.name ? `• ${shelf.name}` : ''}
-                          </div>
-                        </div>
-                        {unitId && (
-                          <button className="btn ghost" onClick={() => { window.location.hash = `#/cold-storage/${unitId}` }}>
-                            View shelf
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             {!loadingContainers && filteredContainers && filteredContainers.length > containersPerPage && (
               <div style={{
                 display: 'flex',
@@ -1333,93 +618,34 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                <select
-                  value={containersPerPage}
-                  onChange={(e) => {
-                    const nextSize = parseInt(e.target.value, 10)
-                    setContainersPerPage(nextSize)
-                    setContainersCurrentPage(1)
-                  }}
-                  style={{
-                    padding: '4px 10px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    background: 'white'
-                  }}
-                >
-                  {[24, 48, 96].map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
+                {[24, 48, 96].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setContainersPerPage(size)
+                      setContainersCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: containersPerPage === size ? '#3b82f6' : 'white',
+                      color: containersPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: containersPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
             </div>
-            {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 12
-              }}>
-                <button
-                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={containersCurrentPage === 1}
-                  style={{
-                    padding: '6px 12px',
-                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
-                    fontSize: 13,
-                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
-                  }}
-                >
-                  Previous
-                </button>
-                <span className="muted" style={{fontSize: 13}}>
-                  Page {containersCurrentPage} of {Math.ceil(archivedContainers.length / containersPerPage)}
-                </span>
-                <button
-                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(archivedContainers.length / containersPerPage), p + 1))}
-                  disabled={containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage)}
-                  style={{
-                    padding: '6px 12px',
-                    background: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    cursor: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
-                    fontSize: 13,
-                    color: containersCurrentPage >= Math.ceil(archivedContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            )}
             <div className="container-list">
-              {loadingArchived && [...Array(6)].map((_, i) => (
-                <ContainerCardSkeleton key={`archived-skeleton-${i}`} />
-              ))}
+              {loadingArchived && <div className="muted">Loading archived containers...</div>}
               {!loadingArchived && archivedContainers && archivedContainers.length === 0 && <div className="muted">No archived containers</div>}
               {!loadingArchived && archivedContainers && archivedContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map((c:any) => (
-                <ContainerCard
-                  key={c.id}
-                  id={c.id}
-                  name={c.name}
-                  type={c.type}
-                  temperature={c.temperature}
-                  layout={c.layout}
-                  occupancy={{used:c.used,total:c.total}}
-                  updatedAt={c.updated_at}
-                  location={c.display_location || c.location}
-                  training={c.training}
-                  archived={c.archived}
-                  is_rnd={c.is_rnd}
-                  cold_storage_id={c.cold_storage_id}
-                  rack_id={c.rack_id}
-                  rack_position={c.rack_position}
-                />
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} archived={c.archived} />
               ))}
             </div>
             {!loadingArchived && archivedContainers && archivedContainers.length > containersPerPage && (
@@ -1481,7 +707,7 @@ export default function App() {
                     }
                     
                     const containerName = s.containers?.name || s.container_id
-                    const containerLocation = formatContainerLocation(s.containers) || s.containers?.location || 'Location unknown'
+                    const containerLocation = s.containers?.location || 'Location unknown'
                     
                     return (
                       <div key={s.id} className="sample-row" style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -1511,7 +737,6 @@ export default function App() {
                             {s.data?.collected_at && (
                               <div className="muted" style={{marginTop:4}}>Collected: {formatDate(s.data.collected_at)}</div>
                             )}
-                            <div className="muted" style={{marginTop:4}}>Storage Path: {containerLocation}</div>
                           </div>
                         </div>
                         <div className="muted" style={{fontSize:13}}>Archived {formatDateTime(s.updated_at)}</div>
@@ -1524,53 +749,8 @@ export default function App() {
           </>
         )}
 
-        {(route === '#/samples' || route === '#/rnd/samples') && (
+        {route === '#/samples' && (
           <div>
-            {route === '#/rnd/samples' && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                <button
-                  className="btn ghost"
-                  style={{ fontSize: 13 }}
-                  onClick={() => { window.location.hash = '#/rnd' }}
-                >
-                  R&amp;D Containers
-                </button>
-                <button
-                  className="btn"
-                  style={{ background: '#3b82f6', color: 'white', fontSize: 13 }}
-                  onClick={() => { window.location.hash = '#/rnd/samples' }}
-                >
-                  R&amp;D Samples
-                </button>
-              </div>
-            )}
-            {searchQuery.trim() && shelfItemMatches.length > 0 && (
-              <div style={{ marginBottom: 16, border: '1px solid #e5e7eb', borderRadius: 8, background: 'white' }}>
-                <div style={{ padding: 12, borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Shelf items matching search</div>
-                <div style={{ padding: 12, display: 'grid', gap: 8 }}>
-                  {shelfItemMatches.map((item) => {
-                    const shelf = shelfById[item.shelf_id]
-                    const unitId = item.cold_storage_id || shelf?.cold_storage_id
-                    const unit = unitById[unitId]
-                    return (
-                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{item.item_id}</div>
-                          <div className="muted" style={{ fontSize: 12 }}>
-                            {(item.item_type || 'item').toUpperCase()} • {unit?.name || 'Unknown unit'} {shelf?.name ? `• ${shelf.name}` : ''}
-                          </div>
-                        </div>
-                        {unitId && (
-                          <button className="btn ghost" onClick={() => { window.location.hash = `#/cold-storage/${unitId}` }}>
-                            View shelf
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             {/* Action buttons */}
             {filteredSamples && filteredSamples.length > 0 && (
               <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
@@ -1579,7 +759,7 @@ export default function App() {
                   onClick={() => {
                     const pageIds = filteredSamples
                       .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
-                      .filter((s: any) => s.id)
+                      .filter((s: any) => s.id && !s.is_checked_out && s.container_id)
                       .map((s: any) => s.id)
                     setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
                   }}
@@ -1597,152 +777,140 @@ export default function App() {
                   Deselect All
                 </button>
                 <div style={{flex: 1}} />
-                {selectedSampleIds.size > 0 && (
-                  <>
-                    <button 
-                      className="btn"
-                      onClick={async () => {
-                        const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
-                        if (selectedSamples.length === 0) {
-                          alert('No samples selected')
-                          return
-                        }
-                        
-                        const user = getUser()
-                        if (!user) {
-                          alert('You must be signed in to checkout samples')
-                          return
-                        }
-                        
-                        setLoadingSamples(true)
-                        try {
-                          const history: Array<{sample_id: string, container_id: string, position: string}> = []
-                          
-                          for (const sample of selectedSamples) {
-                            if (sample.is_checked_out || !sample.container_id) continue
-                            
-                            history.push({
-                              sample_id: sample.sample_id,
-                              container_id: sample.container_id,
-                              position: sample.position
-                            })
-                            
-                            const { error } = await supabase
-                              .from('samples')
-                              .update({
-                                is_checked_out: true,
-                                checked_out_at: new Date().toISOString(),
-                                checked_out_by: user.initials,
-                                previous_container_id: sample.container_id,
-                                previous_position: sample.position,
-                                container_id: null,
-                                position: null
-                              })
-                              .eq('id', sample.id)
-                            
-                            if (error) {
-                              console.error('Checkout error:', error)
-                              alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
-                              return
-                            }
-                          }
-
-                          if (history.length === 0) {
-                            alert('No selected samples can be checked out')
-                            return
-                          }
-                          
-                          setCheckoutHistory([...checkoutHistory, ...history])
-                          setSelectedSampleIds(new Set())
-                          await loadSamples(route)
-                          
-                          alert(`Checked out ${history.length} sample(s)`)
-                        } catch (err: any) {
-                          console.error('Checkout error:', err)
-                          alert(`Failed to checkout samples: ${err.message}`)
-                        } finally {
-                          setLoadingSamples(false)
-                        }
-                      }}
-                      disabled={loadingSamples}
-                      style={{background: '#10b981', color: 'white', fontSize: 13}}
-                    >
-                      Checkout Selected ({selectedSampleIds.size})
-                    </button>
-                    <button 
-                      className="btn"
-                      onClick={async () => {
-                        const selectedSamples = (samples || []).filter((s: any) => selectedSampleIds.has(s.id))
-                        const undoCandidates = selectedSamples.filter((s: any) => s.is_checked_out && s.previous_container_id)
-                        if (undoCandidates.length === 0) {
-                          alert('No selected checked-out samples can be restored')
-                          return
-                        }
-                        
-                        setLoadingSamples(true)
-                        try {
-                          for (const sample of undoCandidates) {
-                            const { error } = await supabase
-                              .from('samples')
-                              .update({
-                                container_id: sample.previous_container_id,
-                                position: sample.previous_position,
-                                is_checked_out: false,
-                                checked_out_at: null,
-                                checked_out_by: null,
-                                previous_container_id: null,
-                                previous_position: null
-                              })
-                              .eq('id', sample.id)
-                            
-                            if (error) {
-                              console.error('Undo checkout error:', error)
-                              alert(`Failed to undo checkout for ${sample.sample_id}: ${error.message}`)
-                              return
-                            }
-                          }
-
-                          setSelectedSampleIds(new Set())
-                          setCheckoutHistory([])
-                          await loadSamples(route)
-                          
-                          alert(`Undo checkout completed for ${undoCandidates.length} sample(s)`)
-                        } catch (err: any) {
-                          console.error('Undo checkout error:', err)
-                          alert(`Failed to undo checkout: ${err.message}`)
-                        } finally {
-                          setLoadingSamples(false)
-                        }
-                      }}
-                      disabled={loadingSamples}
-                      style={{background: '#f59e0b', color: 'white', fontSize: 13}}
-                    >
-                      Undo Checkout ({selectedSampleIds.size})
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={openBulkTagDrawer}
-                      disabled={loadingSamples}
-                      style={{background: '#2563eb', color: 'white', fontSize: 13}}
-                    >
-                      Add Tag(s)
-                    </button>
-                  </>
-                )}
-                <button
-                  className="btn ghost"
-                  onClick={() => {
-                    const selected = filteredSamples.filter((s: any) => selectedSampleIds.has(s.id))
-                    if (selected.length > 0) {
-                      downloadSamplesCsv(selected, 'samples-selected.csv')
+                <button 
+                  className="btn"
+                  onClick={async () => {
+                    const selectedSamples = filteredSamples.filter((s: any) => selectedSampleIds.has(s.id))
+                    if (selectedSamples.length === 0) {
+                      alert('No samples selected')
                       return
                     }
-                    downloadSamplesCsv(filteredSamples, 'samples-filtered.csv')
+                    
+                    const user = getUser()
+                    if (!user) {
+                      alert('You must be signed in to checkout samples')
+                      return
+                    }
+                    
+                    setLoadingSamples(true)
+                    try {
+                      const history: Array<{sample_id: string, container_id: string, position: string}> = []
+                      
+                      for (const sample of selectedSamples) {
+                        if (sample.is_checked_out || !sample.container_id) continue
+                        
+                        // Save to history before checkout
+                        history.push({
+                          sample_id: sample.sample_id,
+                          container_id: sample.container_id,
+                          position: sample.position
+                        })
+                        
+                        const { error } = await supabase
+                          .from('samples')
+                          .update({
+                            is_checked_out: true,
+                            checked_out_at: new Date().toISOString(),
+                            checked_out_by: user.initials,
+                            previous_container_id: sample.container_id,
+                            previous_position: sample.position,
+                            container_id: null,
+                            position: null
+                          })
+                          .eq('id', sample.id)
+                        
+                        if (error) {
+                          console.error('Checkout error:', error)
+                          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+                          return
+                        }
+                      }
+                      
+                      setCheckoutHistory([...checkoutHistory, ...history])
+                      setSelectedSampleIds(new Set())
+                      
+                      // Reload samples
+                      const isArchiveRoute = route === '#/archive'
+                      const { data } = await supabase
+                        .from('samples')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .eq('is_archived', isArchiveRoute)
+                        .order('updated_at', { ascending: false })
+                      
+                      if (data) setSamples(data)
+                      
+                      alert(`Checked out ${history.length} sample(s)`)
+                    } catch (err: any) {
+                      console.error('Checkout error:', err)
+                      alert(`Failed to checkout samples: ${err.message}`)
+                    } finally {
+                      setLoadingSamples(false)
+                    }
                   }}
-                  disabled={loadingSamples || filteredSamples.length === 0}
-                  style={{fontSize: 13}}
+                  disabled={loadingSamples || selectedSampleIds.size === 0}
+                  style={{background: '#10b981', color: 'white', fontSize: 13}}
                 >
-                  Download CSV
+                  Checkout Selected ({selectedSampleIds.size})
+                </button>
+                <button 
+                  className="btn"
+                  onClick={async () => {
+                    if (checkoutHistory.length === 0) {
+                      alert('No checkout history to undo')
+                      return
+                    }
+                    
+                    setLoadingSamples(true)
+                    try {
+                      for (const item of checkoutHistory) {
+                        // Find sample by sample_id
+                        const sample = samples?.find((s: any) => s.sample_id === item.sample_id)
+                        if (!sample) continue
+                        
+                        const { error } = await supabase
+                          .from('samples')
+                          .update({
+                            container_id: item.container_id,
+                            position: item.position,
+                            is_checked_out: false,
+                            checked_out_at: null,
+                            checked_out_by: null,
+                            previous_container_id: null,
+                            previous_position: null
+                          })
+                          .eq('id', sample.id)
+                        
+                        if (error) {
+                          console.error('Undo checkout error:', error)
+                          alert(`Failed to undo checkout for ${item.sample_id}: ${error.message}`)
+                          return
+                        }
+                      }
+                      
+                      setCheckoutHistory([])
+                      
+                      // Reload samples
+                      const isArchiveRoute = route === '#/archive'
+                      const { data } = await supabase
+                        .from('samples')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .eq('is_archived', isArchiveRoute)
+                        .order('updated_at', { ascending: false })
+                      
+                      if (data) setSamples(data)
+                      
+                      alert('Checkout undone successfully')
+                    } catch (err: any) {
+                      console.error('Undo checkout error:', err)
+                      alert(`Failed to undo checkout: ${err.message}`)
+                    } finally {
+                      setLoadingSamples(false)
+                    }
+                  }}
+                  disabled={loadingSamples || checkoutHistory.length === 0}
+                  style={{background: '#f59e0b', color: 'white', fontSize: 13}}
+                >
+                  Undo Checkout ({checkoutHistory.length})
                 </button>
               </div>
             )}
@@ -1753,33 +921,92 @@ export default function App() {
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
-                <select
-                  value={samplesPerPage}
-                  onChange={(e) => {
-                    const nextSize = parseInt(e.target.value, 10)
-                    setSamplesPerPage(nextSize)
-                    setCurrentPage(1)
-                  }}
-                  style={{
-                    padding: '4px 10px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    background: 'white'
-                  }}
-                >
-                  {[24, 48, 96].map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
+                {[24, 48, 96].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setSamplesPerPage(size)
+                      setCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: samplesPerPage === size ? '#3b82f6' : 'white',
+                      color: samplesPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: samplesPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
             </div>
             
-            {loadingSamples && (
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: 'white' }}>
-                <TableSkeleton rows={6} columns={8} />
-              </div>
-            )}
+            {/* Sample Type Filters */}
+            {(() => {
+              // Use the same order as ContainerFilters
+              const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
+              const allTypesInSamples = samples ? Array.from(new Set(samples.map((s: any) => {
+                // For checked out samples, use previous container type; otherwise use current container type
+                return s.is_checked_out && s.previous_containers?.type
+                  ? s.previous_containers.type
+                  : (s.containers?.type || 'Sample Type')
+              }))).filter(type => type !== 'Sample Type') : []
+              
+              // Filter to only types present in the samples, but maintain the defined order
+              const availableSampleTypes = typeOrder.filter(type => allTypesInSamples.includes(type))
+              
+              if (availableSampleTypes.length > 0) {
+                return (
+                  <div style={{marginTop: 12, marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
+                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center'}}>
+                      {availableSampleTypes.map(type => {
+                        const active = sampleTypeFilters.includes(type)
+                        const color = SAMPLE_TYPE_COLORS[type] || '#6b7280'
+                        const inactiveBg = `${color}22`
+                        const activeBg = color
+                        const style = active 
+                          ? { background: activeBg, color: readableTextColor(activeBg), boxShadow: `0 0 0 3px ${color}33`, border: 'none' } 
+                          : { background: inactiveBg, color: color, border: 'none' }
+                        
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              if (active) {
+                                setSampleTypeFilters(sampleTypeFilters.filter(t => t !== type))
+                              } else {
+                                setSampleTypeFilters([...sampleTypeFilters, type])
+                              }
+                              setCurrentPage(1)
+                            }}
+                            style={{
+                              ...style,
+                              padding: '6px 12px',
+                              borderRadius: 9999,
+                              fontSize: 14,
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              outline: 'none'
+                            }}
+                          >
+                            {type}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              }
+              return null
+            })()}
+            
+            {loadingSamples && <div className="muted">Loading samples...</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length === 0 && <div className="muted">No samples found</div>}
             {!loadingSamples && filteredSamples && filteredSamples.length > 0 && (
               <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
@@ -1789,12 +1016,12 @@ export default function App() {
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600, width: 40}}>
                         <input
                           type="checkbox"
-                          checked={filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).length > 0 && 
-                                   filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).every((s: any) => selectedSampleIds.has(s.id))}
+                          checked={filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).length > 0 && 
+                                   filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).filter((s: any) => !s.is_checked_out && s.container_id).every((s: any) => selectedSampleIds.has(s.id))}
                           onChange={(e) => {
                             const pageIds = filteredSamples
                               .slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage)
-                              .filter((s: any) => s.id)
+                              .filter((s: any) => !s.is_checked_out && s.container_id)
                               .map((s: any) => s.id)
                             if (e.target.checked) {
                               setSelectedSampleIds(new Set([...selectedSampleIds, ...pageIds]))
@@ -1806,214 +1033,28 @@ export default function App() {
                           }}
                         />
                       </th>
-                      {([
-                        { label: 'Sample ID', key: 'sample_id', filterable: false },
-                        { label: 'Type', key: 'type', filterable: true },
-                        { label: 'Storage Path', key: 'storage_path', filterable: false },
-                        { label: 'Container', key: 'container', filterable: false },
-                        { label: 'Position', key: 'position', filterable: false },
-                        { label: 'Status', key: 'status', filterable: true },
-                        { label: 'Tags', key: 'tags', filterable: true }
-                      ] as Array<{ label: string; key: string; filterable: boolean }>).map((col) => {
-                        const isActive = sampleSort.key === col.key
-                        const direction = isActive ? sampleSort.direction : 'asc'
-                        const activeFilterCount = col.key === 'type'
-                          ? sampleTypeFilters.length
-                          : col.key === 'status'
-                            ? sampleStatusFilters.length
-                            : col.key === 'tags'
-                              ? sampleTagFilters.length
-                              : 0
-                        return (
-                          <th key={col.key} style={{padding: 12, textAlign: 'left', fontWeight: 600, position: 'relative'}}>
-                            <button
-                              onClick={() => {
-                                setSampleSort((prev) => {
-                                  if (prev.key === col.key) {
-                                    return { key: col.key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
-                                  }
-                                  return { key: col.key, direction: 'asc' }
-                                })
-                                setCurrentPage(1)
-                              }}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: 'transparent',
-                                border: 'none',
-                                padding: 0,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                color: isActive ? '#111827' : '#1f2937'
-                              }}
-                              aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
-                            >
-                              {col.label}
-                              <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.35 }}>
-                                {direction === 'asc' ? '▲' : '▼'}
-                              </span>
-                            </button>
-                            {col.filterable && (
-                              <button
-                                className="btn ghost"
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  if (col.key === 'tags' || tagsOptions.length === 0) {
-                                    await loadTagsOptions()
-                                  }
-                                  setSampleFilterMenu((prev) => (prev === col.key ? null : col.key))
-                                }}
-                                style={{
-                                  marginLeft: 8,
-                                  width: 26,
-                                  height: 26,
-                                  minWidth: 26,
-                                  padding: 0,
-                                  border: activeFilterCount > 0 ? '1px solid #3b82f6' : '1px solid #d1d5db',
-                                  color: activeFilterCount > 0 ? '#1d4ed8' : '#374151',
-                                  background: activeFilterCount > 0 ? '#eff6ff' : '#fff',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                title={`Filter ${col.label}`}
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                  <path d="M3 5H21L14 13V20L10 18V13L3 5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                </svg>
-                              </button>
-                            )}
-                            {sampleFilterMenu === col.key && col.filterable && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: 38,
-                                  left: 8,
-                                  zIndex: 30,
-                                  background: '#fff',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: 8,
-                                  padding: 8,
-                                  minWidth: 220,
-                                  maxHeight: 260,
-                                  overflowY: 'auto',
-                                  boxShadow: '0 10px 24px rgba(15,23,42,0.12)'
-                                }}
-                              >
-                                {col.key === 'type' && (
-                                  <div style={{ display: 'grid', gap: 6 }}>
-                                    {availableSampleTypes.map((type) => {
-                                      const checked = sampleTypeFilters.includes(type)
-                                      return (
-                                        <label key={type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                          <input
-                                            type="checkbox"
-                                            className="toggle-input"
-                                            checked={checked}
-                                            onChange={() => {
-                                              setSampleTypeFilters((prev) =>
-                                                prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-                                              )
-                                              setCurrentPage(1)
-                                            }}
-                                          />
-                                          <span>{type}</span>
-                                        </label>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                                {col.key === 'status' && (
-                                  <div style={{ display: 'grid', gap: 6 }}>
-                                    {['In Storage', 'Checked Out'].map((status) => {
-                                      const checked = sampleStatusFilters.includes(status)
-                                      return (
-                                        <label key={status} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                          <input
-                                            type="checkbox"
-                                            className="toggle-input"
-                                            checked={checked}
-                                            onChange={() => {
-                                              setSampleStatusFilters((prev) =>
-                                                prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
-                                              )
-                                              setCurrentPage(1)
-                                            }}
-                                          />
-                                          <span>{status}</span>
-                                        </label>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                                {col.key === 'tags' && (
-                                  <div style={{ display: 'grid', gap: 6 }}>
-                                    {tagsOptions.length === 0 && <div className="muted">No tags available</div>}
-                                    {tagsOptions.map((tag: any) => {
-                                      const checked = sampleTagFilters.includes(tag.id)
-                                      return (
-                                        <label key={tag.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', gap: 8 }}>
-                                          <input
-                                            type="checkbox"
-                                            className="toggle-input"
-                                            checked={checked}
-                                            onChange={() => {
-                                              setSampleTagFilters((prev) =>
-                                                prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
-                                              )
-                                              setCurrentPage(1)
-                                            }}
-                                          />
-                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ width: 10, height: 10, borderRadius: 999, background: tag.color || '#94a3b8', display: 'inline-block' }} />
-                                            <span>{tag.name}</span>
-                                          </span>
-                                        </label>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                                  <button
-                                    className="btn ghost"
-                                    onClick={() => {
-                                      if (col.key === 'type') setSampleTypeFilters([])
-                                      if (col.key === 'status') setSampleStatusFilters([])
-                                      if (col.key === 'tags') setSampleTagFilters([])
-                                      setCurrentPage(1)
-                                    }}
-                                  >
-                                    Clear
-                                  </button>
-                                  <button className="btn ghost" onClick={() => setSampleFilterMenu(null)}>Done</button>
-                                </div>
-                              </div>
-                            )}
-                          </th>
-                        )
-                      })}
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
                       const handleSampleClick = () => {
-                        const returnTo = route === '#/rnd/samples' ? 'rnd-samples' : 'samples'
-                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=${returnTo}`
+                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=samples`
                       }
                       
-                      const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-                      const containerName = containerData?.name || s.container_id || '-'
-                      const containerLocation = formatContainerLocation(containerData) || containerData?.location || '-'
+                      const containerName = s.containers?.name || s.container_id || '-'
+                      const containerLocation = s.containers?.location || '-'
                       // For checked out samples, use previous container type; otherwise use current container type
                       const containerType = s.is_checked_out && s.previous_containers?.type
                         ? s.previous_containers.type
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
-                      const tagItems = (s.sample_tags || [])
-                        .map((t: any) => t.tags)
-                        .filter(Boolean)
                       
                       return (
                         <tr 
@@ -2027,6 +1068,7 @@ export default function App() {
                             <input
                               type="checkbox"
                               checked={selectedSampleIds.has(s.id)}
+                              disabled={s.is_checked_out || !s.container_id}
                               onChange={(e) => {
                                 const newSelected = new Set(selectedSampleIds)
                                 if (e.target.checked) {
@@ -2111,32 +1153,6 @@ export default function App() {
                             )}
                           </td>
                           <td style={{padding: 12}}>
-                            {tagItems.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                {tagItems.map((tag: any) => {
-                                  const color = tag.color || '#94a3b8'
-                                  return (
-                                    <span
-                                      key={tag.id}
-                                      style={{
-                                        padding: '2px 8px',
-                                        background: `${color}22`,
-                                        color: color,
-                                        borderRadius: 9999,
-                                        fontSize: 12,
-                                        fontWeight: 600
-                                      }}
-                                    >
-                                      {tag.name}
-                                    </span>
-                                  )
-                                })}
-                              </div>
-                            ) : (
-                              <span className="muted">-</span>
-                            )}
-                          </td>
-                          <td style={{padding: 12}}>
                             {s.container_id && (
                               <button
                                 className="btn ghost"
@@ -2195,75 +1211,6 @@ export default function App() {
                 >
                   Next
                 </button>
-              </div>
-            )}
-
-            {showBulkTagDrawer && (
-              <div className="drawer-overlay" onClick={() => setShowBulkTagDrawer(false)}>
-                <div className="drawer" onClick={(e) => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0 }}>Manage Tag(s) on Selected Samples</h3>
-                    <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)}>Close</button>
-                  </div>
-                  <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-                    {selectedSampleIds.size} sample(s) selected. Checked tags will be kept or added; unchecked tags will be removed.
-                  </div>
-                  <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8, textAlign: 'left' }}>
-                    {loadingTagsOptions && <div className="muted">Loading tags...</div>}
-                    {!loadingTagsOptions && tagsOptions.length === 0 && <div className="muted">No tags available.</div>}
-                    {!loadingTagsOptions && tagsOptions.map((tag: any) => {
-                      const checked = selectedBulkTagIds.has(tag.id)
-                      const color = tag.color || '#94a3b8'
-                      return (
-                        <label
-                          key={tag.id}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'auto 1fr',
-                            alignItems: 'center',
-                            gap: 8,
-                            width: '100%',
-                            textAlign: 'left',
-                            color: '#111827',
-                            justifyItems: 'start'
-                          }}
-                        >
-                          <input
-                            className="toggle-input"
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setSelectedBulkTagIds((prev) => {
-                                const next = new Set(prev)
-                                if (next.has(tag.id)) next.delete(tag.id)
-                                else next.add(tag.id)
-                                return next
-                              })
-                            }}
-                          />
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, color: '#111827', width: '100%', textAlign: 'left' }}>
-                            <span
-                              style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                background: color,
-                                display: 'inline-block'
-                              }}
-                            />
-                            <span style={{ color: '#111827', fontWeight: 600 }}>{tag.name}</span>
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)} disabled={applyingBulkTags}>Cancel</button>
-                    <button className="btn" onClick={applyTagsToSelectedSamples} disabled={applyingBulkTags}>
-                      {applyingBulkTags ? 'Applying...' : 'Save Tag Changes'}
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </div>
