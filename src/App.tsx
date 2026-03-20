@@ -2115,13 +2115,14 @@ export default function App() {
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {tagItems.map((tag: any) => {
                                   const color = tag.color || '#94a3b8'
+                                  const textColor = readableTextColor(color)
                                   return (
                                     <span
                                       key={tag.id}
                                       style={{
                                         padding: '2px 8px',
-                                        background: `${color}22`,
-                                        color: color,
+                                        background: color,
+                                        color: textColor,
                                         borderRadius: 9999,
                                         fontSize: 12,
                                         fontWeight: 600
