@@ -67,6 +67,8 @@ export default function App() {
   const [loadingContainers, setLoadingContainers] = useState(false)
   const [archivedContainers, setArchivedContainers] = useState<any[] | null>(null)
   const [loadingArchived, setLoadingArchived] = useState(false)
+  const [rndContainers, setRndContainers] = useState<any[] | null>(null)
+  const [loadingRnd, setLoadingRnd] = useState(false)
   const [samples, setSamples] = useState<any[] | null>(null)
   const [loadingSamples, setLoadingSamples] = useState(false)
   // filters
@@ -184,7 +186,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples!samples_container_id_fkey(*)')
+          .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
           .eq('archived', false)
           .order('updated_at', { ascending: false })
         
@@ -241,8 +243,76 @@ export default function App() {
     })
     
     // Apply search filter (includes cross-search: searching for sample IDs will show their containers)
-    if (searchQuery.trim()) {
-      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    // Also handle RD container filtering
+    const hasSearch = searchQuery.trim() !== ''
+    const terms = hasSearch ? searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t) : []
+    
+    filtered = filtered.filter((c: any) => {
+      // For #/containers route (gen pop), exclude RD containers unless search matches their samples
+      if (route === '#/containers' && c.is_rnd) {
+        // Only show RD container if search matches one of its samples
+        if (!hasSearch) return false
+        
+        const sampleMatches = (c.samples || []).some((s: any) => 
+          terms.some(term => (s.sample_id || '').toLowerCase().includes(term))
+        )
+        return sampleMatches
+      }
+      
+      // Apply regular search filter
+      if (hasSearch) {
+        const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
+        
+        // Check if container info matches
+        const containerMatches = terms.some(term => containerSearchText.includes(term))
+        
+        // Cross-search: Check if any sample IDs in this container match
+        const sampleMatches = (c.samples || []).some((s: any) => 
+          terms.some(term => (s.sample_id || '').toLowerCase().includes(term))
+        )
+        
+        return containerMatches || sampleMatches
+      }
+      
+      return true
+    })
+    
+    return filtered
+  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery, route])
+
+  // apply filters client-side to RND containers list
+  const filteredRndContainers = React.useMemo(() => {
+    if (!rndContainers) return []
+    let filtered = rndContainers.filter((c:any) => {
+      // sample type filter (if any selected)
+      if (selectedTypes && selectedTypes.length){
+        if (!selectedTypes.includes(c.type)) return false
+      }
+      // available only
+      if (availableOnly){
+        const used = Number(c.used || 0)
+        let total = Number(c.total || 0)
+        
+        // DP Pools 9x9 have I9 unavailable, so effective capacity is 80 not 81
+        if (c.type === 'DP Pools' && c.layout === '9x9' && total === 81) {
+          total = 80
+        }
+        
+        if ((total - used) <= 0) return false
+      }
+      // training only - show containers marked as training OR containing training samples
+      if (trainingOnly){
+        const hasTrainingSamples = (c.samples || []).some((s: any) => s.is_training && !s.is_archived)
+        if (!c.training && !hasTrainingSamples) return false
+      }
+      return true
+    })
+    
+    // Apply search filter for RND  containers
+    const hasSearch = searchQuery.trim() !== ''
+    const terms = hasSearch ? searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t) : []
+    
+    if (hasSearch) {
       filtered = filtered.filter((c: any) => {
         const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase()
         
@@ -259,22 +329,28 @@ export default function App() {
     }
     
     return filtered
-  }, [containers, selectedTypes, availableOnly, trainingOnly, searchQuery])
+  }, [rndContainers, selectedTypes, availableOnly, trainingOnly, searchQuery])
 
   useEffect(() => {
     async function onUpdated(e: any){
       // refresh both lists when a container is updated (might be archived/unarchived)
       try {
-        const [activeRes, archivedRes] = await Promise.all([
+        const [activeRes, archivedRes, rndRes] = await Promise.all([
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(*)')
+            .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
             .eq('archived', false)
             .order('updated_at', { ascending: false }),
           supabase
             .from('containers')
-            .select('*, samples!samples_container_id_fkey(*)')
+            .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
             .eq('archived', true)
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('containers')
+            .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
+            .eq('archived', false)
+            .eq('is_rnd', true)
             .order('updated_at', { ascending: false })
         ])
         
@@ -293,6 +369,14 @@ export default function App() {
           }))
           setArchivedContainers(containersWithCounts)
         }
+        
+        if (rndRes.data) {
+          const containersWithCounts = rndRes.data.map((c: any) => ({
+            ...c,
+            used: (c.samples || []).length
+          }))
+          setRndContainers(containersWithCounts)
+        }
       } catch(e) {
         console.warn('Failed to refresh containers after update', e)
       }
@@ -309,7 +393,7 @@ export default function App() {
       try{
         const { data, error } = await supabase
           .from('containers')
-          .select('*, samples!samples_container_id_fkey(*)')
+          .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
           .eq('archived', true)
           .order('updated_at', { ascending: false })
         
@@ -339,6 +423,39 @@ export default function App() {
   }, [route])
 
   useEffect(() => {
+    // load RND containers when on RND route
+    let mounted = true
+    async function load(){
+      setLoadingRnd(true)
+      try{
+        const { data, error } = await supabase
+          .from('containers')
+          .select('*, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))')
+          .eq('archived', false)
+          .eq('is_rnd', true)
+          .order('updated_at', { ascending: false })
+        
+        if (!mounted) return
+        if (error) throw error
+        
+        // Count all samples (including archived) for each container
+        const containersWithCounts = (data ?? []).map((c: any) => ({
+          ...c,
+          used: (c.samples || []).length
+        }))
+        
+        setRndContainers(containersWithCounts)
+      }catch(e){
+        console.warn('failed to load RND containers', e)
+        if (mounted) setRndContainers([])
+      }finally{ if (mounted) setLoadingRnd(false) }
+    }
+
+    if (route === '#/rnd' || route === '#/rnd/samples') load()
+    return () => { mounted = false }
+  }, [route])
+
+  useEffect(() => {
     // load samples when on samples route or archive route
     let mounted = true
     async function loadSamples(){
@@ -363,7 +480,8 @@ export default function App() {
             .select(`
               *, 
               containers!samples_container_id_fkey(id, name, location, type),
-              previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)
+              previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type),
+              sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))
             `)
             .eq('is_archived', isArchiveRoute ? true : false)
             .order('created_at', { ascending: false })
@@ -446,6 +564,55 @@ export default function App() {
     console.log(`Final filtered count: ${filtered.length}`)
     return filtered
   }, [samples, searchQuery, sampleTypeFilters])
+
+  // Filter samples to only show those in RND containers
+  const filteredRndSamples = React.useMemo(() => {
+    if (!samples || !rndContainers) return []
+    
+    const rndContainerIds = new Set(rndContainers.map((c: any) => c.id))
+    
+    console.log(`Filtering samples for RND containers: ${rndContainerIds.size} containers`)
+    
+    let filtered = samples.filter((s: any) => {
+      // Include samples that are in an RND container
+      if (s.container_id && rndContainerIds.has(s.container_id)) return true
+      // Include checked out samples that were previously in an RND container
+      if (s.is_checked_out && s.previous_container_id && rndContainerIds.has(s.previous_container_id)) return true
+      return false
+    })
+    
+    console.log(`After RND filter: ${filtered.length} samples`)
+    
+    // Apply type filter
+    if (sampleTypeFilters.length > 0) {
+      filtered = filtered.filter((s: any) => {
+        const containerType = s.is_checked_out && s.previous_containers?.type
+          ? s.previous_containers.type
+          : (s.containers?.type || 'Sample Type')
+        return sampleTypeFilters.includes(containerType)
+      })
+      console.log(`After type filter (${sampleTypeFilters.join(', ')}): ${filtered.length} RND samples`)
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+      
+      filtered = filtered.filter((s: any) => {
+        const checkedOutText = s.is_checked_out ? 'checked out' : ''
+        const containerName = s.containers?.name || s.previous_containers?.name || ''
+        const containerLocation = s.containers?.location || s.previous_containers?.location || ''
+        const containerType = s.containers?.type || s.previous_containers?.type || ''
+        const searchText = `${s.sample_id || ''} ${containerName} ${containerLocation} ${containerType} ${s.position || ''} ${checkedOutText}`.toLowerCase()
+        const matches = terms.some(term => searchText.includes(term))
+        return matches
+      })
+      console.log(`After search filter: ${filtered.length} RND samples`)
+    }
+    
+    console.log(`Final RND filtered count: ${filtered.length}`)
+    return filtered
+  }, [samples, rndContainers, searchQuery, sampleTypeFilters])
 
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
@@ -749,6 +916,340 @@ export default function App() {
           </>
         )}
 
+        {route === '#/rnd' && (
+          <>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+              <div className="muted">
+                Showing {filteredRndContainers ? `${Math.min((containersCurrentPage - 1) * containersPerPage + 1, filteredRndContainers.length)}-${Math.min(containersCurrentPage * containersPerPage, filteredRndContainers.length)} of ${filteredRndContainers.length}` : '...'} R&amp;D containers
+              </div>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <span className="muted" style={{fontSize: 13}}>Per page:</span>
+                {[24, 48, 96].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setContainersPerPage(size)
+                      setContainersCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: containersPerPage === size ? '#3b82f6' : 'white',
+                      color: containersPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: containersPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Filters */}
+            <div style={{marginTop:8}}>
+              <ContainerFilters selected={selectedTypes} onChange={(s:any)=> setSelectedTypes(s)} availableOnly={availableOnly} onAvailableChange={setAvailableOnly} trainingOnly={trainingOnly} onTrainingChange={setTrainingOnly} />
+            </div>
+            <div className="container-list">
+              {loadingRnd && <div className="muted">Loading R&amp;D containers...</div>}
+              {!loadingRnd && filteredRndContainers && filteredRndContainers.length === 0 && <div className="muted">No R&amp;D containers</div>}
+              {!loadingRnd && filteredRndContainers && filteredRndContainers.slice((containersCurrentPage - 1) * containersPerPage, containersCurrentPage * containersPerPage).map(c => (
+                <ContainerCard key={c.id} id={c.id} name={c.name} type={c.type} temperature={c.temperature} layout={c.layout} occupancy={{used:c.used,total:c.total}} updatedAt={c.updated_at} location={c.location} training={c.training} returnTo="rnd" {...c} />
+              ))}
+            </div>
+            {!loadingRnd && filteredRndContainers && filteredRndContainers.length > containersPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16
+              }}>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={containersCurrentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {containersCurrentPage} of {Math.ceil(filteredRndContainers.length / containersPerPage)}
+                </span>
+                <button
+                  onClick={() => setContainersCurrentPage(p => Math.min(Math.ceil(filteredRndContainers.length / containersPerPage), p + 1))}
+                  disabled={containersCurrentPage >= Math.ceil(filteredRndContainers.length / containersPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: containersCurrentPage >= Math.ceil(filteredRndContainers.length / containersPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: containersCurrentPage >= Math.ceil(filteredRndContainers.length / containersPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: containersCurrentPage >= Math.ceil(filteredRndContainers.length / containersPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {route === '#/rnd/samples' && (
+          <div>
+            {/* Sample type filters */}
+            <div style={{marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center'}}>
+              <span className="muted" style={{fontSize: 13}}>Filter by type:</span>
+              {SAMPLE_TYPES.map(st => {
+                const typeOrder = ['PA Pools', 'DP Pools', 'cfDNA Tubes', 'DTC Tubes', 'MNC Tubes', 'Plasma Tubes', 'BC Tubes', 'IDT Plates', 'Other']
+                const active = (sampleTypeFilters || []).includes(st.key)
+                const activeBg = st.color
+                const inactiveBg = `${st.color}22`
+                const textColor = active ? readableTextColor(st.color) : st.color
+                const style = active 
+                  ? { background: activeBg, color: textColor, boxShadow: `0 0 0 3px ${st.color}33` } 
+                  : { background: inactiveBg, color: st.color }
+                return (
+                  <button
+                    key={st.key}
+                    onClick={() => {
+                      const next = new Set(sampleTypeFilters || [])
+                      if (next.has(st.key)) next.delete(st.key)
+                      else next.add(st.key)
+                      setSampleTypeFilters(Array.from(next))
+                    }}
+                    className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 focus:outline-none transition-shadow`}
+                    style={style}
+                  >
+                    <span>{st.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+            
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+              <div className="muted">
+                Showing {filteredRndSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredRndSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredRndSamples.length)} of ${filteredRndSamples.length}` : '...'} R&amp;D samples
+              </div>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <span className="muted" style={{fontSize: 13}}>Per page:</span>
+                {[24, 48, 96].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setSamplesPerPage(size)
+                      setCurrentPage(1)
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      background: samplesPerPage === size ? '#3b82f6' : 'white',
+                      color: samplesPerPage === size ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: samplesPerPage === size ? 600 : 400
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {loadingSamples && <div className="muted">Loading R&amp;D samples...</div>}
+            {!loadingSamples && filteredRndSamples && filteredRndSamples.length === 0 && <div className="muted">No R&amp;D samples found</div>}
+            {!loadingSamples && filteredRndSamples && filteredRndSamples.length > 0 && (
+              <div style={{border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden'}}>
+                <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                  <thead style={{background: '#f3f4f6'}}>
+                    <tr>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
+                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRndSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
+                      const handleSampleClick = () => {
+                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=rnd-samples`
+                      }
+                      
+                      const containerName = s.containers?.name || s.container_id || '-'
+                      const containerLocation = s.containers?.location || '-'
+                      const containerType = s.is_checked_out && s.previous_containers?.type
+                        ? s.previous_containers.type
+                        : (s.containers?.type || 'Sample Type')
+                      const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
+                      
+                      // Check for tag highlighting
+                      const highlightTag = (s.sample_tags || []).find((t: any) => t.tags?.highlight !== false)
+                      const hasTagHighlight = !!highlightTag
+                      const tagColor = highlightTag?.tags?.color
+                      const rowBg = hasTagHighlight && tagColor 
+                        ? tagColor 
+                        : 'white'
+                      const rowTextColor = hasTagHighlight && tagColor ? readableTextColor(tagColor) : '#111827'
+                      
+                      return (
+                        <tr 
+                          key={s.id}
+                          style={{
+                            borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
+                            background: rowBg,
+                            color: rowTextColor
+                          }}
+                        >
+                          <td style={{padding: 12}}>
+                            <button
+                              onClick={() => window.location.hash = `#/samples/${encodeURIComponent(s.sample_id)}/history`}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: hasTagHighlight && tagColor ? rowTextColor : '#3b82f6',
+                                fontWeight: 600,
+                                fontSize: 14,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                padding: 0
+                              }}
+                            >
+                              {s.sample_id}
+                            </button>
+                          </td>
+                          <td style={{padding: 12}}>
+                            <span style={{
+                              padding: '4px 10px',
+                              background: `${typeColor}22`,
+                              color: typeColor,
+                              borderRadius: 9999,
+                              fontSize: 13,
+                              fontWeight: 500
+                            }}>
+                              {containerType}
+                            </span>
+                          </td>
+                          <td style={{padding: 12}}>{containerLocation}</td>
+                          <td style={{padding: 12}}>{containerName}</td>
+                          <td style={{padding: 12}}>
+                            <span style={{
+                              padding: '2px 8px',
+                              background: '#dbeafe',
+                              color: '#1e40af',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600
+                            }}>
+                              {s.position || '-'}
+                            </span>
+                          </td>
+                          <td style={{padding: 12}}>
+                            {s.is_checked_out ? (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}>
+                                Checked Out
+                              </span>
+                            ) : s.container_id ? (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                background: '#d1fae5',
+                                color: '#065f46',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}>
+                                In Container
+                              </span>
+                            ) : (
+                              <span className="muted">-</span>
+                            )}
+                          </td>
+                          <td style={{padding: 12}}>
+                            {s.container_id && (
+                              <button
+                                className="btn ghost"
+                                onClick={handleSampleClick}
+                                style={{fontSize: 12, padding: '4px 8px'}}
+                              >
+                                View in Container
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            {!loadingSamples && filteredRndSamples && filteredRndSamples.length > samplesPerPage && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16
+              }}>
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === 1 ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: currentPage === 1 ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="muted" style={{fontSize: 13}}>
+                  Page {currentPage} of {Math.ceil(filteredRndSamples.length / samplesPerPage)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredRndSamples.length / samplesPerPage), p + 1))}
+                  disabled={currentPage >= Math.ceil(filteredRndSamples.length / samplesPerPage)}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage >= Math.ceil(filteredRndSamples.length / samplesPerPage) ? '#f3f4f6' : 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    cursor: currentPage >= Math.ceil(filteredRndSamples.length / samplesPerPage) ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                    color: currentPage >= Math.ceil(filteredRndSamples.length / samplesPerPage) ? '#9ca3af' : '#374151'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {route === '#/samples' && (
           <div>
             {/* Action buttons */}
@@ -833,7 +1334,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))')
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -893,7 +1394,7 @@ export default function App() {
                       const isArchiveRoute = route === '#/archive'
                       const { data } = await supabase
                         .from('samples')
-                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
+                        .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type), sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))')
                         .eq('is_archived', isArchiveRoute)
                         .order('updated_at', { ascending: false })
                       
@@ -1056,12 +1557,22 @@ export default function App() {
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
+                      // Check for tag highlighting
+                      const highlightTag = (s.sample_tags || []).find((t: any) => t.tags?.highlight !== false)
+                      const hasTagHighlight = !!highlightTag
+                      const tagColor = highlightTag?.tags?.color
+                      const rowBg = hasTagHighlight && tagColor 
+                        ? tagColor 
+                        : selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
+                      const rowTextColor = hasTagHighlight && tagColor ? readableTextColor(tagColor) : '#111827'
+                      
                       return (
                         <tr 
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
+                            background: rowBg,
+                            color: rowTextColor
                           }}
                         >
                           <td style={{padding: 12}}>
