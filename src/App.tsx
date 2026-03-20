@@ -85,6 +85,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   // sample type filters for samples page
   const [sampleTypeFilters, setSampleTypeFilters] = useState<string[]>([])
+  // sample sorting
+  const [sampleSortState, setSampleSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
   // sample selection for checkout
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set())
   const [checkoutHistory, setCheckoutHistory] = useState<Array<{sample_id: string, container_id: string, position: string}>>([])
@@ -561,9 +563,65 @@ export default function App() {
       console.log(`After search filter: ${filtered.length} samples`)
     }
     
+    // Apply sorting
+    if (sampleSortState) {
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+      const direction = sampleSortState.direction === 'asc' ? 1 : -1
+      const baseOrder = new Map(samples.map((s, index) => [s.id, index]))
+      const getStatusLabel = (s: any) => {
+        if (s.is_checked_out) return 'Checked Out'
+        if (s.container_id) return 'In Container'
+        return 'Not Found'
+      }
+      
+      filtered = [...filtered].sort((a, b) => {
+        const aIndex = baseOrder.get(a.id) ?? 0
+        const bIndex = baseOrder.get(b.id) ?? 0
+        const tieBreak = () => aIndex - bIndex
+        
+        if (sampleSortState.key === 'sample_id') {
+          const compare = collator.compare(a.sample_id || '', b.sample_id || '') * direction
+          return compare || tieBreak()
+        }
+        
+        if (sampleSortState.key === 'type') {
+          const aType = a.is_checked_out && a.previous_containers?.type ? a.previous_containers.type : (a.containers?.type || '')
+          const bType = b.is_checked_out && b.previous_containers?.type ? b.previous_containers.type : (b.containers?.type || '')
+          const compare = collator.compare(aType, bType) * direction
+          return compare || tieBreak()
+        }
+        
+        if (sampleSortState.key === 'location') {
+          const aLocation = a.containers?.location || a.previous_containers?.location || ''
+          const bLocation = b.containers?.location || b.previous_containers?.location || ''
+          const compare = collator.compare(aLocation, bLocation) * direction
+          return compare || tieBreak()
+        }
+        
+        if (sampleSortState.key === 'container') {
+          const aContainer = a.containers?.name || a.previous_containers?.name || ''
+          const bContainer = b.containers?.name || b.previous_containers?.name || ''
+          const compare = collator.compare(aContainer, bContainer) * direction
+          return compare || tieBreak()
+        }
+        
+        if (sampleSortState.key === 'position') {
+          const compare = collator.compare(a.position || '', b.position || '') * direction
+          return compare || tieBreak()
+        }
+        
+        if (sampleSortState.key === 'status') {
+          const compare = collator.compare(getStatusLabel(a), getStatusLabel(b)) * direction
+          return compare || tieBreak()
+        }
+        
+        return tieBreak()
+      })
+    }
+    
     console.log(`Final filtered count: ${filtered.length}`)
     return filtered
-  }, [samples, searchQuery, sampleTypeFilters])
+  }, [samples, searchQuery, sampleTypeFilters, sampleSortState])
 
   // Filter samples to only show those in RND containers
   const filteredRndSamples = React.useMemo(() => {
@@ -1095,22 +1153,12 @@ export default function App() {
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
-                      // Check for tag highlighting
-                      const highlightTag = (s.sample_tags || []).find((t: any) => t.tags?.highlight !== false)
-                      const hasTagHighlight = !!highlightTag
-                      const tagColor = highlightTag?.tags?.color
-                      const rowBg = hasTagHighlight && tagColor 
-                        ? tagColor 
-                        : 'white'
-                      const rowTextColor = hasTagHighlight && tagColor ? readableTextColor(tagColor) : '#111827'
-                      
                       return (
                         <tr 
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: rowBg,
-                            color: rowTextColor
+                            background: 'white'
                           }}
                         >
                           <td style={{padding: 12}}>
@@ -1119,7 +1167,7 @@ export default function App() {
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: hasTagHighlight && tagColor ? rowTextColor : '#3b82f6',
+                                color: '#3b82f6',
                                 fontWeight: 600,
                                 fontSize: 14,
                                 cursor: 'pointer',
@@ -1416,9 +1464,20 @@ export default function App() {
               </div>
             )}
             
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
-              <div className="muted">
-                Showing {filteredSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredSamples.length)} of ${filteredSamples.length}` : '...'} samples
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 12}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'}}>
+                <div className="muted">
+                  Showing {filteredSamples ? `${Math.min((currentPage - 1) * samplesPerPage + 1, filteredSamples.length)}-${Math.min(currentPage * samplesPerPage, filteredSamples.length)} of ${filteredSamples.length}` : '...'} samples
+                </div>
+                {sampleSortState && (
+                  <button
+                    className="btn ghost"
+                    onClick={() => setSampleSortState(null)}
+                    style={{fontSize: 12, padding: '2px 8px'}}
+                  >
+                    Clear Sort
+                  </button>
+                )}
               </div>
               <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
                 <span className="muted" style={{fontSize: 13}}>Per page:</span>
@@ -1534,12 +1593,41 @@ export default function App() {
                           }}
                         />
                       </th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Sample ID</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Type</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Location</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Container</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Position</th>
-                      <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Status</th>
+                      {([{label: 'Sample ID', key: 'sample_id'}, {label: 'Type', key: 'type'}, {label: 'Location', key: 'location'}, {label: 'Container', key: 'container'}, {label: 'Position', key: 'position'}, {label: 'Status', key: 'status'}] as Array<{label: string; key: string}>).map((col) => {
+                        const isActive = sampleSortState?.key === col.key
+                        const direction = isActive ? sampleSortState?.direction : 'asc'
+                        return (
+                          <th key={col.key} style={{padding: 12, textAlign: 'left'}}>
+                            <button
+                              onClick={() => {
+                                setSampleSortState((prev) => {
+                                  if (prev?.key === col.key) {
+                                    return { key: col.key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+                                  }
+                                  return { key: col.key, direction: 'asc' }
+                                })
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                color: isActive ? '#111827' : '#1f2937'
+                              }}
+                              aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              {col.label}
+                              <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.35 }}>
+                                {direction === 'asc' ? '▲' : '▼'}
+                              </span>
+                            </button>
+                          </th>
+                        )
+                      })}
                       <th style={{padding: 12, textAlign: 'left', fontWeight: 600}}>Actions</th>
                     </tr>
                   </thead>
@@ -1557,22 +1645,12 @@ export default function App() {
                         : (s.containers?.type || 'Sample Type')
                       const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
                       
-                      // Check for tag highlighting
-                      const highlightTag = (s.sample_tags || []).find((t: any) => t.tags?.highlight !== false)
-                      const hasTagHighlight = !!highlightTag
-                      const tagColor = highlightTag?.tags?.color
-                      const rowBg = hasTagHighlight && tagColor 
-                        ? tagColor 
-                        : selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
-                      const rowTextColor = hasTagHighlight && tagColor ? readableTextColor(tagColor) : '#111827'
-                      
                       return (
                         <tr 
                           key={s.id}
                           style={{
                             borderTop: index > 0 ? '1px solid #e5e7eb' : 'none',
-                            background: rowBg,
-                            color: rowTextColor
+                            background: selectedSampleIds.has(s.id) ? '#eff6ff' : 'white'
                           }}
                         >
                           <td style={{padding: 12}}>
