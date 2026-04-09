@@ -16,7 +16,7 @@ import RackDetails from './components/RackDetails'
 import TagsManager from './components/TagsManager'
 import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
 import { supabase, apiFetch } from './lib/api'
-import { getUser } from './lib/auth'
+import { clearToken, getUser, setUser as setUserStorage } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
@@ -77,7 +77,7 @@ export default function App() {
   }, [])
 
   function signOut(){
-    try{ const { clearToken, setUser: setUserStorage } = require('./lib/auth') as any; clearToken(); setUserStorage(null) }catch{}
+    try{ clearToken(); setUserStorage(null) }catch{}
     setUser(null)
   }
 
@@ -815,7 +815,7 @@ export default function App() {
   const loadTagsOptions = async () => {
     setLoadingTagsOptions(true)
     try {
-      const res = await apiFetch('/api/tags?includeArchived=1')
+      const res = await apiFetch('/api/tags')
       if (!res.ok) throw new Error('Failed to load tags')
       const payload = await res.json()
       const next = payload?.data || []
@@ -852,9 +852,7 @@ export default function App() {
     setApplyingBulkTags(true)
     try {
       const ops: Promise<Response>[] = []
-      const activeTagIds = new Set(
-        tagsOptions.filter((tag: any) => !tag.archived).map((tag: any) => tag.id)
-      )
+      const activeTagIds = new Set(tagsOptions.map((tag: any) => tag.id))
       selectedSamples.forEach((sample: any) => {
         const currentTagIds = new Set(
           (sample.sample_tags || [])
@@ -2117,13 +2115,14 @@ export default function App() {
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {tagItems.map((tag: any) => {
                                   const color = tag.color || '#94a3b8'
+                                  const textColor = readableTextColor(color)
                                   return (
                                     <span
                                       key={tag.id}
                                       style={{
                                         padding: '2px 8px',
-                                        background: `${color}22`,
-                                        color: color,
+                                        background: color,
+                                        color: textColor,
                                         borderRadius: 9999,
                                         fontSize: 12,
                                         fontWeight: 600
@@ -2210,13 +2209,10 @@ export default function App() {
                   <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
                     {selectedSampleIds.size} sample(s) selected. Checked tags will be kept or added; unchecked tags will be removed.
                   </div>
-                  {(() => {
-                    const activeTags = tagsOptions.filter((tag: any) => !tag.archived)
-                    return (
                   <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 8, maxHeight: 280, overflowY: 'auto', padding: 10, display: 'grid', gap: 8, textAlign: 'left' }}>
                     {loadingTagsOptions && <div className="muted">Loading tags...</div>}
-                    {!loadingTagsOptions && activeTags.length === 0 && <div className="muted">No active tags available.</div>}
-                    {!loadingTagsOptions && activeTags.map((tag: any) => {
+                    {!loadingTagsOptions && tagsOptions.length === 0 && <div className="muted">No tags available.</div>}
+                    {!loadingTagsOptions && tagsOptions.map((tag: any) => {
                       const checked = selectedBulkTagIds.has(tag.id)
                       const color = tag.color || '#94a3b8'
                       return (
@@ -2262,8 +2258,6 @@ export default function App() {
                       )
                     })}
                   </div>
-                    )
-                  })()}
                   <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button className="btn ghost" onClick={() => setShowBulkTagDrawer(false)} disabled={applyingBulkTags}>Cancel</button>
                     <button className="btn" onClick={applyTagsToSelectedSamples} disabled={applyingBulkTags}>

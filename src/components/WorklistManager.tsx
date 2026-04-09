@@ -136,8 +136,20 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   const normalizeHeader = (header: string): string =>
     header.toLowerCase().replace(/[^a-z0-9]/g, '')
 
+  const expandSampleIdVariants = (ids: string[]): string[] => {
+    const expanded = new Set<string>()
+    ids.forEach((id) => {
+      const trimmed = id.trim()
+      if (!trimmed) return
+      expanded.add(trimmed)
+      expanded.add(trimmed.toUpperCase())
+      expanded.add(trimmed.toLowerCase())
+    })
+    return Array.from(expanded)
+  }
+
   const fetchSamplesByIds = async (sampleIds: string[]) => {
-    const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+    const uniqueIds = expandSampleIdVariants(sampleIds)
     if (uniqueIds.length === 0) return []
 
     const idChunks = chunkArray(uniqueIds, 250)
@@ -340,7 +352,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   }
 
   const fetchShelfItemsByIds = async (sampleIds: string[]) => {
-    const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+    const uniqueIds = expandSampleIdVariants(sampleIds)
     if (uniqueIds.length === 0) return []
 
     const idChunks = chunkArray(uniqueIds, 250)
@@ -628,7 +640,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
     try {
       // Get current sample data to save previous positions (case-insensitive)
       const currentSamples = await (async () => {
-        const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+        const uniqueIds = expandSampleIdVariants(sampleIds)
         const chunks = chunkArray(uniqueIds, 250)
         const merged: any[] = []
         for (const chunk of chunks) {
@@ -737,7 +749,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
     try {
       // Get samples with previous position data (case-insensitive)
       const samples = await (async () => {
-        const uniqueIds = Array.from(new Set(sampleIds.map(id => id.trim()).filter(Boolean)))
+        const uniqueIds = expandSampleIdVariants(sampleIds)
         const chunks = chunkArray(uniqueIds, 250)
         const merged: any[] = []
         for (const chunk of chunks) {
