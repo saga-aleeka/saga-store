@@ -36,6 +36,12 @@ function formatAuditDescription(audit: any, containerNames: Map<string, string>)
       const displacedBy = metadata.displaced_by ? ` (displaced by ${metadata.displaced_by})` : ''
       return `Sample ${sampleId} checked out from ${container} (${position})${displacedBy}`
     }
+
+    if (audit.action === 'checked_in') {
+      const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'
+      const position = metadata.position || '?'
+      return `Sample ${sampleId} checked back in to ${container} (${position})`
+    }
     
     if (audit.action === 'archived') {
       const container = metadata.container_name || containerNames.get(metadata.container_id) || 'Unknown'

@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import ContainerGridView from './ContainerGridView'
-import { supabase } from '../lib/api'
+import { supabase, apiFetch } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 
@@ -72,24 +72,18 @@ export default function WorklistContainerView({ containerId, highlightPositions,
 
     setProcessing(true)
     try {
-      // Checkout each sample using Supabase directly
+      // Checkout each sample through audited server endpoint
       for (const sample of samplesToCheckout) {
-        const { error } = await supabase
-          .from('samples')
-          .update({
-            is_checked_out: true,
-            checked_out_at: new Date().toISOString(),
-            checked_out_by: user.initials,
-            previous_container_id: sample.container_id,
-            previous_position: sample.position,
-            container_id: null,
-            position: null
-          })
-          .eq('id', sample.id)
-        
-        if (error) {
-          console.error('Error checking out sample:', error)
-          alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+        const res = await apiFetch(`/api/samples/${sample.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'checkout' })
+        })
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          console.error('Error checking out sample:', payload)
+          alert(`Failed to checkout ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
@@ -134,24 +128,18 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         return
       }
 
-      // Restore each sample
+      // Restore each sample through audited server endpoint
       for (const sample of checkedOutSamples) {
-        const { error } = await supabase
-          .from('samples')
-          .update({
-            container_id: sample.previous_container_id,
-            position: sample.previous_position,
-            is_checked_out: false,
-            checked_out_at: null,
-            checked_out_by: null,
-            previous_container_id: null,
-            previous_position: null
-          })
-          .eq('id', sample.id)
-        
-        if (error) {
-          console.error('Error restoring sample:', error)
-          alert(`Failed to restore ${sample.sample_id}: ${error.message}`)
+        const res = await apiFetch(`/api/samples/${sample.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'undo_checkout' })
+        })
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          console.error('Error restoring sample:', payload)
+          alert(`Failed to restore ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }

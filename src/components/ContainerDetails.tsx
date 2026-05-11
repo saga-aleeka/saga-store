@@ -404,24 +404,27 @@ export default function ContainerDetails({ id }: { id: string | number }){
     setBatchActionInProgress(true)
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}')
-      const userInitials = user.initials || 'Unknown'
+      if (!user?.initials) {
+        throw new Error('You must be signed in to checkout samples')
+      }
       
       // Checkout all selected samples
       for (const sampleId of selectedSampleIds) {
         const sample = data.samples.find((s: any) => s.id === sampleId)
         if (sample) {
-          await supabase
-            .from('samples')
-            .update({
-              is_checked_out: true,
-              checked_out_at: new Date().toISOString(),
-              checked_out_by: userInitials,
-              previous_container_id: sample.container_id,
-              previous_position: sample.position,
-              container_id: null,
-              position: null
-            })
-            .eq('id', sampleId)
+          const res = await apiFetch(`/api/samples/${sampleId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({ action: 'checkout' })
+          })
+
+          if (!res.ok) {
+            const payload = await res.json().catch(() => null)
+            throw new Error(payload?.message || payload?.error || `Failed to checkout ${sample.sample_id}`)
+          }
         }
       }
       

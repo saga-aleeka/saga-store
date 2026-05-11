@@ -74,6 +74,7 @@ module.exports = async function handler(req: any, res: any){
       const updates: any = {
         updated_at: now
       }
+      const pendingAudits: any[] = []
 
       // Handle archiving
       if ('is_archived' in body) {
@@ -91,9 +92,9 @@ module.exports = async function handler(req: any, res: any){
             history: [...currentHistory, historyEvent]
           }
         }
-        
-        // Log to audit (for both archive and unarchive)
-        await createAuditLog(supabaseAdmin, {
+
+        // Queue audit (for both archive and unarchive)
+        pendingAudits.push({
           userInitials: user,
           entityType: 'sample',
           entityId: sampleId,
@@ -113,9 +114,9 @@ module.exports = async function handler(req: any, res: any){
       // Handle training status
       if ('is_training' in body) {
         updates.is_training = body.is_training
-        
-        // Log to audit
-        await createAuditLog(supabaseAdmin, {
+
+        // Queue audit
+        pendingAudits.push({
           userInitials: user,
           entityType: 'sample',
           entityId: sampleId,
@@ -128,6 +129,92 @@ module.exports = async function handler(req: any, res: any){
             position: current.position || null,
             is_checked_out: current.is_checked_out || false,
             checked_out_by: current.checked_out_by || null
+          }
+        })
+      }
+
+      // Handle explicit checkout/undo checkout actions
+      if (body.action === 'checkout') {
+        if (current.is_checked_out || !current.container_id || !current.position) {
+          return res.status(409).json({ error: 'sample_not_checkout_eligible' })
+        }
+
+        const historyEvent = {
+          when: now,
+          action: 'checked_out',
+          user: user || 'unknown',
+          source: 'manual_edit',
+          from_container: current.container_id,
+          from_position: current.position
+        }
+
+        updates.is_checked_out = true
+        updates.checked_out_at = now
+        updates.checked_out_by = user || current.checked_out_by || 'unknown'
+        updates.previous_container_id = current.container_id
+        updates.previous_position = current.position
+        updates.container_id = null
+        updates.position = null
+        updates.data = {
+          ...currentData,
+          history: [...(updates.data?.history || currentHistory), historyEvent]
+        }
+
+        pendingAudits.push({
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: 'checked_out',
+          entityName: current.sample_id,
+          description: `Sample ${current.sample_id} checked out from {container} ({position})`,
+          metadata: {
+            sample_id: current.sample_id,
+            previous_container_id: current.container_id,
+            previous_position: current.position,
+            is_checked_out: true,
+            checked_out_by: user || current.checked_out_by || 'unknown'
+          }
+        })
+      }
+
+      if (body.action === 'undo_checkout') {
+        if (!current.is_checked_out || !current.previous_container_id || !current.previous_position) {
+          return res.status(409).json({ error: 'sample_not_restore_eligible' })
+        }
+
+        const historyEvent = {
+          when: now,
+          action: 'checked_in',
+          user: user || 'unknown',
+          source: 'manual_edit',
+          to_container: current.previous_container_id,
+          to_position: current.previous_position
+        }
+
+        updates.container_id = current.previous_container_id
+        updates.position = current.previous_position
+        updates.is_checked_out = false
+        updates.checked_out_at = null
+        updates.checked_out_by = null
+        updates.previous_container_id = null
+        updates.previous_position = null
+        updates.data = {
+          ...currentData,
+          history: [...(updates.data?.history || currentHistory), historyEvent]
+        }
+
+        pendingAudits.push({
+          userInitials: user,
+          entityType: 'sample',
+          entityId: sampleId,
+          action: 'checked_in',
+          entityName: current.sample_id,
+          description: `Sample ${current.sample_id} checked back in to {container} ({position})`,
+          metadata: {
+            sample_id: current.sample_id,
+            container_id: current.previous_container_id,
+            position: current.previous_position,
+            is_checked_out: false
           }
         })
       }
@@ -157,9 +244,9 @@ module.exports = async function handler(req: any, res: any){
           ...currentData,
           history: [...currentHistory, historyEvent]
         }
-        
-        // Log to audit
-        await createAuditLog(supabaseAdmin, {
+
+        // Queue audit
+        pendingAudits.push({
           userInitials: user,
           entityType: 'sample',
           entityId: sampleId,
@@ -196,6 +283,10 @@ module.exports = async function handler(req: any, res: any){
       if (error) {
         console.error('Sample update error:', error)
         return res.status(500).json({ error: 'update_failed', message: error.message })
+      }
+
+      for (const audit of pendingAudits) {
+        await createAuditLog(supabaseAdmin, audit)
       }
 
       return res.status(200).json({ data })

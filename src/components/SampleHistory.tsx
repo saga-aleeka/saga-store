@@ -18,16 +18,18 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
       setLoading(true)
       try {
         // Load sample data
-        const { data: sampleData, error: sampleError } = await supabase
+        const { data: sampleRows, error: sampleError } = await supabase
           .from('samples')
           .select('*, containers!samples_container_id_fkey(id, name, location, type), previous_containers:containers!samples_previous_container_id_fkey(id, name, location, type)')
           .eq('sample_id', sampleId)
-          .single()
+          .order('is_archived', { ascending: true })
+          .order('created_at', { ascending: false })
+          .limit(1)
         
-        if (sampleError && sampleError.code !== 'PGRST116') {
+        if (sampleError) {
           console.error('Error loading sample:', sampleError)
-        } else if (sampleData) {
-          setSample(sampleData)
+        } else if (sampleRows && sampleRows.length > 0) {
+          setSample(sampleRows[0])
         }
 
         // Load audit logs for this sample

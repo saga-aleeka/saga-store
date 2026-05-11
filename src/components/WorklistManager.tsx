@@ -666,36 +666,18 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         return
       }
 
-      // Update samples to checked out status
-      const updates = availableSamples.map((s: any) => ({
-        id: s.id,
-        is_checked_out: true,
-        checked_out_at: new Date().toISOString(),
-        checked_out_by: user.initials,
-        previous_container_id: s.container_id,
-        previous_position: s.position,
-        container_id: null,
-        position: null
-      }))
+      // Checkout each sample through audited server endpoint
+      for (const sample of availableSamples) {
+        const res = await apiFetch(`/api/samples/${sample.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'checkout' })
+        })
 
-      // Update each sample individually to avoid upsert issues
-      for (const update of updates) {
-        const { error: updateError } = await supabase
-          .from('samples')
-          .update({
-            is_checked_out: update.is_checked_out,
-            checked_out_at: update.checked_out_at,
-            checked_out_by: update.checked_out_by,
-            previous_container_id: update.previous_container_id,
-            previous_position: update.previous_position,
-            container_id: update.container_id,
-            position: update.position
-          })
-          .eq('id', update.id)
-        
-        if (updateError) {
-          console.error('Error updating sample:', updateError)
-          alert(`Failed to checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          console.error('Error updating sample:', payload)
+          alert(`Failed to checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
@@ -770,43 +752,27 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         return
       }
 
-      // Restore samples to previous positions
-      const updates = checkedOutSamples
+      // Restore samples that have previous position data
+      const restoreCandidates = checkedOutSamples
         .filter((s: any) => s.previous_container_id && s.previous_position)
-        .map((s: any) => ({
-          id: s.id,
-          container_id: s.previous_container_id,
-          position: s.previous_position,
-          is_checked_out: false,
-          checked_out_at: null,
-          checked_out_by: null,
-          previous_container_id: null,
-          previous_position: null
-        }))
 
-      if (updates.length === 0) {
+      if (restoreCandidates.length === 0) {
         alert('No samples have previous position data to restore')
         return
       }
 
-      // Update each sample individually to avoid upsert issues
-      for (const update of updates) {
-        const { error: updateError } = await supabase
-          .from('samples')
-          .update({
-            container_id: update.container_id,
-            position: update.position,
-            is_checked_out: update.is_checked_out,
-            checked_out_at: update.checked_out_at,
-            checked_out_by: update.checked_out_by,
-            previous_container_id: update.previous_container_id,
-            previous_position: update.previous_position
-          })
-          .eq('id', update.id)
-        
-        if (updateError) {
-          console.error('Error restoring sample:', updateError)
-          alert(`Failed to undo checkout: ${updateError.message}\n\nMake sure the database migration has been run.`)
+      // Restore each sample through audited server endpoint
+      for (const sample of restoreCandidates) {
+        const res = await apiFetch(`/api/samples/${sample.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'undo_checkout' })
+        })
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          console.error('Error restoring sample:', payload)
+          alert(`Failed to undo checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
@@ -842,7 +808,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         return item
       }))
 
-      alert(`Restored ${updates.length} sample(s) to original positions`)
+      alert(`Restored ${restoreCandidates.length} sample(s) to original positions`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error undoing checkout:', err)

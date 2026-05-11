@@ -298,33 +298,26 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setCheckingOut(true)
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      const userInitials = user.initials || 'Unknown'
+      const token = localStorage.getItem('token')
+      const res = await apiFetch(`/api/samples/${sample.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'checkout' })
+      })
 
-      const { error } = await supabase
-        .from('samples')
-        .update({
-          is_checked_out: true,
-          checked_out_at: new Date().toISOString(),
-          checked_out_by: userInitials,
-          previous_container_id: sample.container_id,
-          previous_position: sample.position,
-          container_id: null,
-          position: null
-        })
-        .eq('id', sample.id)
-
-      if (error) {
-        console.error('Checkout error:', error)
-        alert(`Failed to checkout sample: ${error.message}`)
-        return
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(payload?.message || payload?.error || 'Failed to checkout sample')
       }
       
       onUpdate?.()
       onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Checkout error:', error)
-      alert('Failed to checkout sample')
+      alert(error?.message || 'Failed to checkout sample')
     } finally {
       setCheckingOut(false)
     }

@@ -1627,22 +1627,16 @@ export default function App() {
                               position: sample.position
                             })
                             
-                            const { error } = await supabase
-                              .from('samples')
-                              .update({
-                                is_checked_out: true,
-                                checked_out_at: new Date().toISOString(),
-                                checked_out_by: user.initials,
-                                previous_container_id: sample.container_id,
-                                previous_position: sample.position,
-                                container_id: null,
-                                position: null
-                              })
-                              .eq('id', sample.id)
-                            
-                            if (error) {
-                              console.error('Checkout error:', error)
-                              alert(`Failed to checkout ${sample.sample_id}: ${error.message}`)
+                            const res = await apiFetch(`/api/samples/${sample.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'checkout' })
+                            })
+
+                            if (!res.ok) {
+                              const payload = await res.json().catch(() => null)
+                              console.error('Checkout error:', payload)
+                              alert(`Failed to checkout ${sample.sample_id}: ${payload?.message || payload?.error || 'unknown error'}`)
                               return
                             }
                           }
@@ -1682,22 +1676,16 @@ export default function App() {
                         setLoadingSamples(true)
                         try {
                           for (const sample of undoCandidates) {
-                            const { error } = await supabase
-                              .from('samples')
-                              .update({
-                                container_id: sample.previous_container_id,
-                                position: sample.previous_position,
-                                is_checked_out: false,
-                                checked_out_at: null,
-                                checked_out_by: null,
-                                previous_container_id: null,
-                                previous_position: null
-                              })
-                              .eq('id', sample.id)
-                            
-                            if (error) {
-                              console.error('Undo checkout error:', error)
-                              alert(`Failed to undo checkout for ${sample.sample_id}: ${error.message}`)
+                            const res = await apiFetch(`/api/samples/${sample.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'undo_checkout' })
+                            })
+
+                            if (!res.ok) {
+                              const payload = await res.json().catch(() => null)
+                              console.error('Undo checkout error:', payload)
+                              alert(`Failed to undo checkout for ${sample.sample_id}: ${payload?.message || payload?.error || 'unknown error'}`)
                               return
                             }
                           }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/api'
+import { supabase, apiFetch } from '../lib/api'
 import { getUser } from '../lib/auth'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import LocationBreadcrumb from './LocationBreadcrumb'
@@ -98,7 +98,15 @@ export default function RackDetails({ id }: { id: string }) {
 
   const logAudit = async (payload: any) => {
     try {
-      await supabase.from('audit_logs').insert([payload])
+      const res = await apiFetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.message || body?.error || 'audit_log_write_failed')
+      }
     } catch (e) {
       console.warn('Failed to write audit log', e)
     }
