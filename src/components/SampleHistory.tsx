@@ -137,6 +137,15 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
         details.push(`Container: ${container}`)
       }
       if (metadata.position) details.push(`Position: ${metadata.position}`)
+    } else if (audit.action === 'tag_added') {
+      const tagName = metadata.tag_name || metadata.tag_id || 'tag'
+      description = `Tag added: ${tagName}`
+    } else if (audit.action === 'tag_removed') {
+      const tagName = metadata.tag_name || metadata.tag_id || 'tag'
+      description = `Tag removed: ${tagName}`
+    } else if (audit.action === 'tags_added') {
+      const tags = (metadata.tags || []).map((t: any) => t.name).filter(Boolean)
+      description = tags.length ? `Tags added: ${tags.join(', ')}` : 'Tags added'
     }
 
     return { description, details }

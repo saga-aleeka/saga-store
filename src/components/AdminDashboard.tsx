@@ -404,49 +404,94 @@ export default function AdminDashboard(){
   // editable preview changes
   const [editableBoxes, setEditableBoxes] = useState<any[] | null>(null)
 
-  const audits = useFetch<any[]>('/api/audit')
   const backups = useFetch<any[]>('/api/backups')
+  const [auditRows, setAuditRows] = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(true)
+  const [auditTotal, setAuditTotal] = useState(0)
   
   // Fetch container names for audit log display
   const [containerNames, setContainerNames] = React.useState<Map<string, string>>(new Map())
   
   React.useEffect(() => {
+    async function fetchAuditLogs() {
+      setAuditLoading(true)
+      
+      try {
+        const params = new URLSearchParams({
+          page: String(auditPage),
+          perPage: String(auditPerPage)
+        })
+
+        const query = auditSearchQuery.trim()
+        if (query) params.set('q', query)
+
+        const res = await apiFetch(`/api/audit?${params.toString()}`)
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          throw new Error(payload?.message || payload?.error || 'Failed to load audit logs')
+        }
+
+        const payload = await res.json()
+        const nextRows = payload?.data || []
+        setAuditRows(nextRows)
+        setAuditTotal(Number(payload?.total ?? nextRows.length ?? 0))
+      } catch (error) {
+        console.error('Failed to fetch audit logs:', error)
+        setAuditRows([])
+        setAuditTotal(0)
+      } finally {
+        setAuditLoading(false)
+      }
+    }
+    
+    fetchAuditLogs()
+  }, [auditPage, auditPerPage, auditSearchQuery])
+
+  React.useEffect(() => {
     async function fetchContainerNames() {
-      if (!audits.data || audits.data.length === 0) return
-      
+      if (!auditRows || auditRows.length === 0) {
+        setContainerNames(new Map())
+        return
+      }
+
       const containerIds = new Set<string>()
-      
+
       // Collect all unique container IDs from audit metadata
-      audits.data.forEach((audit: any) => {
+      auditRows.forEach((audit: any) => {
         if (audit.metadata?.container_id) containerIds.add(audit.metadata.container_id)
+        if (audit.metadata?.previous_container_id) containerIds.add(audit.metadata.previous_container_id)
         if (audit.metadata?.from_container) containerIds.add(audit.metadata.from_container)
         if (audit.metadata?.to_container) containerIds.add(audit.metadata.to_container)
+        if (audit.metadata?.container_name && audit.metadata?.container_id) containerIds.add(audit.metadata.container_id)
         if (audit.entity_type === 'container' && audit.entity_id) containerIds.add(audit.entity_id)
       })
-      
-      if (containerIds.size === 0) return
-      
+
+      if (containerIds.size === 0) {
+        setContainerNames(new Map())
+        return
+      }
+
       try {
         const { data, error } = await supabase
           .from('containers')
           .select('id, name')
           .in('id', Array.from(containerIds))
-        
+
         if (error) throw error
-        
+
         const nameMap = new Map<string, string>()
         data?.forEach((container: any) => {
           nameMap.set(container.id, container.name)
         })
-        
+
         setContainerNames(nameMap)
       } catch (error) {
         console.error('Failed to fetch container names for audit log:', error)
       }
     }
-    
+
     fetchContainerNames()
-  }, [audits.data])
+  }, [auditRows])
 
   async function doImport(){
     const payload = { items: [ { sample_id: 'S-NEW', container: 1 } ] }
@@ -824,38 +869,15 @@ export default function AdminDashboard(){
           </div>
           
           {/* Pagination controls */}
-          {!audits.loading && audits.data && audits.data.length > 0 && (() => {
-            // Filter audit logs based on search query
-            const filteredAudits = auditSearchQuery.trim() === '' 
-              ? audits.data 
-              : audits.data.filter((a: any) => {
-                  const query = auditSearchQuery.toLowerCase().trim()
-                  
-                  // Search in entity name (sample ID or container name)
-                  if (a.entity_name?.toLowerCase().includes(query)) return true
-                  
-                  // Search in description
-                  if (a.description?.toLowerCase().includes(query)) return true
-                  
-                  // Search in container names from metadata
-                  if (a.metadata?.container_id && containerNames.get(a.metadata.container_id)?.toLowerCase().includes(query)) return true
-                  if (a.metadata?.from_container && containerNames.get(a.metadata.from_container)?.toLowerCase().includes(query)) return true
-                  if (a.metadata?.to_container && containerNames.get(a.metadata.to_container)?.toLowerCase().includes(query)) return true
-                  
-                  // Search in entity_id if it's a container
-                  if (a.entity_type === 'container' && a.entity_id && containerNames.get(a.entity_id)?.toLowerCase().includes(query)) return true
-                  
-                  return false
-                })
-            
-            const totalPages = Math.ceil(filteredAudits.length / auditPerPage)
-            
+          {!auditLoading && auditRows.length > 0 && (() => {
+            const totalPages = Math.max(Math.ceil(auditTotal / auditPerPage), 1)
+
             return (
               <>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                   <div style={{display:'flex',gap:8,alignItems:'center'}}>
                     <span style={{fontSize:14,color:'#6b7280'}}>
-                      {filteredAudits.length} {filteredAudits.length === 1 ? 'result' : 'results'}
+                      {auditTotal} {auditTotal === 1 ? 'result' : 'results'}
                       {auditSearchQuery.trim() && ` for "${auditSearchQuery}"`}
                     </span>
                     <span style={{fontSize:14,color:'#6b7280'}}>•</span>
@@ -897,12 +919,10 @@ export default function AdminDashboard(){
                 </div>
                 
                 <div style={{marginTop:12}}>
-                  {filteredAudits.length === 0 && (
+                  {auditRows.length === 0 && (
                     <div className="muted">No audit events matching "{auditSearchQuery}"</div>
                   )}
-                  {filteredAudits
-                    .slice((auditPage - 1) * auditPerPage, auditPage * auditPerPage)
-                    .map((a:any) => (
+                  {auditRows.map((a:any) => (
               <div key={a.id} className="sample-row" style={{marginTop:8,padding:12,background:'#f9fafb',borderRadius:6,display:'flex',gap:12,alignItems:'flex-start'}}>
                 <div style={{flex:1,display:'flex',flexDirection:'column',gap:8}}>
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -961,13 +981,13 @@ export default function AdminDashboard(){
             )
           })()}
           
-          {audits.loading && (
+          {auditLoading && (
             <div>
               {[...Array(5)].map((_, i) => <AuditLogSkeleton key={i} />)}
             </div>
           )}
-          {!audits.loading && audits.data && audits.data.length === 0 && (
-            <div className="muted" style={{marginTop:12}}>No audit events</div>
+          {!auditLoading && auditRows.length === 0 && (
+            <div className="muted" style={{marginTop:12}}>{auditSearchQuery.trim() ? `No audit events matching "${auditSearchQuery}"` : 'No audit events'}</div>
           )}
         </div>
       )}

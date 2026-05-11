@@ -14,18 +14,34 @@ module.exports = async function handler(req: any, res: any) {
 
     // GET - Retrieve audit logs
     if (req.method === 'GET'){
-      const { data, error } = await supabaseAdmin
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500)
+      const page = Math.max(Number(req.query?.page ?? new URL(req.url || '', 'http://localhost').searchParams.get('page') ?? 1) || 1, 1)
+      const perPageRaw = Number(req.query?.perPage ?? new URL(req.url || '', 'http://localhost').searchParams.get('perPage') ?? 24) || 24
+      const perPage = Math.min(Math.max(perPageRaw, 1), 100)
+      const searchText = String(req.query?.q ?? new URL(req.url || '', 'http://localhost').searchParams.get('q') ?? '').trim() || null
+
+      const { data, error } = await supabaseAdmin.rpc('search_audit_logs', {
+        search_text: searchText,
+        page_number: page,
+        per_page: perPage
+      })
 
       if (error) {
         console.error('Failed to fetch audit logs:', error)
         return res.status(502).json({ error: 'supabase_fetch_failed', message: error.message })
       }
 
-      return res.status(200).json({ data: data ?? [] })
+      const rows = data ?? []
+      const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0
+      const items = rows.map(({ total_count, ...row }: any) => row)
+
+      return res.status(200).json({
+        data: items,
+        total,
+        page,
+        perPage,
+        totalPages: Math.max(Math.ceil(total / perPage), 1),
+        q: searchText || ''
+      })
     }
 
     // POST - Create audit log entry
