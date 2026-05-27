@@ -1,54 +1,79 @@
 import React, { useState } from 'react'
 import { setToken, setUser } from '../lib/auth'
+import { supabase } from '../lib/supabaseClient'
+import { getUserRoles } from '../lib/roles'
+
+function toInitials(email?: string | null){
+  const local = String(email || '').split('@')[0] || ''
+  const cleaned = local.replace(/[^A-Za-z0-9]/g, '')
+  if (!cleaned) return 'USER'
+  return cleaned.slice(0, 4).toUpperCase()
+}
+
+function toAppUser(user: any){
+  const md = user?.user_metadata || {}
+  const email = user?.email || null
+  const roles = getUserRoles(user)
+  return {
+    initials: md.initials || md.preferred_initials || toInitials(email),
+    name: md.full_name || md.name || email || 'User',
+    email,
+    roles,
+    role: roles[0] || null,
+  }
+}
 
 export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => void }){
-  const [initials, setInitials] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function doSignIn(){
-    if (!initials) return
+    if (!email || !password) return
     setLoading(true)
     try{
       setError(null)
-      // Fetch authorized users from server endpoint (does NOT include tokens)
-      const listRes = await fetch('/api/authorized_users')
-      if (!listRes.ok) {
-        setError('Unable to reach authentication service')
-        setLoading(false)
-        return
-      }
+      setNotice(null)
 
-      const { data: list } = await listRes.json()
-      const match = (list || []).find((u: any) => String(u.initials).toLowerCase() === initials.trim().toLowerCase())
-      
-      if (!match) {
-        setError('Initials not recognized')
-        setLoading(false)
-        return
-      }
-
-      // Now authenticate with the server to get the token
-      const signinRes = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initials: initials.trim() })
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       })
 
-      if (!signinRes.ok) {
-        setError('Authentication failed')
-        setLoading(false)
+      if (signInError || !data?.session || !data?.user) {
+        setError(signInError?.message || 'Authentication failed')
         return
       }
 
-      const { token } = await signinRes.json()
-      setToken(token)
-      setUser({ initials: match.initials, name: match.name })
-      onSuccess({ initials: match.initials, name: match.name })
-      setInitials('')
-      setLoading(false)
+      const appUser = toAppUser(data.user)
+      setToken(data.session.access_token)
+      setUser(appUser)
+      onSuccess(appUser)
+      setPassword('')
     }catch(e){ console.warn(e); setError('Sign-in failed') }
     setLoading(false)
+  }
+
+  async function sendMagicLink(){
+    if (!email) return
+    setMagicLinkLoading(true)
+    try{
+      setError(null)
+      setNotice(null)
+      const { error: otpError } = await supabase.auth.signInWithOtp({ email: email.trim() })
+      if (otpError) {
+        setError(otpError.message || 'Failed to send magic link')
+        return
+      }
+      setNotice('Magic link sent. Check your email to continue.')
+    }catch(e){
+      console.warn(e)
+      setError('Failed to send magic link')
+    }
+    setMagicLinkLoading(false)
   }
 
   return (
@@ -59,22 +84,42 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
 
         <div className="mt-2 flex flex-col gap-2 items-stretch">
           <input
-            aria-label="Enter your initials"
-            placeholder="Enter your initials"
-            value={initials}
-            onChange={(e)=> setInitials(e.target.value)}
+            aria-label="Enter your email"
+            placeholder="Work email"
+            value={email}
+            onChange={(e)=> setEmail(e.target.value)}
+            type="email"
+            autoCapitalize="none"
+            autoCorrect="off"
             onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
             autoFocus
             className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
           />
+          <input
+            aria-label="Enter your password"
+            placeholder="Password"
+            value={password}
+            onChange={(e)=> setPassword(e.target.value)}
+            type="password"
+            onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
+            className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
+          />
           {error && <div className="text-red-600 text-sm mt-1">{error}</div>}
+          {notice && <div className="text-green-700 text-sm mt-1">{notice}</div>}
 
           <button
             className="px-4 py-2 rounded bg-gray-700 text-white font-semibold disabled:opacity-60"
             onClick={doSignIn}
-            disabled={loading || initials.trim() === ''}
+            disabled={loading || email.trim() === '' || password.trim() === ''}
           >
-            {loading ? 'Signing in…' : 'Start Using SAGA'}
+            {loading ? 'Signing in...' : 'Sign in with Supabase'}
+          </button>
+          <button
+            className="px-4 py-2 rounded border border-gray-300 text-gray-700 font-semibold disabled:opacity-60"
+            onClick={sendMagicLink}
+            disabled={magicLinkLoading || email.trim() === ''}
+          >
+            {magicLinkLoading ? 'Sending link...' : 'Email me a magic link'}
           </button>
         </div>
       </div>

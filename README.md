@@ -88,7 +88,55 @@ SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ADMIN_SECRET=your_admin_secret
 CRON_SECRET=your_cron_secret
+ADMIN_ROLES=admin,owner
+ADMIN_EMAILS=admin1@company.com,admin2@company.com
+
+VITE_ADMIN_EMAILS=admin1@company.com,admin2@company.com
 ```
+
+### RBAC And Supabase User Setup
+
+This project now uses Supabase Auth users with role-based checks:
+
+- Signed-in users can access Worklist Manager, Audit Trail, and Backups download.
+- Admin users can additionally manage Authorized Users and create manual backups.
+
+Admin role checks read from:
+
+- `app_metadata.roles` (preferred)
+- `app_metadata.role`
+- `user_metadata.roles`
+- `user_metadata.role`
+
+An email allowlist fallback is also supported with `ADMIN_EMAILS` (backend) and `VITE_ADMIN_EMAILS` (frontend).
+
+#### Onboard users from CLI
+
+Use the included onboarding utility:
+
+```bash
+# Create a standard user
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+npm run onboard:user -- --email user@company.com --name "User Name" --roles user --create-if-missing --password 'TempPass123!'
+
+# Create or promote an admin
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+npm run onboard:user -- --email admin@company.com --name "Admin Name" --roles admin --create-if-missing --password 'TempPass123!'
+
+# Update metadata/roles only for existing user
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+npm run onboard:user -- --email existing@company.com --roles admin,owner --initials EXIS
+
+# Preview changes without writing
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+npm run onboard:user -- --email user@company.com --roles user --dry-run
+```
+
+Notes:
+
+- Use `--email-confirmed` when you need immediate login for newly created users.
+- The utility merges incoming roles with existing `app_metadata.roles`.
+- Existing non-role metadata in `user_metadata` is preserved.
 
 ### Database Setup
 
@@ -106,6 +154,7 @@ Run the migrations in `/db/migrations/` in order:
 - `npm run dev` — Start development server
 - `npm run build` — Build for production
 - `npm run preview` — Preview production build
+- `npm run onboard:user -- ...` — Create/update Supabase users with role metadata
 - `npm test` — Run tests
 
 ## Project Structure

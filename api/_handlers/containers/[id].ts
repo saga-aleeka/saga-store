@@ -2,6 +2,7 @@
 // Handles GET, PUT, PATCH, DELETE for a specific container
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
+const { getRequestAuth, hasAdminSecret } = require('../_auth_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -24,33 +25,15 @@ module.exports = async function handler(req: any, res: any){
       return res.status(400).json({ error: 'missing_id' })
     }
 
-    // Helper to validate admin credentials
-    const providedSecret = req.headers['x-admin-secret'] || req.headers['x_admin_secret']
-    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
-    let isAdmin = false
-    if (ADMIN_SECRET && providedSecret && String(providedSecret) === String(ADMIN_SECRET)) isAdmin = true
-    const m = String(authHeader || '').match(/^Bearer\s+(.+)$/i)
-    const clientToken = m ? m[1] : null
-    
-    console.log('Auth check:', { hasSecret: !!providedSecret, hasToken: !!clientToken, tokenLength: clientToken?.length })
-    
-    if (!isAdmin && clientToken && clientToken.length > 0 && clientToken !== 'null' && clientToken !== 'undefined'){
-      try {
-        const { data: found, error: chkError } = await supabaseAdmin
-          .from('authorized_users')
-          .select('*')
-          .eq('token', clientToken)
-          .limit(1)
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    const isAdmin = hasAdminSecret(req, ADMIN_SECRET) || auth.isAuthenticated
 
-        if (chkError) {
-          console.error('Token check Supabase error:', chkError.message)
-        } else if (found && found.length > 0) {
-          isAdmin = true
-          console.log('Token validated successfully')
-        }
-      } catch (tokenCheckError: any) {
-        console.error('Token validation error:', tokenCheckError)
-      }
+    console.log('Auth check:', { hasAdminSecret: hasAdminSecret(req, ADMIN_SECRET), isAuthenticated: auth.isAuthenticated })
+
+    const headerUser = getUserFromRequest(req)
+    const requestUser = {
+      initials: headerUser.initials || auth.identity.initials,
+      name: headerUser.name || auth.identity.name,
     }
 
     // GET single container with samples
@@ -106,7 +89,7 @@ module.exports = async function handler(req: any, res: any){
       }
       
       // Create audit log
-      const user = getUserFromRequest(req)
+      const user = requestUser
       console.log('User from update request:', user)
       if (data && data[0] && original) {
         console.log('Creating audit log for container update:', data[0].id)
@@ -221,7 +204,7 @@ module.exports = async function handler(req: any, res: any){
       }
 
       // Create audit log
-      const user = getUserFromRequest(req)
+      const user = requestUser
       console.log('User from delete request:', user)
       if (containerData) {
         console.log('Creating audit log for container deletion:', id)

@@ -16,10 +16,11 @@ import RackDetails from './components/RackDetails'
 import TagsManager from './components/TagsManager'
 import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkeleton'
 import { supabase, apiFetch } from './lib/api'
-import { clearToken, getUser, setUser as setUserStorage } from './lib/auth'
+import { clearToken, getUser, setToken, setUser as setUserStorage } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES } from './constants'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
+import { getUserRoles, isAdminUser } from './lib/roles'
 
 // Sample type color mapping (same as ContainerFilters)
 const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
@@ -62,21 +63,74 @@ function buildDisplayLocation(container: any, rackMap: Map<string, any>, coldMap
 
 // Allow disabling the login modal in dev by setting VITE_DISABLE_AUTH=true in .env.local
 const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
-const _mode = (import.meta as any).env?.MODE ?? (import.meta as any).MODE ?? 'development'
 const explicitDisable = (_rawDisable === '1' || String(_rawDisable || '').toLowerCase() === 'true')
-// Default to disabling auth in local development for convenience
-const DISABLE_AUTH = explicitDisable || String(_mode) === 'development'
+const DISABLE_AUTH = explicitDisable
+
+function toInitials(email?: string | null){
+  const local = String(email || '').split('@')[0] || ''
+  const cleaned = local.replace(/[^A-Za-z0-9]/g, '')
+  if (!cleaned) return 'USER'
+  return cleaned.slice(0, 4).toUpperCase()
+}
+
+function toStoredUser(user: any){
+  const md = user?.user_metadata || {}
+  const email = user?.email || null
+  const roles = getUserRoles(user)
+  return {
+    initials: md.initials || md.preferred_initials || toInitials(email),
+    name: md.full_name || md.name || email || 'User',
+    email,
+    roles,
+    role: roles[0] || null,
+  }
+}
 
 export default function App() {
   const [route, setRoute] = useState<string>(window.location.hash || '#/containers')
-  const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer' } : null)
+  const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer', roles: ['admin'], role: 'admin', email: 'dev@example.local' } : null)
   const [user, setUser] = useState<any | null>(initialUser)
+  const canAccessDashboard = DISABLE_AUTH || !!user
+  const canManageUsers = DISABLE_AUTH || isAdminUser(user)
 
   useEffect(() => {
-    if (!DISABLE_AUTH) setUser(getUser())
+    if (DISABLE_AUTH) return
+
+    let mounted = true
+
+    const syncFromSession = (session: any) => {
+      if (!mounted) return
+      if (!session?.access_token || !session?.user) {
+        clearToken()
+        setUserStorage(null)
+        setUser(null)
+        return
+      }
+
+      const mappedUser = toStoredUser(session.user)
+      setToken(session.access_token)
+      setUserStorage(mappedUser)
+      setUser(mappedUser)
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      syncFromSession(data?.session || null)
+    }).catch((err) => {
+      console.warn('Failed to restore Supabase session', err)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncFromSession(session)
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   function signOut(){
+    try{ void supabase.auth.signOut() }catch{}
     try{ clearToken(); setUserStorage(null) }catch{}
     setUser(null)
   }
@@ -230,6 +284,12 @@ export default function App() {
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
+
+  useEffect(() => {
+    if (route === '#/admin' && !!user && !canAccessDashboard) {
+      window.location.hash = '#/containers'
+    }
+  }, [route, canAccessDashboard, user])
 
   // Load counts for badges on mount and when route changes
   useEffect(() => {
@@ -2258,8 +2318,15 @@ export default function App() {
           </div>
         )}
 
-        {route === '#/admin' && (
-          <AdminDashboard />
+        {route === '#/admin' && canAccessDashboard && (
+          <AdminDashboard canManageUsers={canManageUsers} />
+        )}
+
+        {route === '#/admin' && !!user && !canAccessDashboard && (
+          <div className="card" style={{ padding: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Access Required</h3>
+            <p className="muted" style={{ marginBottom: 0 }}>Sign in to access this page.</p>
+          </div>
         )}
 
         {route === '#/worklist' && (

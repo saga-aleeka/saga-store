@@ -240,7 +240,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setArchiving(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = getToken()
       const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
@@ -270,7 +270,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setArchiving(true) // Reuse the archiving state for loading
     try {
-      const token = localStorage.getItem('token')
+      const token = getToken()
       const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
@@ -298,7 +298,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setCheckingOut(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = getToken()
       const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'PUT',
         headers: {
@@ -330,7 +330,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
 
     setDeleting(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = getToken()
       const res = await apiFetch(`/api/samples/${sample.id}`, {
         method: 'DELETE',
         headers: {

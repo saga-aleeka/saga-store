@@ -403,7 +403,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
     
     setBatchActionInProgress(true)
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      const user = getUser() || {}
       if (!user?.initials) {
         throw new Error('You must be signed in to checkout samples')
       }

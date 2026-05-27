@@ -3,6 +3,7 @@
 // - POST /api/admin_users -> create a user (requires x-admin-secret header)
 // - DELETE /api/admin_users -> delete a user by id/initials/token (requires x-admin-secret header)
 const { createClient } = require('@supabase/supabase-js')
+const { getRequestAuth, hasAdminSecret, isAdminAuth } = require('./_auth_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -13,6 +14,9 @@ module.exports = async function handler(req: any, res: any){
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'server_misconfigured', message: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' })
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    const isAdmin = hasAdminSecret(req, ADMIN_SECRET) || isAdminAuth(auth)
+    if (!isAdmin) return res.status(401).json({ error: 'missing_admin_credentials' })
 
     if (req.method === 'GET'){
       // list users but DO NOT include tokens in the response for safety
@@ -25,26 +29,7 @@ module.exports = async function handler(req: any, res: any){
       return res.status(200).json({ data: data ?? [] })
     }
 
-    // For POST/DELETE/PATCH require admin credentials.
-    // Accept either the ADMIN_SECRET header or an Authorization: Bearer <token>
-    const providedSecret = req.headers['x-admin-secret'] || req.headers['x_admin_secret']
-    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
-    let isAdmin = false
-    if (ADMIN_SECRET && providedSecret && String(providedSecret) === String(ADMIN_SECRET)) isAdmin = true
-    // If Authorization Bearer token provided, validate it exists in authorized_users
-    const m = String(authHeader || '').match(/^Bearer\s+(.+)$/i)
-    const clientToken = m ? m[1] : null
-    if (!isAdmin && clientToken) {
-      // check token exists
-      const { data: found, error: chkError } = await supabaseAdmin
-        .from('authorized_users')
-        .select('*')
-        .eq('token', clientToken)
-        .limit(1)
-
-      if (!chkError && found && found.length > 0) isAdmin = true
-    }
-    if (!isAdmin) return res.status(401).json({ error: 'missing_admin_credentials' })
+    // POST/DELETE/PATCH also require admin credentials.
 
     if (req.method === 'POST'){
       let body: any = req.body

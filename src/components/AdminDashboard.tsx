@@ -323,6 +323,12 @@ function useFetch<T>(url: string){
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
+    if (!url) {
+      setData([] as any)
+      setLoading(false)
+      return
+    }
+
     let mounted = true
     let aborted = false
     setLoading(true)
@@ -330,7 +336,7 @@ function useFetch<T>(url: string){
     async function fetchData(){
       setLoading(true)
       try{
-        const r = await fetch(getApiUrl(url))
+        const r = await apiFetch(url)
         if (!r.ok && r.status === 404) {
           // Endpoint doesn't exist, return empty array
           if (mounted && !aborted) { setData([] as any); setLoading(false) }
@@ -361,9 +367,15 @@ function useFetch<T>(url: string){
   return { data, loading }
 }
 
-export default function AdminDashboard(){
+export default function AdminDashboard({ canManageUsers = false }: { canManageUsers?: boolean }){
 
   const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'|'worklist'>('import')
+
+  useEffect(() => {
+    if (!canManageUsers && tab === 'users') {
+      setTab('audit')
+    }
+  }, [canManageUsers, tab])
 
   // Pagination state for audit logs
   const [auditPage, setAuditPage] = useState(1)
@@ -371,7 +383,7 @@ export default function AdminDashboard(){
   const [auditSearchQuery, setAuditSearchQuery] = useState('')
 
   // fetch authorized users (server-side endpoint will use service role key in production)
-  const authUsers = useFetch<any[]>('/api/admin_users')
+  const authUsers = useFetch<any[]>(canManageUsers ? '/api/admin_users' : '')
   const [showAdd, setShowAdd] = useState(false)
   const [newInitials, setNewInitials] = useState('')
   const [newName, setNewName] = useState('')
@@ -512,7 +524,9 @@ export default function AdminDashboard(){
         <button className={tab==='worklist'? 'btn':'btn ghost'} onClick={() => setTab('worklist')}>Worklist Manager</button>
         <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
         <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
-        <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
+        {canManageUsers && (
+          <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
+        )}
       </div>
 
       {tab === 'worklist' && (
@@ -999,41 +1013,43 @@ export default function AdminDashboard(){
               <h3 style={{margin:0,fontSize:18,fontWeight:600}}>Database Backups</h3>
               <p className="muted" style={{marginTop:4}}>Nightly backups occur automatically at 3:00 AM EST</p>
             </div>
-            <button 
-              className="btn" 
-              onClick={async () => {
-                try {
-                  const res = await apiFetch('/api/backups', { 
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ nightly: false })
-                  })
-                  
-                  if (!res.ok) throw new Error('Backup failed')
-                  
-                  // Download the CSV
-                  const blob = await res.blob()
-                  const url = window.URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `saga-manual-backup-${new Date().toISOString().split('T')[0]}.csv`
-                  document.body.appendChild(a)
-                  a.click()
-                  document.body.removeChild(a)
-                  window.URL.revokeObjectURL(url)
-                  
-                  alert('Backup downloaded successfully!')
-                  
-                  // Refresh the backups list by reloading the component
-                  window.location.reload()
-                } catch(e) {
-                  console.error('Backup failed:', e)
-                  alert('Failed to create backup. Please try again.')
-                }
-              }}
-            >
-              Create Manual Backup
-            </button>
+            {canManageUsers && (
+              <button 
+                className="btn" 
+                onClick={async () => {
+                  try {
+                    const res = await apiFetch('/api/backups', { 
+                      method: 'POST',
+                      headers: {'Content-Type':'application/json'},
+                      body: JSON.stringify({ nightly: false })
+                    })
+                    
+                    if (!res.ok) throw new Error('Backup failed')
+                    
+                    // Download the CSV
+                    const blob = await res.blob()
+                    const url = window.URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `saga-manual-backup-${new Date().toISOString().split('T')[0]}.csv`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    window.URL.revokeObjectURL(url)
+                    
+                    alert('Backup downloaded successfully!')
+                    
+                    // Refresh the backups list by reloading the component
+                    window.location.reload()
+                  } catch(e) {
+                    console.error('Backup failed:', e)
+                    alert('Failed to create backup. Please try again.')
+                  }
+                }}
+              >
+                Create Manual Backup
+              </button>
+            )}
           </div>
           
           <div style={{marginTop:12}}>
@@ -1110,7 +1126,7 @@ export default function AdminDashboard(){
         </div>
       )}
 
-      {tab === 'users' && (
+      {tab === 'users' && canManageUsers && (
         <div>
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}

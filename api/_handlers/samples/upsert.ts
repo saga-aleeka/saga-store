@@ -1,6 +1,7 @@
 // Sample upsert endpoint - creates or updates samples without duplicates
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
+const { getRequestAuth } = require('../_auth_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -15,23 +16,11 @@ module.exports = async function handler(req: any, res: any){
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     
-    // Validate auth token
-    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
-    const m = String(authHeader).match(/^Bearer\s+(.+)$/i)
-    const token = m ? m[1] : null
-    
-    let user = null
-    if (token) {
-      const { data: users } = await supabaseAdmin
-        .from('authorized_users')
-        .select('initials')
-        .eq('token', token)
-        .limit(1)
-      
-      if (users && users.length > 0) {
-        user = users[0].initials
-      }
-    }
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    if (!auth.isAuthenticated) return res.status(401).json({ error: 'unauthorized' })
+
+    const headerUser = getUserFromRequest(req)
+    const user = headerUser.initials || auth.identity.initials || auth.identity.email || null
 
     let body: any = req.body
     try{ if (!body && req.json) body = await req.json() }catch(e){}

@@ -1,5 +1,6 @@
 // Backup endpoint - generates CSV backups and lists stored backups
 const { createClient } = require('@supabase/supabase-js')
+const { getRequestAuth, hasAdminSecret, isAdminAuth } = require('./_auth_helper')
 
 // Helper to generate CSV content
 function generateCSV(containers: any[], samples: any[]): string {
@@ -67,12 +68,17 @@ module.exports = async function handler(req: any, res: any) {
   try {
     const SUPABASE_URL = process.env.SUPABASE_URL
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const ADMIN_SECRET = process.env.ADMIN_SECRET
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return res.status(500).json({ error: 'server_misconfigured' })
     }
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    if (!auth.isAuthenticated && !hasAdminSecret(req, ADMIN_SECRET)) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
 
     // GET /api/backups - list available backups or download specific backup
     if (req.method === 'GET') {
@@ -166,11 +172,16 @@ module.exports = async function handler(req: any, res: any) {
 
     // POST /api/backups - generate a backup
     if (req.method === 'POST') {
+      const canCreateBackups = hasAdminSecret(req, ADMIN_SECRET) || isAdminAuth(auth)
+      if (!canCreateBackups) {
+        return res.status(403).json({ error: 'forbidden', message: 'Admin access required' })
+      }
+
       let body: any = req.body
       try { if (!body && req.json) body = await req.json() } catch(e) {}
 
       const isNightly = body?.nightly === true
-      const userInitials = req.headers['x-user-initials'] || 'system'
+      const userInitials = req.headers['x-user-initials'] || auth.identity.initials || 'system'
 
       // Fetch all containers
       const { data: allContainers, error: containersError } = await supabaseAdmin

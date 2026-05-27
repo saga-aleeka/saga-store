@@ -3,6 +3,7 @@
 // service role key, then calls the `samples_upsert_v1` RPC with the provided items.
 // This file is intended to run on Vercel/Netlify/Supabase Edge Functions or similar.
 const { createClient } = require('@supabase/supabase-js')
+const { getRequestAuth } = require('./_auth_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -15,21 +16,8 @@ module.exports = async function handler(req: any, res: any){
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Extract client token from Authorization header
-    const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || ''
-    const m = String(auth).match(/^Bearer\s+(.+)$/i)
-    if (!m) return res.status(401).json({ error: 'missing_authorization' })
-    const clientToken = m[1]
-
-    // Validate client token exists in authorized_users
-    const { data: found, error: checkError } = await supabaseAdmin
-      .from('authorized_users')
-      .select('*')
-      .eq('token', clientToken)
-      .limit(1)
-
-    if (checkError) return res.status(500).json({ error: 'supabase_lookup_failed', message: checkError.message })
-    if (!found || found.length === 0) return res.status(401).json({ error: 'unauthorized' })
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    if (!auth.isAuthenticated) return res.status(401).json({ error: 'unauthorized' })
 
     // parse body: accept { items: [...] } or a raw array
     let body: any = req.body

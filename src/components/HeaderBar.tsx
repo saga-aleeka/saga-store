@@ -5,6 +5,7 @@ type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boo
 export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin, containersCount = 0, archivedCount = 0, samplesCount = 0, searchQuery = '', onSearchChange}: Props){
   const [menuOpen, setMenuOpen] = useState(false)
   const [tabsOpen, setTabsOpen] = useState(false)
+  const canAccessAdmin = !!user
   const root = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const tabsButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -80,19 +81,21 @@ export default function HeaderBar({route = window.location.hash || '#/containers
               </div>
             )}
 
-            <div className="relative">
-              <button ref={menuButtonRef} aria-label="menu" className="hamburger" onClick={() => setMenuOpen(v => !v)}>
-                <span />
-                <span />
-                <span />
-              </button>
+            {canAccessAdmin && (
+              <div className="relative">
+                <button ref={menuButtonRef} aria-label="menu" className="hamburger" onClick={() => setMenuOpen(v => !v)}>
+                  <span />
+                  <span />
+                  <span />
+                </button>
 
-              {menuOpen && (
-                <div ref={menuDropdownRef} className="dropdown" role="menu">
-                  <button className="dropdown-item" onClick={() => navigate('#/admin')}>Admin Dashboard</button>
-                </div>
-              )}
-            </div>
+                {menuOpen && (
+                  <div ref={menuDropdownRef} className="dropdown" role="menu">
+                    <button className="dropdown-item" onClick={() => navigate('#/admin')}>Admin Dashboard</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

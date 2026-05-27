@@ -2,6 +2,7 @@
 // Handles sample updates, moves, and archiving with history tracking
 const { createClient } = require('@supabase/supabase-js')
 const { createAuditLog, getUserFromRequest } = require('../_audit_helper')
+const { getRequestAuth } = require('../_auth_helper')
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -22,23 +23,9 @@ module.exports = async function handler(req: any, res: any){
       return res.status(400).json({ error: 'sample_id_required' })
     }
 
-    // Validate auth token
-    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
-    const m = String(authHeader).match(/^Bearer\s+(.+)$/i)
-    const token = m ? m[1] : null
-    
-    let user = null
-    if (token) {
-      const { data: users } = await supabaseAdmin
-        .from('authorized_users')
-        .select('initials')
-        .eq('token', token)
-        .limit(1)
-      
-      if (users && users.length > 0) {
-        user = users[0].initials
-      }
-    }
+    const auth = await getRequestAuth(req, supabaseAdmin)
+    const headerUser = getUserFromRequest(req)
+    const user = headerUser.initials || auth.identity.initials || auth.identity.email || null
 
     if (req.method === 'GET') {
       // Get sample details
@@ -50,6 +37,10 @@ module.exports = async function handler(req: any, res: any){
 
       if (error) return res.status(404).json({ error: 'sample_not_found' })
       return res.status(200).json({ data })
+    }
+
+    if (!auth.isAuthenticated) {
+      return res.status(401).json({ error: 'unauthorized' })
     }
 
     if (req.method === 'PUT' || req.method === 'PATCH') {
