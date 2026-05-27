@@ -119,6 +119,28 @@ function formatAuditDescription(audit: any, containerNames: Map<string, string>)
   return audit.description || audit.entity_name || 'Unknown action'
 }
 
+const ROLE_OPTIONS = ['user', 'admin', 'owner'] as const
+
+function normalizeRoles(value: any): string[] {
+  if (!value) return []
+  const list = Array.isArray(value)
+    ? value
+    : String(value)
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+
+  return Array.from(new Set(list.map((entry: any) => String(entry || '').trim().toLowerCase()).filter(Boolean)))
+}
+
+function toggleRole(roles: string[], role: string): string[] {
+  const next = new Set(normalizeRoles(roles))
+  if (next.has(role)) next.delete(role)
+  else next.add(role)
+  if (next.size === 0) next.add('user')
+  return Array.from(next)
+}
+
 // parser helpers
 function parseGridText(raw: string){
   if (!raw || !raw.trim()) return { boxes: [], items: [] }
@@ -382,13 +404,14 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
   const [auditPerPage, setAuditPerPage] = useState(24)
   const [auditSearchQuery, setAuditSearchQuery] = useState('')
 
-  // fetch authorized users (server-side endpoint will use service role key in production)
+  // fetch Supabase auth users (admin-only tab)
   const authUsers = useFetch<any[]>(canManageUsers ? '/api/admin_users' : '')
   const [showAdd, setShowAdd] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [newFullName, setNewFullName] = useState('')
   const [newInitials, setNewInitials] = useState('')
-  const [newName, setNewName] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
+  const [newRoles, setNewRoles] = useState<string[]>(['user'])
+  const [editingUser, setEditingUser] = useState<any | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   // auto-clear notices after a short delay
   React.useEffect(() => {
@@ -525,7 +548,7 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
         <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
         <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
         {canManageUsers && (
-          <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Authorized Users</button>
+          <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Users</button>
         )}
       </div>
 
@@ -1130,7 +1153,7 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
         <div>
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}
-            {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No authorized users found</div>}
+            {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No users found</div>}
 
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:8}}>
               <div style={{display:'flex',gap:8}}>
@@ -1153,18 +1176,57 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
 
               {showAdd && (
                 <div style={{border:'1px solid #eee',padding:8,borderRadius:6,marginBottom:12}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                    <input placeholder="Initials" value={newInitials} onChange={(e)=> setNewInitials(e.target.value)} />
-                    <input placeholder="Name (optional)" value={newName} onChange={(e)=> setNewName(e.target.value)} />
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 120px auto',gap:8,alignItems:'center'}}>
+                    <input placeholder="Email" value={newEmail} onChange={(e)=> setNewEmail(e.target.value)} />
+                    <input placeholder="Display name" value={newFullName} onChange={(e)=> setNewFullName(e.target.value)} />
+                    <input placeholder="Initials" value={newInitials} onChange={(e)=> setNewInitials(e.target.value.toUpperCase())} />
                     <button className="btn" onClick={async ()=>{
                       try{
-                        await apiFetch('/api/admin_users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ initials: newInitials, name: newName }) })
-                        setNewInitials(''); setNewName(''); setShowAdd(false)
-                        setNotice({ type: 'success', text: 'User created' })
+                        const res = await apiFetch('/api/admin_users', {
+                          method: 'POST',
+                          headers: {'Content-Type':'application/json'},
+                          body: JSON.stringify({
+                            email: newEmail,
+                            full_name: newFullName,
+                            initials: newInitials,
+                            roles: newRoles,
+                          })
+                        })
+                        if (!res.ok) {
+                          const payload = await res.json().catch(() => null)
+                          throw new Error(payload?.message || payload?.error || 'Invite failed')
+                        }
+                        setNewEmail('')
+                        setNewFullName('')
+                        setNewInitials('')
+                        setNewRoles(['user'])
+                        setShowAdd(false)
+                        setNotice({ type: 'success', text: 'User invited successfully' })
                         window.dispatchEvent(new Event('authorized_users_updated'))
-                      }catch(e){ console.warn('create user failed', e); setNotice({ type: 'error', text: 'Create failed' }) }
+                      }catch(e:any){
+                        console.warn('create user failed', e)
+                        setNotice({ type: 'error', text: e?.message || 'Create failed' })
+                      }
                     }}>Save</button>
                   </div>
+                  <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
+                    <span className="muted" style={{fontSize:12}}>Roles:</span>
+                    {ROLE_OPTIONS.map((role) => {
+                      const active = newRoles.includes(role)
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          className={active ? 'btn' : 'btn ghost'}
+                          style={{padding:'4px 10px',fontSize:12,textTransform:'uppercase'}}
+                          onClick={() => setNewRoles((current) => toggleRole(current, role))}
+                        >
+                          {role}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="muted" style={{fontSize:12,marginTop:8}}>Saving sends an invite email for the user to set up their profile.</div>
                 </div>
               )}
 
@@ -1172,52 +1234,50 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
               <table style={{width:'100%',borderCollapse:'collapse'}}>
                 <thead>
                   <tr style={{textAlign:'left',borderBottom:'1px solid #eee'}}>
+                    <th style={{padding:8}}>Email</th>
+                    <th style={{padding:8}}>Display Name</th>
                     <th style={{padding:8}}>Initials</th>
-                    <th style={{padding:8}}>Name</th>
+                    <th style={{padding:8}}>Roles</th>
+                    <th style={{padding:8}}>Status</th>
+                    <th style={{padding:8}}>Last Sign In</th>
                     <th style={{padding:8}}>Created</th>
-                    <th style={{padding:8,width:60}}> </th>
+                    <th style={{padding:8,width:180}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!authUsers.loading && authUsers.data && authUsers.data.map((u:any) => (
                     <tr key={u.id} style={{borderBottom:'1px solid #fafafa'}}>
+                      <td style={{padding:8,verticalAlign:'middle'}}>{u.email || '—'}</td>
+                      <td style={{padding:8,verticalAlign:'middle'}}>{u.full_name || '—'}</td>
                       <td style={{padding:8,verticalAlign:'middle',fontWeight:700}}>{u.initials}</td>
-                      <td style={{padding:8}}>{editingId === u.id ? (
-                        <input value={editingName} onChange={(e)=> setEditingName(e.target.value)} />
-                      ) : (u.name || '')}</td>
-                      <td style={{padding:8}} className="muted">{u.created_at ?? u.createdAt ?? ''}</td>
+                      <td style={{padding:8,verticalAlign:'middle'}}>{Array.isArray(u.roles) && u.roles.length ? u.roles.join(', ') : 'user'}</td>
+                      <td style={{padding:8,verticalAlign:'middle'}}>{u.status || '—'}</td>
+                      <td style={{padding:8}} className="muted">{u.last_sign_in_at ? formatDateTime(u.last_sign_in_at) : 'Never'}</td>
+                      <td style={{padding:8}} className="muted">{u.created_at ? formatDateTime(u.created_at) : ''}</td>
                       <td style={{padding:8,verticalAlign:'middle'}}>
-                        <div style={{position:'relative'}}>
-                          <button className="btn ghost" onClick={(e)=>{
-                            // toggle edit mode
-                            if (editingId === u.id){ setEditingId(null); setEditingName('') }
-                            else { setEditingId(u.id); setEditingName(u.name || '') }
-                          }}>⋯</button>
-                          {editingId === u.id && (
-                            <div style={{position:'absolute',right:0,top:28,background:'#fff',border:'1px solid #eee',borderRadius:6,padding:8,zIndex:20,boxShadow:'0 4px 12px rgba(0,0,0,0.06)'}}>
-                              <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                                <button className="btn" onClick={async ()=>{
-                                  try{
-                                    await apiFetch('/api/admin_users', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id, updates: { name: editingName } }) })
-                                    setEditingId(null); setEditingName('')
-                                    setNotice({ type: 'success', text: 'User updated' })
-                                    window.dispatchEvent(new Event('authorized_users_updated'))
-                                  }catch(e){ console.warn('update failed', e); setNotice({ type: 'error', text: 'Update failed' }) }
-                                }}>Save</button>
-                                <button className="btn ghost" onClick={()=> { setEditingId(null); setEditingName('') }}>Cancel</button>
-                                <button className="btn" onClick={async ()=>{
-                                  if (!confirm(`Delete user ${u.initials}? This cannot be undone.`)) return
-                                  try{
-                                    await apiFetch('/api/admin_users', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id }) })
-                                    setEditingId(null); setEditingName('')
-                                    setNotice({ type: 'success', text: 'User deleted' })
-                                    window.dispatchEvent(new Event('authorized_users_updated'))
-                                  }catch(e){ console.warn('delete failed', e); setNotice({ type: 'error', text: 'Delete failed' }) }
-                                }}>Delete</button>
-                                {u.token && <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(String(u.token || '')) }}>Copy token</button>}
-                              </div>
-                            </div>
-                          )}
+                        <div style={{display:'flex',gap:8}}>
+                          <button className="btn ghost" onClick={() => setEditingUser({
+                            id: u.id,
+                            email: u.email || '',
+                            full_name: u.full_name || '',
+                            initials: u.initials || '',
+                            roles: Array.isArray(u.roles) && u.roles.length ? normalizeRoles(u.roles) : ['user'],
+                          })}>Edit</button>
+                          <button className="btn" onClick={async ()=>{
+                            if (!confirm(`Delete user ${u.email || u.id}? This cannot be undone.`)) return
+                            try{
+                              const res = await apiFetch('/api/admin_users', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: u.id }) })
+                              if (!res.ok) {
+                                const payload = await res.json().catch(() => null)
+                                throw new Error(payload?.message || payload?.error || 'Delete failed')
+                              }
+                              setNotice({ type: 'success', text: 'User deleted' })
+                              window.dispatchEvent(new Event('authorized_users_updated'))
+                            }catch(e:any){
+                              console.warn('delete failed', e)
+                              setNotice({ type: 'error', text: e?.message || 'Delete failed' })
+                            }
+                          }}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -1225,6 +1285,60 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
                 </tbody>
               </table>
             </div>
+
+            {editingUser && (
+              <div style={{marginTop:12,border:'1px solid #eee',padding:10,borderRadius:6}}>
+                <div style={{fontWeight:700,marginBottom:8}}>Edit User</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 120px auto auto',gap:8,alignItems:'center'}}>
+                  <input placeholder="Email" value={editingUser.email} onChange={(e)=> setEditingUser((u:any) => ({ ...u, email: e.target.value }))} />
+                  <input placeholder="Display name" value={editingUser.full_name} onChange={(e)=> setEditingUser((u:any) => ({ ...u, full_name: e.target.value }))} />
+                  <input placeholder="Initials" value={editingUser.initials} onChange={(e)=> setEditingUser((u:any) => ({ ...u, initials: e.target.value.toUpperCase() }))} />
+                  <button className="btn" onClick={async ()=>{
+                    try{
+                      const res = await apiFetch('/api/admin_users', {
+                        method: 'PATCH',
+                        headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({
+                          id: editingUser.id,
+                          email: editingUser.email,
+                          full_name: editingUser.full_name,
+                          initials: editingUser.initials,
+                          roles: editingUser.roles,
+                        })
+                      })
+                      if (!res.ok) {
+                        const payload = await res.json().catch(() => null)
+                        throw new Error(payload?.message || payload?.error || 'Update failed')
+                      }
+                      setEditingUser(null)
+                      setNotice({ type: 'success', text: 'User updated' })
+                      window.dispatchEvent(new Event('authorized_users_updated'))
+                    }catch(e:any){
+                      console.warn('update failed', e)
+                      setNotice({ type: 'error', text: e?.message || 'Update failed' })
+                    }
+                  }}>Save</button>
+                  <button className="btn ghost" onClick={() => setEditingUser(null)}>Cancel</button>
+                </div>
+                <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
+                  <span className="muted" style={{fontSize:12}}>Roles:</span>
+                  {ROLE_OPTIONS.map((role) => {
+                    const active = Array.isArray(editingUser.roles) && editingUser.roles.includes(role)
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        className={active ? 'btn' : 'btn ghost'}
+                        style={{padding:'4px 10px',fontSize:12,textTransform:'uppercase'}}
+                        onClick={() => setEditingUser((u:any) => ({ ...u, roles: toggleRole(normalizeRoles(u.roles), role) }))}
+                      >
+                        {role}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1239,9 +1353,13 @@ function AuthorizedUsersLink(){
     try{
       const u = new URL(String(SUPABASE_URL))
       const projectRef = u.hostname.split('.')[0]
-      consoleUrl = `https://app.supabase.com/project/${projectRef}/table/public/authorized_users`
+      consoleUrl = `https://app.supabase.com/project/${projectRef}/auth/users`
     }catch(e){ console.warn('failed to build supabase console url', e) }
   }
 
-  return null
+  if (!consoleUrl) return null
+
+  return (
+    <a className="btn ghost" href={consoleUrl} target="_blank" rel="noreferrer">Open Supabase Users</a>
+  )
 }

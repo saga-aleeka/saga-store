@@ -1,9 +1,83 @@
-// Serverless endpoint to manage authorized_users table.
-// - GET /api/admin_users  -> list users (does NOT return tokens)
-// - POST /api/admin_users -> create a user (requires x-admin-secret header)
-// - DELETE /api/admin_users -> delete a user by id/initials/token (requires x-admin-secret header)
+// Serverless endpoint to manage Supabase Auth users.
+// - GET /api/admin_users    -> list auth users with profile metadata
+// - POST /api/admin_users   -> invite user by email and set metadata/roles
+// - PATCH /api/admin_users  -> update user metadata/roles
+// - DELETE /api/admin_users -> delete auth user by id
 const { createClient } = require('@supabase/supabase-js')
 const { getRequestAuth, hasAdminSecret, isAdminAuth } = require('./_auth_helper')
+
+function parseRoles(value) {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter(Boolean)
+  }
+
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function toUnique(values) {
+  return Array.from(new Set(values))
+}
+
+function mapAuthUser(user) {
+  const appMeta = user?.app_metadata || {}
+  const userMeta = user?.user_metadata || {}
+  const roles = toUnique([
+    ...parseRoles(appMeta.roles),
+    ...parseRoles(appMeta.role),
+    ...parseRoles(userMeta.roles),
+    ...parseRoles(userMeta.role),
+  ])
+
+  const status = user?.banned_until
+    ? 'banned'
+    : user?.last_sign_in_at
+      ? 'active'
+      : user?.invited_at
+        ? 'invited'
+        : 'pending'
+
+  return {
+    id: user?.id,
+    email: user?.email || null,
+    full_name: userMeta.full_name || userMeta.name || null,
+    initials: userMeta.initials || userMeta.preferred_initials || null,
+    roles,
+    status,
+    created_at: user?.created_at || null,
+    updated_at: user?.updated_at || null,
+    invited_at: user?.invited_at || null,
+    confirmed_at: user?.confirmed_at || null,
+    last_sign_in_at: user?.last_sign_in_at || null,
+    banned_until: user?.banned_until || null,
+    is_sso_user: !!user?.is_sso_user,
+    is_anonymous: !!user?.is_anonymous,
+    raw_app_meta_data: appMeta,
+    raw_user_meta_data: userMeta,
+  }
+}
+
+async function listAllAuthUsers(supabaseAdmin) {
+  const users = []
+  let page = 1
+  const perPage = 200
+
+  while (page <= 50) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+    const batch = data?.users || []
+    users.push(...batch)
+    if (batch.length < perPage) break
+    page += 1
+  }
+
+  return users
+}
 
 module.exports = async function handler(req: any, res: any){
   try{
@@ -19,14 +93,9 @@ module.exports = async function handler(req: any, res: any){
     if (!isAdmin) return res.status(401).json({ error: 'missing_admin_credentials' })
 
     if (req.method === 'GET'){
-      // list users but DO NOT include tokens in the response for safety
-      const { data, error } = await supabaseAdmin
-        .from('authorized_users')
-        .select('id,initials,name,created_at')
-        .order('initials', { ascending: true })
-
-      if (error) return res.status(502).json({ error: 'supabase_list_failed', message: error.message })
-      return res.status(200).json({ data: data ?? [] })
+      const users = await listAllAuthUsers(supabaseAdmin)
+      const mapped = users.map(mapAuthUser).sort((a, b) => String(a.email || '').localeCompare(String(b.email || '')))
+      return res.status(200).json({ data: mapped })
     }
 
     // POST/DELETE/PATCH also require admin credentials.
@@ -34,52 +103,110 @@ module.exports = async function handler(req: any, res: any){
     if (req.method === 'POST'){
       let body: any = req.body
       try{ if (!body && req.json) body = await req.json() }catch(e){}
-      const initials = body?.initials
-      const name = body?.name
-      if (!initials) return res.status(400).json({ error: 'missing_initials' })
+      const email = String(body?.email || '').trim().toLowerCase()
+      if (!email) return res.status(400).json({ error: 'missing_email' })
 
-      const insertBody = { initials: String(initials).trim(), name: name ?? null }
-      const { data, error } = await supabaseAdmin
-        .from('authorized_users')
-        .insert([insertBody])
-        .select()
+      const roles = toUnique(parseRoles(body?.roles || body?.role || 'user'))
+      const fullName = body?.full_name ?? body?.name ?? null
+      const initials = body?.initials ?? null
+      const userMeta = {
+        ...(body?.user_metadata || {}),
+        full_name: fullName,
+        initials,
+      }
 
-      if (error) return res.status(502).json({ error: 'supabase_insert_failed', message: error.message })
-      // return the created row(s) including token
-      return res.status(201).json({ data })
+      const inviteOptions: any = {
+        data: userMeta,
+      }
+
+      if (body?.redirectTo || process.env.SUPABASE_INVITE_REDIRECT_TO) {
+        inviteOptions.redirectTo = body?.redirectTo || process.env.SUPABASE_INVITE_REDIRECT_TO
+      }
+
+      const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteOptions)
+      if (inviteError) {
+        const code = /already|exists/i.test(String(inviteError.message || '')) ? 409 : 502
+        return res.status(code).json({ error: 'supabase_invite_failed', message: inviteError.message })
+      }
+
+      const invitedUser = invited?.user
+      if (!invitedUser?.id) {
+        return res.status(502).json({ error: 'supabase_invite_failed', message: 'Invite response missing user id' })
+      }
+
+      const { data: updated, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(invitedUser.id, {
+        app_metadata: {
+          ...(invitedUser.app_metadata || {}),
+          roles,
+        },
+        user_metadata: userMeta,
+      })
+
+      if (updateError) {
+        return res.status(502).json({ error: 'supabase_update_failed', message: updateError.message })
+      }
+
+      return res.status(201).json({ data: mapAuthUser(updated?.user || invitedUser) })
     }
 
     if (req.method === 'PATCH'){
       let body: any = req.body
       try{ if (!body && req.json) body = await req.json() }catch(e){}
-      const { id, initials, updates } = body || {}
-      if (!id && !initials) return res.status(400).json({ error: 'missing_identifier', message: 'provide id or initials' })
-      
-      let query = supabaseAdmin.from('authorized_users').update(updates || {})
-      if (id) query = query.eq('id', id)
-      else if (initials) query = query.eq('initials', initials)
-      
-      const { data, error } = await query.select()
+      const id = String(body?.id || '').trim()
+      if (!id) return res.status(400).json({ error: 'missing_id' })
 
-      if (error) return res.status(502).json({ error: 'supabase_update_failed', message: error.message })
-      return res.status(200).json({ data })
+      const { data: existingData, error: existingError } = await supabaseAdmin.auth.admin.getUserById(id)
+      if (existingError || !existingData?.user) {
+        return res.status(404).json({ error: 'user_not_found', message: existingError?.message || 'User not found' })
+      }
+
+      const existingUser = existingData.user
+      const nextRoles = body?.roles || body?.role
+      const roles = nextRoles !== undefined
+        ? toUnique(parseRoles(nextRoles))
+        : toUnique(parseRoles(existingUser.app_metadata?.roles || existingUser.app_metadata?.role))
+
+      const nextUserMeta = {
+        ...(existingUser.user_metadata || {}),
+        ...(body?.user_metadata || {}),
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body || {}, 'full_name') || Object.prototype.hasOwnProperty.call(body || {}, 'name')) {
+        nextUserMeta.full_name = body?.full_name ?? body?.name ?? null
+      }
+      if (Object.prototype.hasOwnProperty.call(body || {}, 'initials')) {
+        nextUserMeta.initials = body?.initials ?? null
+      }
+
+      const updatePayload: any = {
+        app_metadata: {
+          ...(existingUser.app_metadata || {}),
+          roles,
+        },
+        user_metadata: nextUserMeta,
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body || {}, 'email')) {
+        updatePayload.email = String(body?.email || '').trim().toLowerCase()
+      }
+      if (Object.prototype.hasOwnProperty.call(body || {}, 'banned_until')) {
+        updatePayload.ban_duration = body?.banned_until ? '876000h' : 'none'
+      }
+
+      const { data: updated, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(id, updatePayload)
+      if (updateError) return res.status(502).json({ error: 'supabase_update_failed', message: updateError.message })
+      return res.status(200).json({ data: mapAuthUser(updated?.user || existingUser) })
     }
 
     if (req.method === 'DELETE'){
       let body: any = req.body
       try{ if (!body && req.json) body = await req.json() }catch(e){}
-      const { id, initials, token } = body || {}
-      if (!id && !initials && !token) return res.status(400).json({ error: 'missing_identifier', message: 'provide id or initials or token' })
-      
-      let query = supabaseAdmin.from('authorized_users').delete()
-      if (id) query = query.eq('id', id)
-      else if (initials) query = query.eq('initials', initials)
-      else if (token) query = query.eq('token', token)
-      
-      const { data, error } = await query.select()
+      const id = String(body?.id || '').trim()
+      if (!id) return res.status(400).json({ error: 'missing_id', message: 'provide id' })
 
-      if (error) return res.status(502).json({ error: 'supabase_delete_failed', message: error.message })
-      return res.status(200).json({ data })
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(id)
+      if (deleteError) return res.status(502).json({ error: 'supabase_delete_failed', message: deleteError.message })
+      return res.status(200).json({ success: true, id })
     }
 
     return res.status(405).json({ error: 'method_not_allowed' })
