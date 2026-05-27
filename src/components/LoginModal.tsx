@@ -20,12 +20,14 @@ function toAppUser(user: any){
     email,
     roles,
     role: roles[0] || null,
+    passwordSet: md.password_set === true || md.passwordSet === true,
   }
 }
 
 export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => void }){
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'magic' | 'password'>('magic')
   const [loading, setLoading] = useState(false)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -91,35 +93,60 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
             type="email"
             autoCapitalize="none"
             autoCorrect="off"
-            onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
+            onKeyDown={(e)=> {
+              if (e.key !== 'Enter') return
+              if (mode === 'password') doSignIn()
+              else sendMagicLink()
+            }}
             autoFocus
             className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
           />
-          <input
-            aria-label="Enter your password"
-            placeholder="Password"
-            value={password}
-            onChange={(e)=> setPassword(e.target.value)}
-            type="password"
-            onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
-            className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
-          />
+
+          {mode === 'password' && (
+            <input
+              aria-label="Enter your password"
+              placeholder="Password"
+              value={password}
+              onChange={(e)=> setPassword(e.target.value)}
+              type="password"
+              onKeyDown={(e)=> { if (e.key === 'Enter') doSignIn() }}
+              className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
+            />
+          )}
+
           {error && <div className="text-red-600 text-sm mt-1">{error}</div>}
           {notice && <div className="text-green-700 text-sm mt-1">{notice}</div>}
 
+          {mode === 'magic' && (
+            <button
+              className="px-4 py-2 rounded bg-gray-700 text-white font-semibold disabled:opacity-60"
+              onClick={sendMagicLink}
+              disabled={magicLinkLoading || email.trim() === ''}
+            >
+              {magicLinkLoading ? 'Sending link...' : 'Email me a magic link'}
+            </button>
+          )}
+
+          {mode === 'password' && (
+            <button
+              className="px-4 py-2 rounded bg-gray-700 text-white font-semibold disabled:opacity-60"
+              onClick={doSignIn}
+              disabled={loading || email.trim() === '' || password.trim() === ''}
+            >
+              {loading ? 'Signing in...' : 'Sign in with password'}
+            </button>
+          )}
+
           <button
-            className="px-4 py-2 rounded bg-gray-700 text-white font-semibold disabled:opacity-60"
-            onClick={doSignIn}
-            disabled={loading || email.trim() === '' || password.trim() === ''}
+            className="px-4 py-2 rounded border border-gray-300 text-gray-700 font-semibold"
+            onClick={() => {
+              setError(null)
+              setNotice(null)
+              setMode((v) => (v === 'magic' ? 'password' : 'magic'))
+            }}
+            disabled={loading || magicLinkLoading}
           >
-            {loading ? 'Signing in...' : 'Sign in with Supabase'}
-          </button>
-          <button
-            className="px-4 py-2 rounded border border-gray-300 text-gray-700 font-semibold disabled:opacity-60"
-            onClick={sendMagicLink}
-            disabled={magicLinkLoading || email.trim() === ''}
-          >
-            {magicLinkLoading ? 'Sending link...' : 'Email me a magic link'}
+            {mode === 'magic' ? 'Use password instead' : 'Use magic link instead'}
           </button>
         </div>
       </div>

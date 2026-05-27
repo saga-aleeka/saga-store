@@ -83,6 +83,7 @@ function toStoredUser(user: any){
     email,
     roles,
     role: roles[0] || null,
+    passwordSet: md.password_set === true || md.passwordSet === true,
   }
 }
 

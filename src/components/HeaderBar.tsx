@@ -1,16 +1,74 @@
 import React, {useEffect, useRef, useState} from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boolean, onExitAdmin?: () => void, containersCount?: number, archivedCount?: number, samplesCount?: number, searchQuery?: string, onSearchChange?: (query: string) => void }
 
 export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin, containersCount = 0, archivedCount = 0, samplesCount = 0, searchQuery = '', onSearchChange}: Props){
   const [menuOpen, setMenuOpen] = useState(false)
   const [tabsOpen, setTabsOpen] = useState(false)
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordNotice, setPasswordNotice] = useState<string | null>(null)
+  const promptedUserRef = useRef<string | null>(null)
   const canAccessAdmin = !!user
   const root = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const tabsButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuDropdownRef = useRef<HTMLDivElement | null>(null)
   const tabsDropdownRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const key = String(user?.email || user?.initials || '')
+    if (!key || user?.passwordSet) return
+    if (promptedUserRef.current === key) return
+    promptedUserRef.current = key
+    setShowPasswordSetup(true)
+  }, [user])
+
+  async function savePassword(){
+    if (!newPassword || !confirmPassword) {
+      setPasswordError('Enter and confirm your password')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match')
+      return
+    }
+
+    setSavingPassword(true)
+    try {
+      setPasswordError(null)
+      setPasswordNotice(null)
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        data: { password_set: true }
+      })
+
+      if (error) {
+        setPasswordError(error.message || 'Failed to update password')
+        return
+      }
+
+      setPasswordNotice('Password saved. You can now use password or magic link.')
+      setTimeout(() => {
+        setShowPasswordSetup(false)
+        setNewPassword('')
+        setConfirmPassword('')
+        setPasswordNotice(null)
+      }, 1000)
+    } catch (err) {
+      console.warn('password update failed', err)
+      setPasswordError('Failed to update password')
+    }
+    setSavingPassword(false)
+  }
 
   useEffect(() => {
     function onDoc(e: MouseEvent){
@@ -167,6 +225,53 @@ export default function HeaderBar({route = window.location.hash || '#/containers
             </div>
           )}
         </>
+      )}
+
+      {showPasswordSetup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-[rgba(0,0,0,0.25)] z-50">
+          <div className="bg-white p-6 rounded-lg w-[430px] max-w-[92%] shadow-md">
+            <h3 className="m-0 mb-2 text-lg font-bold">Set Your Password</h3>
+            <p className="text-sm text-gray-600 mt-0 mb-3">Magic link sign-in is enabled. Add a password if you want to sign in either way.</p>
+
+            <div className="flex flex-col gap-2">
+              <input
+                aria-label="New password"
+                type="password"
+                placeholder="New password (min 8 characters)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
+              />
+              <input
+                aria-label="Confirm password"
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
+              />
+              {passwordError && <div className="text-red-600 text-sm">{passwordError}</div>}
+              {passwordNotice && <div className="text-green-700 text-sm">{passwordNotice}</div>}
+            </div>
+
+            <div className="flex gap-2 justify-end mt-4">
+              <button
+                className="btn ghost"
+                onClick={() => setShowPasswordSetup(false)}
+                disabled={savingPassword}
+              >
+                Skip for now
+              </button>
+              <button
+                className="btn"
+                onClick={savePassword}
+                disabled={savingPassword}
+              >
+                {savingPassword ? 'Saving...' : 'Save password'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </header>
   )
