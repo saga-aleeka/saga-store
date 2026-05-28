@@ -65,15 +65,24 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
     try{
       setError(null)
       setNotice(null)
-      const { error: otpError } = await supabase.auth.signInWithOtp({ email: email.trim() })
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: false,
+        },
+      })
       if (otpError) {
-        setError(otpError.message || 'Failed to send magic link')
+        if (/not found|signup is disabled|user/i.test(String(otpError.message || ''))) {
+          setError('Account not found. Ask an admin to create your access first.')
+          return
+        }
+        setError(otpError.message || 'Failed to send sign-in email')
         return
       }
-      setNotice('Magic link sent. Check your email to continue.')
+      setNotice('Sign-in email sent. Check your email to continue.')
     }catch(e){
       console.warn(e)
-      setError('Failed to send magic link')
+      setError('Failed to send sign-in email')
     }
     setMagicLinkLoading(false)
   }
@@ -123,7 +132,7 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
               onClick={sendMagicLink}
               disabled={magicLinkLoading || email.trim() === ''}
             >
-              {magicLinkLoading ? 'Sending link...' : 'Email me a magic link'}
+              {magicLinkLoading ? 'Sending email...' : 'Email me a sign-in link'}
             </button>
           )}
 
@@ -146,7 +155,7 @@ export default function LoginModal({ onSuccess }: { onSuccess: (user: any) => vo
             }}
             disabled={loading || magicLinkLoading}
           >
-            {mode === 'magic' ? 'Use password instead' : 'Use magic link instead'}
+            {mode === 'magic' ? 'Use password instead' : 'Use sign-in email instead'}
           </button>
         </div>
       </div>

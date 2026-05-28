@@ -141,6 +141,10 @@ function toggleRole(roles: string[], role: string): string[] {
   return Array.from(next)
 }
 
+function normalizeInitials(value: any): string {
+  return String(value || '').trim().toUpperCase()
+}
+
 // parser helpers
 function parseGridText(raw: string){
   if (!raw || !raw.trim()) return { boxes: [], items: [] }
@@ -406,12 +410,14 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
 
   // fetch Supabase auth users (admin-only tab)
   const authUsers = useFetch<any[]>(canManageUsers ? '/api/admin_users' : '')
+  const authorizedUsers = useFetch<any[]>(canManageUsers ? '/api/authorized_users' : '')
   const [showAdd, setShowAdd] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newFullName, setNewFullName] = useState('')
   const [newInitials, setNewInitials] = useState('')
   const [newRoles, setNewRoles] = useState<string[]>(['user'])
   const [editingUser, setEditingUser] = useState<any | null>(null)
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   // auto-clear notices after a short delay
   React.useEffect(() => {
@@ -443,6 +449,8 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
   const [auditRows, setAuditRows] = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(true)
   const [auditTotal, setAuditTotal] = useState(0)
+  const authUserInitials = new Set((authUsers.data || []).map((user: any) => normalizeInitials(user?.initials)).filter(Boolean))
+  const missingAuthAccounts = (authorizedUsers.data || []).filter((user: any) => !authUserInitials.has(normalizeInitials(user?.initials)))
   
   // Fetch container names for audit log display
   const [containerNames, setContainerNames] = React.useState<Map<string, string>>(new Map())
@@ -1155,12 +1163,29 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
             {authUsers.loading && <div className="muted">Loading...</div>}
             {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No users found</div>}
 
+            {!authorizedUsers.loading && missingAuthAccounts.length > 0 && (
+              <div style={{padding:10,marginBottom:12,borderRadius:6,background:'#fff7ed',border:'1px solid #fed7aa',color:'#9a3412'}}>
+                <div style={{fontWeight:700,marginBottom:4}}>Auth account audit</div>
+                <div style={{fontSize:13}}>These authorized users do not appear to have a matching Supabase auth account yet. Matching is based on initials because the legacy authorized_users table does not store email addresses.</div>
+                <div style={{marginTop:8,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {missingAuthAccounts.map((user: any) => (
+                    <span key={user.id || user.initials} style={{padding:'4px 8px',borderRadius:999,background:'#ffedd5',fontSize:12,fontWeight:600}}>
+                      {user.initials}{user.name ? ` • ${user.name}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:8}}>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn" onClick={() => setShowAdd(v => !v)}>{showAdd ? 'Cancel' : 'Add user'}</button>
                 <AuthorizedUsersLink />
               </div>
-              <div style={{fontSize:13,color:'#666'}}>Users: {authUsers.data ? authUsers.data.length : '—'}</div>
+              <div style={{fontSize:13,color:'#666'}}>
+                Users: {authUsers.data ? authUsers.data.length : '—'}
+                {missingAuthAccounts.length > 0 ? ` • Missing auth accounts: ${missingAuthAccounts.length}` : ''}
+              </div>
             </div>
 
 
@@ -1194,14 +1219,14 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
                         })
                         if (!res.ok) {
                           const payload = await res.json().catch(() => null)
-                          throw new Error(payload?.message || payload?.error || 'Invite failed')
+                          throw new Error(payload?.message || payload?.error || 'Create failed')
                         }
                         setNewEmail('')
                         setNewFullName('')
                         setNewInitials('')
                         setNewRoles(['user'])
                         setShowAdd(false)
-                        setNotice({ type: 'success', text: 'User invited successfully' })
+                        setNotice({ type: 'success', text: 'User created. They can now visit the site and request a sign-in email.' })
                         window.dispatchEvent(new Event('authorized_users_updated'))
                       }catch(e:any){
                         console.warn('create user failed', e)
@@ -1226,7 +1251,7 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
                       )
                     })}
                   </div>
-                  <div className="muted" style={{fontSize:12,marginTop:8}}>Saving sends an invite email for the user to set up their profile.</div>
+                  <div className="muted" style={{fontSize:12,marginTop:8}}>Saving creates the account immediately. The user can then visit the site anytime and request a fresh sign-in email.</div>
                 </div>
               )}
 
@@ -1255,7 +1280,30 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
                       <td style={{padding:8}} className="muted">{u.last_sign_in_at ? formatDateTime(u.last_sign_in_at) : 'Never'}</td>
                       <td style={{padding:8}} className="muted">{u.created_at ? formatDateTime(u.created_at) : ''}</td>
                       <td style={{padding:8,verticalAlign:'middle'}}>
-                        <div style={{display:'flex',gap:8}}>
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                          <button className="btn ghost" onClick={async ()=>{
+                            if (!u.email) {
+                              setNotice({ type: 'error', text: 'Cannot send a sign-in email because this user has no email address.' })
+                              return
+                            }
+                            setResendingUserId(u.id)
+                            try{
+                              const { error } = await supabase.auth.signInWithOtp({
+                                email: String(u.email).trim(),
+                                options: {
+                                  shouldCreateUser: false,
+                                },
+                              })
+                              if (error) throw error
+                              setNotice({ type: 'success', text: `Sign-in email sent to ${u.email}.` })
+                            }catch(e:any){
+                              console.warn('sign-in email failed', e)
+                              setNotice({ type: 'error', text: e?.message || 'Failed to send sign-in email' })
+                            }
+                            setResendingUserId(null)
+                          }} disabled={resendingUserId === u.id}>
+                            {resendingUserId === u.id ? 'Sending…' : 'Send sign-in email'}
+                          </button>
                           <button className="btn ghost" onClick={() => setEditingUser({
                             id: u.id,
                             email: u.email || '',

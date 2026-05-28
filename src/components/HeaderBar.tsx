@@ -1,5 +1,11 @@
 import React, {useEffect, useRef, useState} from 'react'
 import { supabase } from '../lib/supabaseClient'
+import {
+  getPasswordRequirements,
+  getPasswordStrength,
+  isPasswordAccepted,
+  validateNewPassword,
+} from '../lib/passwordPolicy'
 
 type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boolean, onExitAdmin?: () => void, containersCount?: number, archivedCount?: number, samplesCount?: number, searchQuery?: string, onSearchChange?: (query: string) => void }
 
@@ -19,6 +25,9 @@ export default function HeaderBar({route = window.location.hash || '#/containers
   const tabsButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuDropdownRef = useRef<HTMLDivElement | null>(null)
   const tabsDropdownRef = useRef<HTMLDivElement | null>(null)
+  const passwordRequirements = getPasswordRequirements(newPassword)
+  const passwordStrength = getPasswordStrength(newPassword)
+  const passwordAccepted = isPasswordAccepted(newPassword, confirmPassword)
 
   useEffect(() => {
     const key = String(user?.email || user?.initials || '')
@@ -29,16 +38,9 @@ export default function HeaderBar({route = window.location.hash || '#/containers
   }, [user])
 
   async function savePassword(){
-    if (!newPassword || !confirmPassword) {
-      setPasswordError('Enter and confirm your password')
-      return
-    }
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match')
+    const validationError = validateNewPassword(newPassword, confirmPassword)
+    if (validationError) {
+      setPasswordError(validationError)
       return
     }
 
@@ -237,17 +239,74 @@ export default function HeaderBar({route = window.location.hash || '#/containers
               <input
                 aria-label="New password"
                 type="password"
-                placeholder="New password (min 8 characters)"
+                placeholder="New password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewPassword(e.target.value)
+                  setPasswordError(null)
+                }}
                 className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
               />
+              <div className="rounded border border-gray-200 p-3 bg-gray-50">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold text-gray-700">Password strength</span>
+                  <span
+                    className={
+                      passwordStrength.tone === 'strong'
+                        ? 'text-green-700'
+                        : passwordStrength.tone === 'medium'
+                          ? 'text-amber-700'
+                          : 'text-red-600'
+                    }
+                  >
+                    {newPassword ? passwordStrength.label : 'Enter a password'}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((index) => {
+                    const active = passwordStrength.score >= (index + 1) * 2 - 1
+                    return (
+                      <div
+                        key={index}
+                        className={[
+                          'h-2 rounded',
+                          !newPassword
+                            ? 'bg-gray-200'
+                            : active && passwordStrength.tone === 'strong'
+                              ? 'bg-green-600'
+                              : active && passwordStrength.tone === 'medium'
+                                ? 'bg-amber-500'
+                                : active
+                                  ? 'bg-red-500'
+                                  : 'bg-gray-200',
+                        ].join(' ')}
+                      />
+                    )
+                  })}
+                </div>
+                <ul className="mt-3 space-y-1 text-sm">
+                  {passwordRequirements.map((requirement) => (
+                    <li
+                      key={requirement.key}
+                      className={requirement.met ? 'text-green-700' : 'text-gray-600'}
+                    >
+                      {requirement.met ? 'OK' : 'Need'} {requirement.label}
+                    </li>
+                  ))}
+                  <li className={confirmPassword && newPassword === confirmPassword ? 'text-green-700' : 'text-gray-600'}>
+                    {confirmPassword && newPassword === confirmPassword ? 'OK' : 'Need'} Passwords match
+                  </li>
+                </ul>
+              </div>
               <input
                 aria-label="Confirm password"
                 type="password"
                 placeholder="Confirm password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value)
+                  setPasswordError(null)
+                }}
                 className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
               />
               {passwordError && <div className="text-red-600 text-sm">{passwordError}</div>}
@@ -265,7 +324,7 @@ export default function HeaderBar({route = window.location.hash || '#/containers
               <button
                 className="btn"
                 onClick={savePassword}
-                disabled={savingPassword}
+                disabled={savingPassword || !passwordAccepted}
               >
                 {savingPassword ? 'Saving...' : 'Save password'}
               </button>

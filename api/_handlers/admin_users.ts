@@ -1,6 +1,6 @@
 // Serverless endpoint to manage Supabase Auth users.
 // - GET /api/admin_users    -> list auth users with profile metadata
-// - POST /api/admin_users   -> invite user by email and set metadata/roles
+// - POST /api/admin_users   -> create a dormant auth user and set metadata/roles
 // - PATCH /api/admin_users  -> update user metadata/roles
 // - DELETE /api/admin_users -> delete auth user by id
 const { createClient } = require('@supabase/supabase-js')
@@ -113,40 +113,27 @@ module.exports = async function handler(req: any, res: any){
         ...(body?.user_metadata || {}),
         full_name: fullName,
         initials,
+        password_set: false,
       }
 
-      const inviteOptions: any = {
-        data: userMeta,
-      }
-
-      if (body?.redirectTo || process.env.SUPABASE_INVITE_REDIRECT_TO) {
-        inviteOptions.redirectTo = body?.redirectTo || process.env.SUPABASE_INVITE_REDIRECT_TO
-      }
-
-      const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteOptions)
-      if (inviteError) {
-        const code = /already|exists/i.test(String(inviteError.message || '')) ? 409 : 502
-        return res.status(code).json({ error: 'supabase_invite_failed', message: inviteError.message })
-      }
-
-      const invitedUser = invited?.user
-      if (!invitedUser?.id) {
-        return res.status(502).json({ error: 'supabase_invite_failed', message: 'Invite response missing user id' })
-      }
-
-      const { data: updated, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(invitedUser.id, {
-        app_metadata: {
-          ...(invitedUser.app_metadata || {}),
-          roles,
-        },
+      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        app_metadata: { roles },
         user_metadata: userMeta,
       })
 
-      if (updateError) {
-        return res.status(502).json({ error: 'supabase_update_failed', message: updateError.message })
+      if (createError) {
+        const code = /already|exists/i.test(String(createError.message || '')) ? 409 : 502
+        return res.status(code).json({ error: 'supabase_create_failed', message: createError.message })
       }
 
-      return res.status(201).json({ data: mapAuthUser(updated?.user || invitedUser) })
+      const createdUser = created?.user
+      if (!createdUser?.id) {
+        return res.status(502).json({ error: 'supabase_create_failed', message: 'Create response missing user id' })
+      }
+
+      return res.status(201).json({ data: mapAuthUser(createdUser) })
     }
 
     if (req.method === 'PATCH'){
