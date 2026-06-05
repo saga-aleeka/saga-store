@@ -27,31 +27,52 @@ module.exports = async function handler(req: any, res: any) {
     const archived = req.query?.archived || 
       (req.url && new URL(req.url, 'http://localhost').searchParams.get('archived'))
 
-    // Build query
-    let query = supabaseAdmin.from('samples').select('*')
-    
-    if (container_id) {
-      query = query.eq('container_id', container_id)
-    }
-    
-    if (archived === 'true' || archived === true) {
-      query = query.eq('is_archived', true)
-    } else {
-      query = query.eq('is_archived', false)
-    }
-    
-    query = query.order('created_at', { ascending: false })
+    // Fetch samples in pages to avoid Supabase per-request row caps.
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+    const allRows: any[] = []
 
-    const { data, error } = await query
+    while (hasMore) {
+      let query = supabaseAdmin
+        .from('samples')
+        .select('*')
 
-    if (error) {
-      return res.status(502).json({ 
-        error: 'supabase_query_failed', 
-        message: error.message 
-      })
+      if (container_id) {
+        query = query.eq('container_id', container_id)
+      }
+
+      if (archived === 'true' || archived === true) {
+        query = query.eq('is_archived', true)
+      } else {
+        query = query.eq('is_archived', false)
+      }
+
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) {
+        return res.status(502).json({
+          error: 'supabase_query_failed',
+          message: error.message
+        })
+      }
+
+      const rows = data ?? []
+      allRows.push(...rows)
+      hasMore = rows.length === pageSize
+      page += 1
+
+      // Safety guard against runaway loops.
+      if (page > 500) {
+        hasMore = false
+      }
     }
 
-    return res.status(200).json({ data: data ?? [] })
+    return res.status(200).json({ data: allRows })
   } catch (err: any) {
     console.error('samples handler error', err)
     return res.status(500).json({ 

@@ -415,6 +415,53 @@ export default function App() {
     }, {})
   }, [coldStorageUnits])
 
+  const fetchAllContainerSamples = React.useCallback(async () => {
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+    const allRows: any[] = []
+
+    while (hasMore) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('samples')
+        .select('id, sample_id, container_id, is_archived, is_training, sample_tags:sample_tags(tag_id)')
+        .not('container_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      const rows = data || []
+      allRows.push(...rows)
+      hasMore = rows.length === pageSize
+      page += 1
+
+      if (page > 500) {
+        hasMore = false
+      }
+    }
+
+    return allRows
+  }, [])
+
+  const mergeContainersWithSamples = React.useCallback((containerRows: any[], sampleRows: any[]) => {
+    const byContainer = new Map<string, any[]>()
+
+    sampleRows.forEach((sample: any) => {
+      const key = sample?.container_id
+      if (!key) return
+      if (!byContainer.has(key)) byContainer.set(key, [])
+      byContainer.get(key)!.push(sample)
+    })
+
+    return (containerRows || []).map((container: any) => ({
+      ...container,
+      samples: byContainer.get(container.id) || []
+    }))
+  }, [])
+
   const shelfItemMatches = React.useMemo(() => {
     if (!searchQuery.trim()) return []
     const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
@@ -502,15 +549,15 @@ export default function App() {
     async function onUpdated(e: any){
       // refresh both lists when a container is updated (might be archived/unarchived)
       try {
-        const [activeRes, archivedRes, racksRes, coldRes] = await Promise.all([
+        const [activeRes, archivedRes, racksRes, coldRes, allSamples] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select(`${CONTAINER_LOCATION_SELECT}`)
             .eq('archived', false)
             .order('created_at', { ascending: false }),
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select(`${CONTAINER_LOCATION_SELECT}`)
             .eq('archived', true)
             .order('created_at', { ascending: false }),
           supabase
@@ -518,14 +565,17 @@ export default function App() {
             .select('id, name, cold_storage_id'),
           supabase
             .from('cold_storage_units')
-            .select('id, name')
+            .select('id, name'),
+          fetchAllContainerSamples()
         ])
 
         const rackMap = new Map((racksRes.data || []).map((r: any) => [r.id, r]))
         const coldMap = new Map((coldRes.data || []).map((c: any) => [c.id, c]))
+        const activeWithSamples = mergeContainersWithSamples(activeRes.data || [], allSamples || [])
+        const archivedWithSamples = mergeContainersWithSamples(archivedRes.data || [], allSamples || [])
         
         if (activeRes.data) {
-          const containersWithCounts = activeRes.data.map((c: any) => ({
+          const containersWithCounts = activeWithSamples.map((c: any) => ({
             ...c,
             used: (c.samples || []).length,
             display_location: buildDisplayLocation(c, rackMap, coldMap)
@@ -534,7 +584,7 @@ export default function App() {
         }
         
         if (archivedRes.data) {
-          const containersWithCounts = archivedRes.data.map((c: any) => ({
+          const containersWithCounts = archivedWithSamples.map((c: any) => ({
             ...c,
             used: (c.samples || []).length,
             display_location: buildDisplayLocation(c, rackMap, coldMap)
@@ -555,10 +605,10 @@ export default function App() {
     async function load(){
       setLoadingArchived(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
+        const [{ data, error }, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select(`${CONTAINER_LOCATION_SELECT}`)
             .eq('archived', true)
             .order('created_at', { ascending: false }),
           supabase
@@ -566,7 +616,8 @@ export default function App() {
             .select('id, name, cold_storage_id'),
           supabase
             .from('cold_storage_units')
-            .select('id, name')
+            .select('id, name'),
+          fetchAllContainerSamples()
         ])
         
         if (!mounted) return
@@ -580,8 +631,9 @@ export default function App() {
         // Count all samples (including archived) for each container
         const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
         const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
+        const containersWithSamples = mergeContainersWithSamples(data || [], allSamples || [])
 
-        const containersWithCounts = (data ?? []).map((c: any) => ({
+        const containersWithCounts = containersWithSamples.map((c: any) => ({
           ...c,
           used: (c.samples || []).length,
           display_location: buildDisplayLocation(c, rackMap, coldMap)
@@ -604,10 +656,10 @@ export default function App() {
     async function load(){
       setLoadingContainers(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }] = await Promise.all([
+        const [{ data, error }, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
           supabase
             .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id))`)
+            .select(`${CONTAINER_LOCATION_SELECT}`)
             .eq('archived', false)
             .order('created_at', { ascending: false }),
           supabase
@@ -615,7 +667,8 @@ export default function App() {
             .select('id, name, cold_storage_id'),
           supabase
             .from('cold_storage_units')
-            .select('id, name')
+            .select('id, name'),
+          fetchAllContainerSamples()
         ])
 
         if (!mounted) return
@@ -626,8 +679,9 @@ export default function App() {
 
         const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
         const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
+        const containersWithSamples = mergeContainersWithSamples(data || [], allSamples || [])
 
-        const containersWithCounts = (data ?? []).map((c: any) => ({
+        const containersWithCounts = containersWithSamples.map((c: any) => ({
           ...c,
           used: (c.samples || []).length,
           display_location: buildDisplayLocation(c, rackMap, coldMap)
@@ -642,7 +696,7 @@ export default function App() {
 
     if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
-  }, [route])
+  }, [route, fetchAllContainerSamples, mergeContainersWithSamples])
 
   const samplesForTypeFilters = React.useMemo(() => {
     if (!samples) return []

@@ -74,12 +74,43 @@ export default function ContainerDetails({ id }: { id: string | number }){
   const [creatingTag, setCreatingTag] = useState(false)
   const [showTagControls, setShowTagControls] = useState(true)
 
+  const fetchContainerSamples = async (targetContainerId: string | number) => {
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+    const allRows: any[] = []
+
+    while (hasMore) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('samples')
+        .select('*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))')
+        .eq('container_id', targetContainerId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      const rows = data || []
+      allRows.push(...rows)
+      hasMore = rows.length === pageSize
+      page += 1
+
+      if (page > 200) {
+        hasMore = false
+      }
+    }
+
+    return allRows
+  }
+
   const loadContainer = async (skipLoadingState = false) => {
     if (!skipLoadingState) setLoading(true)
     try{
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight)))`)
+        .select(`${CONTAINER_LOCATION_SELECT}`)
         .eq('id', id)
         .single()
       
@@ -111,8 +142,10 @@ export default function ContainerDetails({ id }: { id: string | number }){
         }
       }
 
-      setData(enriched)
-      return enriched
+      const containerSamples = await fetchContainerSamples(id)
+      const containerWithSamples = { ...enriched, samples: containerSamples }
+      setData(containerWithSamples)
+      return containerWithSamples
     }catch(e){
       console.warn('failed to load container', e)
       setData(null)

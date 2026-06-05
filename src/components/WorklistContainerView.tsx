@@ -21,18 +21,49 @@ export default function WorklistContainerView({ containerId, highlightPositions,
     loadContainer()
   }, [containerId])
 
+  const fetchContainerSamples = async (targetContainerId: string) => {
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+    const allRows: any[] = []
+
+    while (hasMore) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('samples')
+        .select('*')
+        .eq('container_id', targetContainerId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+      const rows = data || []
+      allRows.push(...rows)
+      hasMore = rows.length === pageSize
+      page += 1
+
+      if (page > 200) {
+        hasMore = false
+      }
+    }
+
+    return allRows
+  }
+
   const loadContainer = async () => {
     setLoading(true)
     try {
       const { data: containerData, error } = await supabase
         .from('containers')
-        .select(`${CONTAINER_LOCATION_SELECT}, samples!samples_container_id_fkey(*)`)
+        .select(`${CONTAINER_LOCATION_SELECT}`)
         .eq('id', containerId)
         .single()
       
       if (error) throw error
-      setContainer(containerData)
-      setSamples(containerData.samples || [])
+      const containerSamples = await fetchContainerSamples(containerId)
+      setContainer({ ...containerData, samples: containerSamples })
+      setSamples(containerSamples)
     } catch (err) {
       console.error('Failed to load container:', err)
     } finally {
