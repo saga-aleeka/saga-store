@@ -65,6 +65,11 @@ function buildDisplayLocation(container: any, rackMap: Map<string, any>, coldMap
 const _rawDisable = (import.meta as any).env?.VITE_DISABLE_AUTH ?? (import.meta as any).VITE_DISABLE_AUTH
 const explicitDisable = (_rawDisable === '1' || String(_rawDisable || '').toLowerCase() === 'true')
 const DISABLE_AUTH = explicitDisable
+const IDLE_TIMEOUT_MS = 45 * 60 * 1000
+const REFRESH_COOLDOWN_MS = 30 * 60 * 1000
+const IDLE_LAST_ACTIVITY_KEY = 'saga_idle_last_activity_at'
+const IDLE_FORCE_SIGNOUT_KEY = 'saga_idle_force_signout'
+const LAST_HARD_REFRESH_AT_KEY = 'saga_last_hard_refresh_at'
 
 function toInitials(email?: string | null){
   const local = String(email || '').split('@')[0] || ''
@@ -130,11 +135,35 @@ export default function App() {
     }
   }, [])
 
-  function signOut(){
+  const signOut = React.useCallback((options?: { hardRefresh?: boolean; broadcast?: boolean }) => {
+    const hardRefresh = options?.hardRefresh === true
+    const broadcast = options?.broadcast === true
+
     try{ void supabase.auth.signOut() }catch{}
     try{ clearToken(); setUserStorage(null) }catch{}
     setUser(null)
-  }
+
+    if (broadcast) {
+      try {
+        localStorage.setItem(IDLE_FORCE_SIGNOUT_KEY, JSON.stringify({
+          at: Date.now(),
+          source: idleBroadcastRef.current
+        }))
+      } catch {}
+    }
+
+    if (hardRefresh) {
+      try {
+        const now = Date.now()
+        const last = Number(sessionStorage.getItem(LAST_HARD_REFRESH_AT_KEY) || 0)
+        if (Number.isFinite(last) && now - last < REFRESH_COOLDOWN_MS) return
+        sessionStorage.setItem(LAST_HARD_REFRESH_AT_KEY, String(now))
+        window.location.reload()
+      } catch {
+        window.location.reload()
+      }
+    }
+  }, [])
 
   const [containers, setContainers] = useState<any[] | null>(null)
   const [loadingContainers, setLoadingContainers] = useState(false)
@@ -177,6 +206,91 @@ export default function App() {
   const [loadingTagsOptions, setLoadingTagsOptions] = useState(false)
   const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<Set<string>>(new Set())
   const [applyingBulkTags, setApplyingBulkTags] = useState(false)
+  const idleLastActivityRef = React.useRef<number>(Date.now())
+  const idleBroadcastRef = React.useRef<string>(`tab-${Math.random().toString(36).slice(2)}`)
+  const idleTriggeredRef = React.useRef<boolean>(false)
+
+  useEffect(() => {
+    if (DISABLE_AUTH || !user) {
+      idleTriggeredRef.current = false
+      return
+    }
+
+    const markActivity = () => {
+      const now = Date.now()
+      idleLastActivityRef.current = now
+      try { localStorage.setItem(IDLE_LAST_ACTIVITY_KEY, String(now)) } catch {}
+    }
+
+    const maybeIdleSignOut = () => {
+      if (idleTriggeredRef.current) return
+
+      const now = Date.now()
+      let sharedLast = idleLastActivityRef.current
+
+      try {
+        const stored = Number(localStorage.getItem(IDLE_LAST_ACTIVITY_KEY) || 0)
+        if (Number.isFinite(stored) && stored > sharedLast) {
+          sharedLast = stored
+        }
+      } catch {}
+
+      if (now - sharedLast < IDLE_TIMEOUT_MS) return
+
+      idleTriggeredRef.current = true
+      signOut({ hardRefresh: true, broadcast: true })
+    }
+
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        maybeIdleSignOut()
+      }
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === IDLE_LAST_ACTIVITY_KEY && event.newValue) {
+        const next = Number(event.newValue)
+        if (Number.isFinite(next)) {
+          idleLastActivityRef.current = Math.max(idleLastActivityRef.current, next)
+        }
+      }
+
+      if (event.key === IDLE_FORCE_SIGNOUT_KEY && event.newValue) {
+        try {
+          const payload = JSON.parse(event.newValue)
+          if (payload?.source === idleBroadcastRef.current) return
+        } catch {}
+
+        if (!idleTriggeredRef.current) {
+          idleTriggeredRef.current = true
+          signOut({ hardRefresh: true, broadcast: false })
+        }
+      }
+    }
+
+    const activityEvents: Array<keyof WindowEventMap> = ['mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown']
+
+    markActivity()
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true })
+    })
+    window.addEventListener('focus', onVisibilityOrFocus)
+    document.addEventListener('visibilitychange', onVisibilityOrFocus)
+    window.addEventListener('storage', onStorage)
+
+    const intervalId = window.setInterval(maybeIdleSignOut, 60 * 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity)
+      })
+      window.removeEventListener('focus', onVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [user, signOut])
 
   const loadSamples = React.useCallback(async (activeRoute?: string) => {
     const routeToUse = activeRoute ?? route
