@@ -280,6 +280,16 @@ export default function App() {
     }
   }, [route])
 
+  // Prevent stale per-session sample filters from hiding records when users revisit sample pages.
+  useEffect(() => {
+    if (route === '#/samples' || route === '#/rnd/samples') {
+      setSampleTypeFilters([])
+      setSampleStatusFilters([])
+      setSampleTagFilters([])
+      setSampleFilterMenu(null)
+    }
+  }, [route])
+
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
     window.addEventListener('hashchange', onHash)
@@ -704,8 +714,8 @@ export default function App() {
       
       filtered = filtered.filter((s: any) => {
         const checkedOutText = s.is_checked_out ? 'checked out' : ''
-        // Include both current and previous container info for checked out samples
-        const containerData = s.containers || s.previous_containers
+        // For checked out samples, prefer previous container metadata for searchability.
+        const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
         const containerName = containerData?.name || ''
         const containerLocation = getContainerLocationSearchText(containerData) || containerData?.location || ''
         const containerType = containerData?.type || ''
