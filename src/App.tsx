@@ -540,8 +540,8 @@ export default function App() {
       const to = from + pageSize - 1
       const { data, error } = await supabase
         .from('samples')
-        .select('id, sample_id, container_id, is_archived, is_training, sample_tags:sample_tags(tag_id)')
-        .not('container_id', 'is', null)
+        .select('id, sample_id, container_id, previous_container_id, is_checked_out, is_archived, is_training, sample_tags:sample_tags(tag_id)')
+        .or('container_id.not.is.null,and(is_checked_out.eq.true,previous_container_id.not.is.null)')
         .order('created_at', { ascending: false })
         .range(from, to)
 
@@ -564,7 +564,7 @@ export default function App() {
     const byContainer = new Map<string, any[]>()
 
     sampleRows.forEach((sample: any) => {
-      const key = sample?.container_id
+      const key = sample?.container_id || (sample?.is_checked_out ? sample?.previous_container_id : null)
       if (!key) return
       if (!byContainer.has(key)) byContainer.set(key, [])
       byContainer.get(key)!.push(sample)
@@ -603,13 +603,22 @@ export default function App() {
   // apply filters client-side to containers list
   const filteredContainers = React.useMemo(() => {
     if (!containers) return []
+    const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    const hasSearch = terms.length > 0
+
     let filtered = containers.filter((c:any) => {
+      const locationText = getContainerLocationSearchText(c)
+      const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''} ${locationText || ''}`.toLowerCase()
+      const sampleMatches = hasSearch && (c.samples || []).some((s: any) =>
+        terms.some(term => (s.sample_id || '').toLowerCase().includes(term))
+      )
+
       // sample type filter (if any selected)
       if (selectedTypes && selectedTypes.length){
         if (!selectedTypes.includes(c.type)) return false
       }
       if (route === '#/rnd' && !c.is_rnd) return false
-      if (route === '#/containers' && c.is_rnd) return false
+      if (route === '#/containers' && c.is_rnd && !sampleMatches) return false
       // available only
       if (availableOnly){
         const used = Number(c.used || 0)
@@ -638,8 +647,7 @@ export default function App() {
     })
     
     // Apply search filter (includes cross-search: searching for sample IDs will show their containers)
-    if (searchQuery.trim()) {
-      const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
+    if (hasSearch) {
       filtered = filtered.filter((c: any) => {
         const locationText = getContainerLocationSearchText(c)
         const containerSearchText = `${c.id || ''} ${c.name || ''} ${c.location || ''} ${locationText || ''}`.toLowerCase()
