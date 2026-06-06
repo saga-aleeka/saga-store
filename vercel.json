@@ -1,10 +1,18 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 300
+    },
+    "api/cron/nightly-backup.ts": {
+      "maxDuration": 300
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/nightly-backup",
-      "schedule": "0 8 * * *"
+      "schedule": "0 7 * * *"
     }
   ],
   "rewrites": [

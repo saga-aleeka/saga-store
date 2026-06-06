@@ -8,3 +8,4 @@ dist/
 .swp
 *.log
 .vercel
+.env*

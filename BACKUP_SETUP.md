@@ -52,7 +52,7 @@ If you want to store nightly backups in Supabase Storage:
 ## Vercel Configuration
 
 The cron job is configured in `vercel.json`:
-- **Schedule**: `0 8 * * *` (8:00 AM UTC = 3:00 AM EST)
+- **Schedule**: `0 7 * * *` (7:00 AM UTC = 3:00 AM EDT)
 - **Endpoint**: `/api/cron/nightly-backup`
 
 ### Environment Variables

@@ -450,7 +450,6 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
   const [auditLoading, setAuditLoading] = useState(true)
   const [auditTotal, setAuditTotal] = useState(0)
   const authUserInitials = new Set((authUsers.data || []).map((user: any) => normalizeInitials(user?.initials)).filter(Boolean))
-  const missingAuthAccounts = (authorizedUsers.data || []).filter((user: any) => !authUserInitials.has(normalizeInitials(user?.initials)))
   
   // Fetch container names for audit log display
   const [containerNames, setContainerNames] = React.useState<Map<string, string>>(new Map())
@@ -1163,20 +1162,6 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
             {authUsers.loading && <div className="muted">Loading...</div>}
             {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No users found</div>}
 
-            {!authorizedUsers.loading && missingAuthAccounts.length > 0 && (
-              <div style={{padding:10,marginBottom:12,borderRadius:6,background:'#fff7ed',border:'1px solid #fed7aa',color:'#9a3412'}}>
-                <div style={{fontWeight:700,marginBottom:4}}>Auth account audit</div>
-                <div style={{fontSize:13}}>These authorized users do not appear to have a matching Supabase auth account yet. Matching is based on initials because the legacy authorized_users table does not store email addresses.</div>
-                <div style={{marginTop:8,display:'flex',gap:8,flexWrap:'wrap'}}>
-                  {missingAuthAccounts.map((user: any) => (
-                    <span key={user.id || user.initials} style={{padding:'4px 8px',borderRadius:999,background:'#ffedd5',fontSize:12,fontWeight:600}}>
-                      {user.initials}{user.name ? ` • ${user.name}` : ''}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:8}}>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn" onClick={() => setShowAdd(v => !v)}>{showAdd ? 'Cancel' : 'Add user'}</button>
@@ -1184,7 +1169,6 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
               </div>
               <div style={{fontSize:13,color:'#666'}}>
                 Users: {authUsers.data ? authUsers.data.length : '—'}
-                {missingAuthAccounts.length > 0 ? ` • Missing auth accounts: ${missingAuthAccounts.length}` : ''}
               </div>
             </div>
 
@@ -1335,55 +1319,84 @@ export default function AdminDashboard({ canManageUsers = false }: { canManageUs
             </div>
 
             {editingUser && (
-              <div style={{marginTop:12,border:'1px solid #eee',padding:10,borderRadius:6}}>
-                <div style={{fontWeight:700,marginBottom:8}}>Edit User</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 120px auto auto',gap:8,alignItems:'center'}}>
-                  <input placeholder="Email" value={editingUser.email} onChange={(e)=> setEditingUser((u:any) => ({ ...u, email: e.target.value }))} />
-                  <input placeholder="Display name" value={editingUser.full_name} onChange={(e)=> setEditingUser((u:any) => ({ ...u, full_name: e.target.value }))} />
-                  <input placeholder="Initials" value={editingUser.initials} onChange={(e)=> setEditingUser((u:any) => ({ ...u, initials: e.target.value.toUpperCase() }))} />
-                  <button className="btn" onClick={async ()=>{
-                    try{
-                      const res = await apiFetch('/api/admin_users', {
-                        method: 'PATCH',
-                        headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({
-                          id: editingUser.id,
-                          email: editingUser.email,
-                          full_name: editingUser.full_name,
-                          initials: editingUser.initials,
-                          roles: editingUser.roles,
+              <div
+                style={{
+                  position:'fixed',
+                  inset:0,
+                  background:'rgba(15,23,42,0.45)',
+                  display:'flex',
+                  alignItems:'center',
+                  justifyContent:'center',
+                  zIndex:1000,
+                  padding:16,
+                }}
+                onClick={() => setEditingUser(null)}
+              >
+                <div
+                  style={{
+                    width:'min(820px, 100%)',
+                    background:'#fff',
+                    borderRadius:10,
+                    border:'1px solid #e5e7eb',
+                    boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
+                    padding:16,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                    <div style={{fontWeight:700}}>Edit User</div>
+                    <button className="btn ghost" onClick={() => setEditingUser(null)}>Close</button>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 120px',gap:8,alignItems:'center'}}>
+                    <input placeholder="Email" value={editingUser.email} onChange={(e)=> setEditingUser((u:any) => ({ ...u, email: e.target.value }))} />
+                    <input placeholder="Display name" value={editingUser.full_name} onChange={(e)=> setEditingUser((u:any) => ({ ...u, full_name: e.target.value }))} />
+                    <input placeholder="Initials" value={editingUser.initials} onChange={(e)=> setEditingUser((u:any) => ({ ...u, initials: e.target.value.toUpperCase() }))} />
+                  </div>
+                  <div style={{display:'flex',gap:6,alignItems:'center',marginTop:12,flexWrap:'wrap'}}>
+                    <span className="muted" style={{fontSize:12}}>Roles:</span>
+                    {ROLE_OPTIONS.map((role) => {
+                      const active = Array.isArray(editingUser.roles) && editingUser.roles.includes(role)
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          className={active ? 'btn' : 'btn ghost'}
+                          style={{padding:'4px 10px',fontSize:12,textTransform:'uppercase'}}
+                          onClick={() => setEditingUser((u:any) => ({ ...u, roles: toggleRole(normalizeRoles(u.roles), role) }))}
+                        >
+                          {role}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:14}}>
+                    <button className="btn ghost" onClick={() => setEditingUser(null)}>Cancel</button>
+                    <button className="btn" onClick={async ()=>{
+                      try{
+                        const res = await apiFetch('/api/admin_users', {
+                          method: 'PATCH',
+                          headers: {'Content-Type':'application/json'},
+                          body: JSON.stringify({
+                            id: editingUser.id,
+                            email: editingUser.email,
+                            full_name: editingUser.full_name,
+                            initials: editingUser.initials,
+                            roles: editingUser.roles,
+                          })
                         })
-                      })
-                      if (!res.ok) {
-                        const payload = await res.json().catch(() => null)
-                        throw new Error(payload?.message || payload?.error || 'Update failed')
+                        if (!res.ok) {
+                          const payload = await res.json().catch(() => null)
+                          throw new Error(payload?.message || payload?.error || 'Update failed')
+                        }
+                        setEditingUser(null)
+                        setNotice({ type: 'success', text: 'User updated' })
+                        window.dispatchEvent(new Event('authorized_users_updated'))
+                      }catch(e:any){
+                        console.warn('update failed', e)
+                        setNotice({ type: 'error', text: e?.message || 'Update failed' })
                       }
-                      setEditingUser(null)
-                      setNotice({ type: 'success', text: 'User updated' })
-                      window.dispatchEvent(new Event('authorized_users_updated'))
-                    }catch(e:any){
-                      console.warn('update failed', e)
-                      setNotice({ type: 'error', text: e?.message || 'Update failed' })
-                    }
-                  }}>Save</button>
-                  <button className="btn ghost" onClick={() => setEditingUser(null)}>Cancel</button>
-                </div>
-                <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
-                  <span className="muted" style={{fontSize:12}}>Roles:</span>
-                  {ROLE_OPTIONS.map((role) => {
-                    const active = Array.isArray(editingUser.roles) && editingUser.roles.includes(role)
-                    return (
-                      <button
-                        key={role}
-                        type="button"
-                        className={active ? 'btn' : 'btn ghost'}
-                        style={{padding:'4px 10px',fontSize:12,textTransform:'uppercase'}}
-                        onClick={() => setEditingUser((u:any) => ({ ...u, roles: toggleRole(normalizeRoles(u.roles), role) }))}
-                      >
-                        {role}
-                      </button>
-                    )
-                  })}
+                    }}>Save</button>
+                  </div>
                 </div>
               </div>
             )}
