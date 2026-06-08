@@ -540,7 +540,7 @@ export default function App() {
       const to = from + pageSize - 1
       const { data, error } = await supabase
         .from('samples')
-        .select('id, sample_id, container_id, previous_container_id, is_checked_out, is_archived, is_training, sample_tags:sample_tags(tag_id)')
+        .select('id, sample_id, container_id, previous_container_id, position, is_checked_out, is_archived, is_training, sample_tags:sample_tags(tag_id)')
         .or('container_id.not.is.null,and(is_checked_out.eq.true,previous_container_id.not.is.null)')
         .order('created_at', { ascending: false })
         .range(from, to)
@@ -577,7 +577,15 @@ export default function App() {
   }, [])
 
   const getPhysicalSampleCount = React.useCallback((container: any) => {
-    return (container?.samples || []).filter((sample: any) => sample?.container_id === container?.id).length
+    const occupiedPositions = new Set<string>()
+    ;(container?.samples || []).forEach((sample: any) => {
+      if (sample?.container_id !== container?.id) return
+      if (sample?.is_checked_out) return
+      const position = String(sample?.position || '').trim().toUpperCase()
+      if (!position) return
+      occupiedPositions.add(position)
+    })
+    return occupiedPositions.size
   }, [])
 
   const shelfItemMatches = React.useMemo(() => {
