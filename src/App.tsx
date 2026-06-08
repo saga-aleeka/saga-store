@@ -576,6 +576,10 @@ export default function App() {
     }))
   }, [])
 
+  const getPhysicalSampleCount = React.useCallback((container: any) => {
+    return (container?.samples || []).filter((sample: any) => sample?.container_id === container?.id).length
+  }, [])
+
   const shelfItemMatches = React.useMemo(() => {
     if (!searchQuery.trim()) return []
     const terms = searchQuery.split(',').map(t => t.trim().toLowerCase()).filter(t => t)
@@ -699,7 +703,7 @@ export default function App() {
         if (activeRes.data) {
           const containersWithCounts = activeWithSamples.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length,
+            used: getPhysicalSampleCount(c),
             display_location: buildDisplayLocation(c, rackMap, coldMap)
           }))
           setContainers(containersWithCounts)
@@ -708,7 +712,7 @@ export default function App() {
         if (archivedRes.data) {
           const containersWithCounts = archivedWithSamples.map((c: any) => ({
             ...c,
-            used: (c.samples || []).length,
+            used: getPhysicalSampleCount(c),
             display_location: buildDisplayLocation(c, rackMap, coldMap)
           }))
           setArchivedContainers(containersWithCounts)
@@ -757,7 +761,7 @@ export default function App() {
 
         const containersWithCounts = containersWithSamples.map((c: any) => ({
           ...c,
-          used: (c.samples || []).length,
+          used: getPhysicalSampleCount(c),
           display_location: buildDisplayLocation(c, rackMap, coldMap)
         }))
         
@@ -805,7 +809,7 @@ export default function App() {
 
         const containersWithCounts = containersWithSamples.map((c: any) => ({
           ...c,
-          used: (c.samples || []).length,
+          used: getPhysicalSampleCount(c),
           display_location: buildDisplayLocation(c, rackMap, coldMap)
         }))
 
@@ -818,7 +822,7 @@ export default function App() {
 
     if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
-  }, [route, fetchAllContainerSamples, mergeContainersWithSamples])
+  }, [route, fetchAllContainerSamples, getPhysicalSampleCount, mergeContainersWithSamples])
 
   const samplesForTypeFilters = React.useMemo(() => {
     if (!samples) return []
