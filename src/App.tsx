@@ -543,6 +543,7 @@ export default function App() {
         .select('id, sample_id, container_id, previous_container_id, position, is_checked_out, is_archived, is_training, sample_tags:sample_tags(tag_id)')
         .or('container_id.not.is.null,and(is_checked_out.eq.true,previous_container_id.not.is.null)')
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to)
 
       if (error) throw error
@@ -564,7 +565,8 @@ export default function App() {
     const byContainer = new Map<string, any[]>()
 
     sampleRows.forEach((sample: any) => {
-      const key = sample?.container_id || (sample?.is_checked_out ? sample?.previous_container_id : null)
+      const keyRaw = sample?.container_id || (sample?.is_checked_out ? sample?.previous_container_id : null)
+      const key = keyRaw ? String(keyRaw) : null
       if (!key) return
       if (!byContainer.has(key)) byContainer.set(key, [])
       byContainer.get(key)!.push(sample)
@@ -572,14 +574,15 @@ export default function App() {
 
     return (containerRows || []).map((container: any) => ({
       ...container,
-      samples: byContainer.get(container.id) || []
+      samples: byContainer.get(String(container.id)) || []
     }))
   }, [])
 
   const getPhysicalSampleCount = React.useCallback((container: any) => {
+    const containerId = String(container?.id || '')
     const occupiedPositions = new Set<string>()
     ;(container?.samples || []).forEach((sample: any) => {
-      if (sample?.container_id !== container?.id) return
+      if (String(sample?.container_id || '') !== containerId) return
       if (sample?.is_checked_out) return
       const position = String(sample?.position || '').trim().toUpperCase()
       if (!position) return

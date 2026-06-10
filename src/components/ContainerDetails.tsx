@@ -88,6 +88,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
         .select('*, sample_tags:sample_tags(tag_id, tags:tags(id, name, color, highlight))')
         .eq('container_id', targetContainerId)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to)
 
       if (error) throw error
