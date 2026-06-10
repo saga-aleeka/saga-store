@@ -580,15 +580,9 @@ export default function App() {
 
   const getPhysicalSampleCount = React.useCallback((container: any) => {
     const containerId = String(container?.id || '')
-    const occupiedPositions = new Set<string>()
-    ;(container?.samples || []).forEach((sample: any) => {
-      if (String(sample?.container_id || '') !== containerId) return
-      if (sample?.is_checked_out) return
-      const position = String(sample?.position || '').trim().toUpperCase()
-      if (!position) return
-      occupiedPositions.add(position)
-    })
-    return occupiedPositions.size
+    return (container?.samples || []).filter((sample: any) => {
+      return String(sample?.container_id || '') === containerId
+    }).length
   }, [])
 
   const shelfItemMatches = React.useMemo(() => {
