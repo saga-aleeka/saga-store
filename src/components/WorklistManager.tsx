@@ -104,6 +104,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   const [creatingTag, setCreatingTag] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scannerInputRef = useRef<HTMLInputElement>(null)
+  const scanAutoSubmitTimeoutRef = useRef<number | null>(null)
 
   const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
     if (chunkSize <= 0) return [items]
@@ -478,6 +479,14 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
       scannerInputRef.current?.focus()
     }
   }, [worklist.length])
+
+  useEffect(() => {
+    return () => {
+      if (scanAutoSubmitTimeoutRef.current) {
+        window.clearTimeout(scanAutoSubmitTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const parseCSV = (text: string): string[] => {
     const lines = text.trim().split('\n')
@@ -1003,6 +1012,11 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         const handleScanSubmit = (event: React.FormEvent) => {
           event.preventDefault()
 
+            if (scanAutoSubmitTimeoutRef.current) {
+              window.clearTimeout(scanAutoSubmitTimeoutRef.current)
+              scanAutoSubmitTimeoutRef.current = null
+            }
+
           const scannedValue = scanInput.trim()
           if (!scannedValue) return
 
@@ -1067,7 +1081,24 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
                 ref={scannerInputRef}
                 type="text"
                 value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
+                onChange={(e) => {
+                  const nextValue = e.target.value
+                  setScanInput(nextValue)
+
+                  if (scanAutoSubmitTimeoutRef.current) {
+                    window.clearTimeout(scanAutoSubmitTimeoutRef.current)
+                  }
+
+                  if (nextValue.trim().length === 0) {
+                    scanAutoSubmitTimeoutRef.current = null
+                    return
+                  }
+
+                  // Barcode scanners usually type rapidly; submit shortly after input stops.
+                  scanAutoSubmitTimeoutRef.current = window.setTimeout(() => {
+                    scannerInputRef.current?.form?.requestSubmit()
+                  }, 180)
+                }}
                 placeholder="Scan barcode and press Enter"
                 autoComplete="off"
                 spellCheck={false}
