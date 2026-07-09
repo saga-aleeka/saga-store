@@ -56,28 +56,54 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   return 'Unknown'
 }
 
+let sharedScanAudioContext: AudioContext | null = null
+
+const getScanAudioContext = (): AudioContext | null => {
+  if (sharedScanAudioContext) return sharedScanAudioContext
+
+  const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext
+  if (!AudioContextCtor) return null
+
+  sharedScanAudioContext = new AudioContextCtor()
+  return sharedScanAudioContext
+}
+
+const unlockScanAudio = () => {
+  try {
+    const ctx = getScanAudioContext()
+    if (!ctx) return
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {})
+    }
+  } catch {
+    // Ignore unlock errors; scanner still works without sound
+  }
+}
+
 const playScanTone = (kind: 'success' | 'error') => {
   try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const audioContext = getScanAudioContext()
+    if (!audioContext) return
+
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {})
+    }
+
     const oscillator = audioContext.createOscillator()
     const gainNode = audioContext.createGain()
 
     oscillator.type = 'sine'
-    oscillator.frequency.value = kind === 'success' ? 880 : 220
+    oscillator.frequency.value = kind === 'success' ? 1046 : 196
 
     const now = audioContext.currentTime
     gainNode.gain.setValueAtTime(0.0001, now)
-    gainNode.gain.exponentialRampToValueAtTime(0.16, now + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'success' ? 0.08 : 0.18))
+    gainNode.gain.exponentialRampToValueAtTime(kind === 'success' ? 0.24 : 0.2, now + 0.01)
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'success' ? 0.1 : 0.22))
 
     oscillator.connect(gainNode)
     gainNode.connect(audioContext.destination)
     oscillator.start(now)
-    oscillator.stop(now + (kind === 'success' ? 0.09 : 0.2))
-
-    oscillator.onended = () => {
-      audioContext.close().catch(() => {})
-    }
+    oscillator.stop(now + (kind === 'success' ? 0.12 : 0.24))
   } catch {
     // Ignore audio errors; scanning should still work without sound
   }
@@ -479,6 +505,20 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
       scannerInputRef.current?.focus()
     }
   }, [worklist.length])
+
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockScanAudio()
+    }
+
+    window.addEventListener('pointerdown', handleFirstInteraction)
+    window.addEventListener('keydown', handleFirstInteraction)
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstInteraction)
+      window.removeEventListener('keydown', handleFirstInteraction)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -1128,6 +1168,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
                 ref={scannerInputRef}
                 type="text"
                 value={scanInput}
+                onFocus={unlockScanAudio}
                 onChange={(e) => {
                   const nextValue = e.target.value
                   setScanInput(nextValue)
