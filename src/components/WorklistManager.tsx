@@ -1059,6 +1059,53 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         
         return (
         <>
+          {availableTypes.length > 0 && (
+            <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
+              <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+                {availableTypes.map(type => (
+                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTypes.includes(type)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTypes([...selectedTypes, type])
+                        } else {
+                          setSelectedTypes(selectedTypes.filter(t => t !== type))
+                        }
+                      }}
+                    />
+                    <span style={{fontSize: 13}}>{type}</span>
+                  </label>
+                ))}
+                {selectedTypes.length > 0 && (
+                  <button 
+                    className="btn ghost" 
+                    onClick={() => setSelectedTypes([])}
+                    style={{fontSize: 12, padding: '2px 8px', marginLeft: 8}}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {containersNeeded.length > 0 && (
+            <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
+              <h3 style={{fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#1e40af'}}>Containers Needed ({containersNeeded.length})</h3>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+                {containersNeeded.map((container, i) => (
+                  <div key={i} style={{padding: '6px 12px', background: 'white', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 14}}>
+                    <strong>{container.name}</strong>
+                    <span className="muted" style={{marginLeft: 8}}>{container.location}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               position: 'sticky',
@@ -1136,53 +1183,6 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
               </div>
             )}
           </div>
-
-          {availableTypes.length > 0 && (
-            <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
-              <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {availableTypes.map(type => (
-                  <label key={type} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-                    <input
-                      type="checkbox"
-                      checked={selectedTypes.includes(type)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTypes([...selectedTypes, type])
-                        } else {
-                          setSelectedTypes(selectedTypes.filter(t => t !== type))
-                        }
-                      }}
-                    />
-                    <span style={{fontSize: 13}}>{type}</span>
-                  </label>
-                ))}
-                {selectedTypes.length > 0 && (
-                  <button 
-                    className="btn ghost" 
-                    onClick={() => setSelectedTypes([])}
-                    style={{fontSize: 12, padding: '2px 8px', marginLeft: 8}}
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {containersNeeded.length > 0 && (
-            <div style={{marginBottom: 16, padding: 16, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bfdbfe'}}>
-              <h3 style={{fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#1e40af'}}>Containers Needed ({containersNeeded.length})</h3>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {containersNeeded.map((container, i) => (
-                  <div key={i} style={{padding: '6px 12px', background: 'white', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 14}}>
-                    <strong>{container.name}</strong>
-                    <span className="muted" style={{marginLeft: 8}}>{container.location}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           
           <div style={{marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
             <button className="btn" onClick={selectAll} disabled={loading}>
