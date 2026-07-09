@@ -56,10 +56,39 @@ const detectSampleType = (sampleId: string, containerName?: string): string => {
   return 'Unknown'
 }
 
+const playScanTone = (kind: 'success' | 'error') => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+
+    oscillator.type = 'sine'
+    oscillator.frequency.value = kind === 'success' ? 880 : 220
+
+    const now = audioContext.currentTime
+    gainNode.gain.setValueAtTime(0.0001, now)
+    gainNode.gain.exponentialRampToValueAtTime(0.16, now + 0.01)
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'success' ? 0.08 : 0.18))
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    oscillator.start(now)
+    oscillator.stop(now + (kind === 'success' ? 0.09 : 0.2))
+
+    oscillator.onended = () => {
+      audioContext.close().catch(() => {})
+    }
+  } catch {
+    // Ignore audio errors; scanning should still work without sound
+  }
+}
+
 export default function WorklistManager({ adminMode = false }: { adminMode?: boolean }) {
   const [worklist, setWorklist] = useState<WorklistSample[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set())
+  const [scanInput, setScanInput] = useState('')
+  const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [viewingContainer, setViewingContainer] = useState<{id: string, highlightPositions: string[]} | null>(null)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [sortState, setSortState] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
@@ -74,6 +103,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   const [newTagHighlight, setNewTagHighlight] = useState(true)
   const [creatingTag, setCreatingTag] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const scannerInputRef = useRef<HTMLInputElement>(null)
 
   const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
     if (chunkSize <= 0) return [items]
@@ -395,6 +425,19 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         sessionStorage.removeItem('saga_worklist')
       }
     }
+
+    const savedSelections = sessionStorage.getItem('saga_worklist_selected')
+    if (savedSelections) {
+      try {
+        const parsed = JSON.parse(savedSelections)
+        if (Array.isArray(parsed)) {
+          setSelectedSamples(new Set(parsed.filter((value): value is string => typeof value === 'string')))
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved selected worklist samples:', e)
+        sessionStorage.removeItem('saga_worklist_selected')
+      }
+    }
   }, [])
 
   // Save worklist to sessionStorage whenever it changes
@@ -405,6 +448,36 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
       sessionStorage.removeItem('saga_worklist')
     }
   }, [worklist])
+
+  // Save selected samples during navigation so scanned checks persist while working
+  useEffect(() => {
+    if (selectedSamples.size > 0) {
+      sessionStorage.setItem('saga_worklist_selected', JSON.stringify(Array.from(selectedSamples)))
+    } else {
+      sessionStorage.removeItem('saga_worklist_selected')
+    }
+  }, [selectedSamples])
+
+  // Remove selected rows that no longer exist in the loaded worklist
+  useEffect(() => {
+    if (worklist.length === 0) {
+      if (selectedSamples.size > 0) setSelectedSamples(new Set())
+      return
+    }
+
+    const validIds = new Set(worklist.map((item) => item.sample_id.trim().toUpperCase()))
+    setSelectedSamples((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id.trim().toUpperCase())))
+      if (next.size === prev.size) return prev
+      return next
+    })
+  }, [worklist])
+
+  useEffect(() => {
+    if (worklist.length > 0) {
+      scannerInputRef.current?.focus()
+    }
+  }, [worklist.length])
 
   const parseCSV = (text: string): string[] => {
     const lines = text.trim().split('\n')
@@ -627,6 +700,11 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
 
   const checkoutSamples = async (sampleIds: string[]) => {
     if (sampleIds.length === 0) return
+
+    const confirmed = confirm(
+      `Checkout ${sampleIds.length} sample(s)?\n\nScanned items are only selected first so you can review/edit before confirming checkout.`
+    )
+    if (!confirmed) return
 
     const user = getUser()
     const token = getToken()
@@ -921,6 +999,40 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
             return tieBreak()
           })
         }
+
+        const handleScanSubmit = (event: React.FormEvent) => {
+          event.preventDefault()
+
+          const scannedValue = scanInput.trim()
+          if (!scannedValue) return
+
+          const normalizedScannedValue = scannedValue.toUpperCase()
+          const foundSample = filteredWorklist.find(
+            (sample) => sample.sample_id.trim().toUpperCase() === normalizedScannedValue
+          )
+
+          if (!foundSample) {
+            setScanFeedback({
+              type: 'error',
+              message: `${scannedValue} is not in the current worklist results. Double check the item or filters.`
+            })
+            playScanTone('error')
+            alert(`Scanned item not found in current results: ${scannedValue}`)
+            scannerInputRef.current?.focus()
+            scannerInputRef.current?.select()
+            return
+          }
+
+          setSelectedSamples((prev) => {
+            const next = new Set(prev)
+            next.add(foundSample.sample_id)
+            return next
+          })
+          setScanFeedback({ type: 'success', message: `Checked ${foundSample.sample_id}` })
+          playScanTone('success')
+          setScanInput('')
+          scannerInputRef.current?.focus()
+        }
         
         // Get unique containers needed from filtered list
         const containersNeeded = Array.from(
@@ -933,6 +1045,67 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         
         return (
         <>
+          <div
+            style={{
+              position: 'sticky',
+              top: 8,
+              zIndex: 20,
+              marginBottom: 12,
+              padding: 12,
+              background: 'white',
+              border: '1px solid #dbeafe',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)'
+            }}
+          >
+            <form onSubmit={handleScanSubmit} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label htmlFor="worklist-scan-input" style={{ fontSize: 14, fontWeight: 600, color: '#1f2937' }}>
+                Scan Item
+              </label>
+              <input
+                id="worklist-scan-input"
+                ref={scannerInputRef}
+                type="text"
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                placeholder="Scan barcode and press Enter"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={loading}
+                style={{ marginTop: 0, minWidth: 260, flex: '1 1 360px' }}
+              />
+              <button className="btn" type="submit" disabled={loading || scanInput.trim().length === 0}>
+                Check
+              </button>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => {
+                  setScanInput('')
+                  setScanFeedback(null)
+                  scannerInputRef.current?.focus()
+                }}
+                disabled={loading && scanInput.trim().length === 0}
+              >
+                Clear
+              </button>
+            </form>
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Scanning only selects items in the current results. Review/edit your checked list, then use Checkout Selected to complete checkout.
+            </div>
+            {scanFeedback && (
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: scanFeedback.type === 'success' ? '#065f46' : '#991b1b'
+                }}
+              >
+                {scanFeedback.message}
+              </div>
+            )}
+          </div>
+
           {availableTypes.length > 0 && (
             <div style={{marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb'}}>
               <div style={{fontSize: 14, fontWeight: 600, marginBottom: 8}}>Filter by Sample Type:</div>
