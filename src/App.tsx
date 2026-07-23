@@ -426,7 +426,7 @@ export default function App() {
       try {
         const { count, error } = await supabase
           .from('containers')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('archived', false)
         
         if (!mounted) return
@@ -442,7 +442,7 @@ export default function App() {
       try {
         const { count, error } = await supabase
           .from('containers')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('archived', true)
         
         if (!mounted) return
@@ -458,7 +458,7 @@ export default function App() {
       try {
         const { count, error } = await supabase
           .from('samples')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('is_archived', false)
         
         if (!mounted) return
