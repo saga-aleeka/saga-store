@@ -52,6 +52,7 @@ module.exports = async function handler(req: any, res: any) {
       const to = from + pageSize - 1
       const { data, error } = await query
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to)
 
       if (error) {

@@ -35,6 +35,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         .select('*')
         .eq('container_id', targetContainerId)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to)
 
       if (error) throw error

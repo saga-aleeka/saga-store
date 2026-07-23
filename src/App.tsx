@@ -320,6 +320,7 @@ export default function App() {
           `)
           .eq('is_archived', isArchiveRoute ? true : false)
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
 
         const { data, error } = await query.range(from, to)
         
