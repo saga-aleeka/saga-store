@@ -1,5 +1,6 @@
 // Consolidated API router for Vercel Hobby plan limits.
 const envCheckHandler = require('./_handlers/_env_check')
+const { checkSupabaseProjectRefLock } = require('./_handlers/_runtime_guard')
 const authSigninHandler = require('./_handlers/auth/signin')
 const authorizedUsersHandler = require('./_handlers/authorized_users')
 const adminUsersHandler = require('./_handlers/admin_users')
@@ -16,6 +17,16 @@ const containersHandler = require('./_handlers/containers')
 const containersByIdHandler = require('./_handlers/containers/[id]')
 
 module.exports = async function handler(req: any, res: any) {
+  const guard = checkSupabaseProjectRefLock()
+  if (!guard.ok) {
+    return res.status(503).json({
+      error: 'environment_guard_failed',
+      reason: guard.reason,
+      expected_project_ref: guard.expected,
+      actual_project_ref: guard.actual,
+    })
+  }
+
   const url = new URL(req.url || '', 'http://localhost')
   const pathname = url.pathname
 
