@@ -5,6 +5,7 @@
 // - DELETE /api/admin_users -> delete auth user by id
 const { createClient } = require('@supabase/supabase-js')
 const { getRequestAuth, hasAdminSecret, isAdminAuth } = require('./_auth_helper')
+const { generateTempPassword } = require('./_password_helper')
 
 function parseRoles(value) {
   if (!value) return []
@@ -49,6 +50,7 @@ function mapAuthUser(user) {
     initials: userMeta.initials || userMeta.preferred_initials || null,
     roles,
     status,
+    must_change_password: appMeta.must_change_password === true,
     created_at: user?.created_at || null,
     updated_at: user?.updated_at || null,
     invited_at: user?.invited_at || null,
@@ -116,10 +118,13 @@ module.exports = async function handler(req: any, res: any){
         password_set: false,
       }
 
+      const tempPassword = generateTempPassword()
+
       const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
+        password: tempPassword,
         email_confirm: true,
-        app_metadata: { roles },
+        app_metadata: { roles, must_change_password: true },
         user_metadata: userMeta,
       })
 
@@ -133,7 +138,10 @@ module.exports = async function handler(req: any, res: any){
         return res.status(502).json({ error: 'supabase_create_failed', message: 'Create response missing user id' })
       }
 
-      return res.status(201).json({ data: mapAuthUser(createdUser) })
+      return res.status(201).json({
+        data: mapAuthUser(createdUser),
+        temp_password: tempPassword,
+      })
     }
 
     if (req.method === 'PATCH'){

@@ -9,3 +9,5 @@ dist/
 *.log
 .vercel
 .env*
+.tmp/
+*.env
