@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { toast } from 'sonner'
 import { supabase, apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { getToken, getUser } from '../lib/auth'
@@ -368,10 +367,10 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
 
       setShowBulkTagDrawer(false)
       setSelectedBulkTagIds(new Set())
-      toast.success(`Updated tag assignments for ${selectedRowsWithDbId.length} sample(s)`)
+      alert(`Updated tag assignments for ${selectedRowsWithDbId.length} sample(s)`)
     } catch (e: any) {
       console.error('Failed to apply tags:', e)
-      toast.error(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
+      alert(`Failed to apply tags: ${e?.message || 'Unknown error'}`)
     } finally {
       setApplyingBulkTags(false)
     }
@@ -400,10 +399,10 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         return { ...row, ...updates }
       }))
 
-      toast.success(`${successLabel} for ${selectedRowsWithDbId.length} sample(s)`)
+      alert(`${successLabel} for ${selectedRowsWithDbId.length} sample(s)`)
     } catch (e: any) {
       console.error('Bulk update failed:', e)
-      toast.error(`Bulk update failed: ${e?.message || 'Unknown error'}`)
+      alert(`Bulk update failed: ${e?.message || 'Unknown error'}`)
     } finally {
       setBulkUpdating(false)
     }
@@ -751,6 +750,11 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   const checkoutSamples = async (sampleIds: string[]) => {
     if (sampleIds.length === 0) return
 
+    const confirmed = confirm(
+      `Checkout ${sampleIds.length} sample(s)?\n\nScanned items are only selected first so you can review/edit before confirming checkout.`
+    )
+    if (!confirmed) return
+
     const user = getUser()
     const token = getToken()
     
@@ -800,7 +804,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         if (!res.ok) {
           const payload = await res.json().catch(() => null)
           console.error('Error updating sample:', payload)
-          toast.error(`Failed to checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
+          alert(`Failed to checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
@@ -837,11 +841,11 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         return item
       }))
 
-      toast.success(`Checked out ${availableSamples.length} sample(s)`)
+      alert(`Checked out ${availableSamples.length} sample(s)`)
       setSelectedSamples(new Set())
     } catch (err: any) {
       console.error('Error checking out samples:', err)
-      toast.error(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
+      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -895,7 +899,7 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         if (!res.ok) {
           const payload = await res.json().catch(() => null)
           console.error('Error restoring sample:', payload)
-          toast.error(`Failed to undo checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
+          alert(`Failed to undo checkout: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
@@ -964,8 +968,8 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
   return (
     <div className="worklist-manager" style={{maxWidth: 1200, margin: '0 auto'}}>
       <div style={{marginBottom: 24}}>
-        <h2 style={{fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: '-0.02em'}}>Worklist Manager</h2>
-        <p className="muted" style={{marginTop: 8, marginBottom: 0}}>Upload a CSV file with sample IDs to view and manage sample checkout</p>
+        <h2 style={{fontSize: 24, fontWeight: 600, marginBottom: 8}}>Worklist Manager</h2>
+        <p className="muted">Upload a CSV file with sample IDs to view and manage sample checkout</p>
       </div>
 
       <div style={{marginBottom: 24, padding: 16, background: '#f9fafb', borderRadius: 8, border: '2px dashed #d1d5db'}}>

@@ -24,7 +24,6 @@ const audits = [
   { id: 2, type: 'move', target: 'sample', target_id: 'S-002', actor: 'bob', msg: 'Moved S-002 to container 1', at: '2025-10-31T09:12:00Z' }
 ]
 
-
 let tagSeq = 1
 const tags: Array<{ id: string; name: string; color: string; created_at: string }> = []
 const sampleTags: Array<{ sample_id: string; tag_id: string; created_at: string }> = []

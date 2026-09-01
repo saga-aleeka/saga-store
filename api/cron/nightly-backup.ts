@@ -1,7 +1,6 @@
 // Cron job endpoint for nightly backups
 // This endpoint is called by Vercel Cron at 3am EST daily
 const { createClient } = require('@supabase/supabase-js')
-const { checkSupabaseProjectRefLock } = require('../_handlers/_runtime_guard')
 
 // Helper to generate CSV content (same as backups.ts)
 function generateCSV(containers: any[], samples: any[]): string {
@@ -65,16 +64,6 @@ function escapeCSV(value: any): string {
 
 module.exports = async function handler(req: any, res: any) {
   try {
-    const guard = checkSupabaseProjectRefLock()
-    if (!guard.ok) {
-      return res.status(503).json({
-        error: 'environment_guard_failed',
-        reason: guard.reason,
-        expected_project_ref: guard.expected,
-        actual_project_ref: guard.actual,
-      })
-    }
-
     // Verify this is a cron request (Vercel sets this header)
     const authHeader = req.headers['authorization']
     const cronSecret = process.env.CRON_SECRET

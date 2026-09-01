@@ -28,10 +28,6 @@ interface ContainerGridViewProps {
 export default function ContainerGridView({ container, samples, onSampleClick, editMode = false, scanningPosition = null, highlightedPositions = [], selectedPositions = [], selectedSampleIds }: ContainerGridViewProps) {
   const [gridSize, setGridSize] = useState({ rows: 9, cols: 9 })
   const [sampleMap, setSampleMap] = useState<Map<string, Sample>>(new Map())
-  const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => {
-    if (typeof document === 'undefined') return false
-    return document.documentElement.dataset.theme === 'dark'
-  })
 
   useEffect(() => {
     // Parse layout (e.g., "9x9", "14x7")
@@ -93,17 +89,19 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     return String(index + 1) // 1, 2, 3, ...
   }
 
-  const getCellColor = (sample?: Sample, darkMode = false) => {
-    if (!sample) return darkMode ? '#334155' : '#f9fafb'
+  const getCellColor = (sample?: Sample) => {
+    if (!sample) return '#f9fafb'
     const highlightTag = (sample.sample_tags || []).find((t) => t.tags?.highlight !== false)
     const tagColor = highlightTag?.tags?.color
     if (tagColor) return tagColor
-    if (sample.is_training) return darkMode ? '#7c3aed' : '#c7d2fe'
-    if (sample.is_archived) return darkMode ? '#b45309' : '#fef3c7'
-    return darkMode ? '#2563eb' : '#dbeafe'
+    if (sample.is_training) return '#c7d2fe' // indigo-300
+    if (sample.is_archived) return '#fef3c7'
+    if (sample.data?.status === 'pending') return '#fef3c7'
+    return '#dbeafe'
   }
 
-  const getContrastTextColor = (color: string) => {
+  const getTextColor = (sample?: Sample) => {
+    const color = sample ? getCellColor(sample) : '#f9fafb'
     try {
       const h = color.replace('#', '')
       const r = parseInt(h.substring(0, 2), 16) / 255
@@ -113,12 +111,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
       const Gs = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4)
       const Bs = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4)
       const lum = 0.2126 * Rs + 0.7152 * Gs + 0.0722 * Bs
-
-      const darkTextLum = 0.02
-      const lightTextLum = 0.98
-      const contrastWithDark = (Math.max(lum, darkTextLum) + 0.05) / (Math.min(lum, darkTextLum) + 0.05)
-      const contrastWithLight = (Math.max(lum, lightTextLum) + 0.05) / (Math.min(lum, lightTextLum) + 0.05)
-      return contrastWithDark >= contrastWithLight ? '#0f172a' : '#f8fafc'
+      return lum > 0.6 ? '#111827' : '#ffffff'
     } catch (e) {
       return '#1f2937'
     }
@@ -139,23 +132,6 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
     }
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-
-    const applyTheme = () => {
-      setIsDarkTheme(document.documentElement.dataset.theme === 'dark')
-    }
-
-    applyTheme()
-    const observer = new MutationObserver(applyTheme)
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   // Check if a position should be highlighted (from URL or from props array)
@@ -240,30 +216,23 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
               const isSelected = selectedPositions.map(p => p.toUpperCase()).includes(position.toUpperCase())
               const isScanning = scanningPosition === position
               const isSampleSelected = selectedSampleIds && sample ? selectedSampleIds.has(sample.id) : false
-
-              const baseCellColor = getCellColor(sample, isDarkTheme)
-              const cellBackground = isUnavailable
-                ? (isDarkTheme ? '#334155' : '#d1d5db')
-                : isScanning
-                  ? (isDarkTheme ? '#4c1d95' : '#f3e8ff')
-                  : isSampleSelected
-                    ? (isDarkTheme ? '#1d4ed8' : '#dbeafe')
-                    : isSelected
-                      ? (isDarkTheme ? '#1e40af' : '#dbeafe')
-                      : baseCellColor
-
-              const emptyCellTextColor = isDarkTheme ? '#94a3b8' : '#9ca3af'
-              const occupiedCellTextColor = getContrastTextColor(cellBackground)
-              const unavailableCellTextColor = isDarkTheme ? '#cbd5e1' : '#6b7280'
               
               return (
                 <div
                   key={`cell-${rowIndex}-${colIndex}`}
                   onClick={() => !isUnavailable && handleCellClick(position)}
                   style={{
-                    background: cellBackground,
+                    background: isUnavailable
+                      ? '#d1d5db'
+                      : isScanning 
+                        ? '#f3e8ff'
+                        : isSampleSelected
+                          ? '#dbeafe'
+                          : isSelected
+                            ? '#dbeafe'
+                            : getCellColor(sample),
                     border: isUnavailable
-                      ? (isDarkTheme ? '2px solid #64748b' : '2px solid #9ca3af')
+                      ? '2px solid #9ca3af'
                       : isScanning
                         ? '3px solid #8b5cf6'
                         : isSampleSelected
@@ -274,7 +243,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                               ? '3px solid #f59e0b' 
                               : isOccupied 
                                 ? '2px solid #3b82f6' 
-                                : (isDarkTheme ? '1px solid #475569' : '1px solid #d1d5db'),
+                                : '1px solid #d1d5db',
                     borderRadius: '6px',
                     display: 'flex',
                     flexDirection: 'column',
@@ -289,7 +258,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                     transition: 'all 0.15s',
                     fontSize: '11px',
                     fontWeight: isOccupied ? 600 : 400,
-                    color: isUnavailable ? unavailableCellTextColor : isOccupied ? occupiedCellTextColor : emptyCellTextColor,
+                    color: isUnavailable ? '#6b7280' : isOccupied ? getTextColor(sample) : '#9ca3af',
                     position: 'relative',
                     overflow: 'hidden',
                     boxShadow: isScanning 
@@ -345,23 +314,10 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                       }}>
                         {sample.sample_id}
                       </div>
-                      {sample.is_training && !sample.is_archived && (
-                        <div style={{
-                          fontSize: '8px',
-                          color: occupiedCellTextColor,
-                          marginTop: '2px',
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
-                          opacity: 0.92
-                        }}>
-                          TRAINING
-                        </div>
-                      )}
-
                       {sample.is_archived && (
                         <div style={{ 
                           fontSize: '8px', 
-                          color: getContrastTextColor(cellBackground),
+                          color: '#92400e',
                           marginTop: '2px',
                           fontWeight: 600
                         }}>
@@ -371,8 +327,7 @@ export default function ContainerGridView({ container, samples, onSampleClick, e
                       {!sample.is_archived && sample.owner && (
                         <div style={{ 
                           fontSize: '9px', 
-                          color: occupiedCellTextColor,
-                          opacity: 0.84,
+                          color: '#6b7280',
                           marginTop: '2px'
                         }}>
                           {sample.owner}

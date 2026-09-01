@@ -1,6 +1,5 @@
 // Consolidated API router for Vercel Hobby plan limits.
 const envCheckHandler = require('./_handlers/_env_check')
-const { checkSupabaseProjectRefLock } = require('./_handlers/_runtime_guard')
 const authSigninHandler = require('./_handlers/auth/signin')
 const authorizedUsersHandler = require('./_handlers/authorized_users')
 const adminUsersHandler = require('./_handlers/admin_users')
@@ -15,20 +14,8 @@ const samplesHandler = require('./_handlers/samples')
 const samplesByIdHandler = require('./_handlers/samples/[id]')
 const containersHandler = require('./_handlers/containers')
 const containersByIdHandler = require('./_handlers/containers/[id]')
-const passwordResetHandler = require('./_handlers/password_reset')
-const changePasswordHandler = require('./_handlers/change_password')
 
 module.exports = async function handler(req: any, res: any) {
-  const guard = checkSupabaseProjectRefLock()
-  if (!guard.ok) {
-    return res.status(503).json({
-      error: 'environment_guard_failed',
-      reason: guard.reason,
-      expected_project_ref: guard.expected,
-      actual_project_ref: guard.actual,
-    })
-  }
-
   const url = new URL(req.url || '', 'http://localhost')
   const pathname = url.pathname
 
@@ -40,8 +27,6 @@ module.exports = async function handler(req: any, res: any) {
   if (pathname === '/api/auth/signin') return authSigninHandler(req, res)
   if (pathname === '/api/authorized_users') return authorizedUsersHandler(req, res)
   if (pathname === '/api/admin_users') return adminUsersHandler(req, res)
-  if (pathname === '/api/password_reset') return passwordResetHandler(req, res)
-  if (pathname === '/api/change_password') return changePasswordHandler(req, res)
   if (pathname === '/api/audit') return auditHandler(req, res)
   if (pathname === '/api/tags') return tagsHandler(req, res)
   if (pathname === '/api/sample-tags') return sampleTagsHandler(req, res)

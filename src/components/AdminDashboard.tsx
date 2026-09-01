@@ -393,9 +393,15 @@ function useFetch<T>(url: string){
   return { data, loading }
 }
 
-export default function AdminDashboard({ canManageUsers = false, section = 'import' }: { canManageUsers?: boolean; section?: 'import'|'audit'|'backups'|'users'|'worklist' }){
+export default function AdminDashboard({ canManageUsers = false }: { canManageUsers?: boolean }){
 
-  const effectiveSection = (!canManageUsers && section === 'users') ? 'audit' : section
+  const [tab, setTab] = useState<'import'|'audit'|'backups'|'users'|'worklist'>('import')
+
+  useEffect(() => {
+    if (!canManageUsers && tab === 'users') {
+      setTab('audit')
+    }
+  }, [canManageUsers, tab])
 
   // Pagination state for audit logs
   const [auditPage, setAuditPage] = useState(1)
@@ -412,10 +418,10 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
   const [newRoles, setNewRoles] = useState<string[]>(['user'])
   const [editingUser, setEditingUser] = useState<any | null>(null)
   const [resendingUserId, setResendingUserId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string; password?: string } | null>(null)
-  // Credential notices stay until dismissed; a temp password cannot be retrieved again.
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  // auto-clear notices after a short delay
   React.useEffect(() => {
-    if (!notice || notice.password) return
+    if (!notice) return
     const t = setTimeout(() => setNotice(null), 4000)
     return () => clearTimeout(t)
   }, [notice])
@@ -542,8 +548,18 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
 
   return (
     <div className="card">
+      <h2>Admin Dashboard</h2>
+      <div style={{display:'flex',gap:8,marginTop:12,marginBottom:12}}>
+        <button className={tab==='import'? 'btn':'btn ghost'} onClick={() => setTab('import')}>Mass Import</button>
+        <button className={tab==='worklist'? 'btn':'btn ghost'} onClick={() => setTab('worklist')}>Worklist Manager</button>
+        <button className={tab==='audit'? 'btn':'btn ghost'} onClick={() => setTab('audit')}>Audit Trail</button>
+        <button className={tab==='backups'? 'btn':'btn ghost'} onClick={() => setTab('backups')}>Backups</button>
+        {canManageUsers && (
+          <button className={tab==='users'? 'btn':'btn ghost'} onClick={() => setTab('users')}>Users</button>
+        )}
+      </div>
 
-      {effectiveSection === 'worklist' && (
+      {tab === 'worklist' && (
         <div>
           <p className="muted" style={{marginBottom: 12}}>
             Admin tools for bulk editing uploaded worklist samples, including bulk Add Tag(s).
@@ -552,7 +568,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
         </div>
       )}
 
-      {effectiveSection === 'import' && (
+      {tab === 'import' && (
         <div>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <p className="muted">Upload CSV or paste grid-style records. The parser will extract boxes and sample positions.</p>
@@ -872,7 +888,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
         </div>
       )}
 
-      {effectiveSection === 'audit' && (
+      {tab === 'audit' && (
         <div>
           <p className="muted">Comprehensive audit log of all container and sample changes</p>
           
@@ -1020,7 +1036,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
         </div>
       )}
 
-      {effectiveSection === 'backups' && (
+      {tab === 'backups' && (
         <div>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
             <div>
@@ -1140,7 +1156,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
         </div>
       )}
 
-      {effectiveSection === 'users' && canManageUsers && (
+      {tab === 'users' && canManageUsers && (
         <div>
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}
@@ -1160,18 +1176,10 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
 
               {notice && (
                 <div style={{padding:10,marginBottom:12,borderRadius:6,background: notice.type === 'success' ? '#e6ffed' : '#ffecec', border: notice.type === 'success' ? '1px solid #b7f2c9' : '1px solid #f5c6c6', color: notice.type === 'success' ? '#0b6b2b' : '#8a1b1b'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                     <div>{notice.text}</div>
                     <button className="btn ghost" onClick={() => setNotice(null)}>Dismiss</button>
                   </div>
-                  {notice.password && (
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10}}>
-                      <code style={{flex:1,padding:'8px 10px',background:'#fff',border:'1px solid #f5c6c6',borderRadius:4,fontSize:15,letterSpacing:'0.04em',userSelect:'all'}}>
-                        {notice.password}
-                      </code>
-                      <button className="btn" onClick={() => navigator.clipboard?.writeText(notice.password || '')}>Copy</button>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1197,18 +1205,12 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
                           const payload = await res.json().catch(() => null)
                           throw new Error(payload?.message || payload?.error || 'Create failed')
                         }
-                        const created = await res.json().catch(() => null)
-                        const createdEmail = newEmail
                         setNewEmail('')
                         setNewFullName('')
                         setNewInitials('')
                         setNewRoles(['user'])
                         setShowAdd(false)
-                        setNotice({
-                          type: 'success',
-                          text: `User created. Give ${createdEmail} this temporary password — it cannot be shown again.`,
-                          password: created?.temp_password || undefined,
-                        })
+                        setNotice({ type: 'success', text: 'User created. They can now visit the site and request a sign-in email.' })
                         window.dispatchEvent(new Event('authorized_users_updated'))
                       }catch(e:any){
                         console.warn('create user failed', e)
@@ -1233,7 +1235,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
                       )
                     })}
                   </div>
-                  <div className="muted" style={{fontSize:12,marginTop:8}}>Saving creates the account and generates a temporary password to give the user. They will be asked to set a permanent password on first sign-in.</div>
+                  <div className="muted" style={{fontSize:12,marginTop:8}}>Saving creates the account immediately. The user can then visit the site anytime and request a fresh sign-in email.</div>
                 </div>
               )}
 
@@ -1265,33 +1267,26 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
                         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                           <button className="btn ghost" onClick={async ()=>{
                             if (!u.email) {
-                              setNotice({ type: 'error', text: 'Cannot reset the password because this user has no email address.' })
+                              setNotice({ type: 'error', text: 'Cannot send a sign-in email because this user has no email address.' })
                               return
                             }
-                            if (!confirm(`Reset the password for ${u.email}?\n\nA new temporary password will be generated for you to give them.`)) return
                             setResendingUserId(u.id)
                             try{
-                              const res = await apiFetch('/api/password_reset', {
-                                method: 'POST',
-                                headers: {'Content-Type':'application/json'},
-                                body: JSON.stringify({ id: u.id })
+                              const { error } = await supabase.auth.signInWithOtp({
+                                email: String(u.email).trim(),
+                                options: {
+                                  shouldCreateUser: false,
+                                },
                               })
-                              const payload = await res.json().catch(() => null)
-                              if (!res.ok) throw new Error(payload?.message || payload?.error || 'Password reset failed')
-
-                              setNotice({
-                                type: 'success',
-                                text: `Password reset. Give ${u.email} this temporary password — it cannot be shown again.`,
-                                password: payload?.data?.temp_password || undefined,
-                              })
-                              window.dispatchEvent(new Event('authorized_users_updated'))
+                              if (error) throw error
+                              setNotice({ type: 'success', text: `Sign-in email sent to ${u.email}.` })
                             }catch(e:any){
-                              console.warn('password reset failed', e)
-                              setNotice({ type: 'error', text: e?.message || 'Password reset failed' })
+                              console.warn('sign-in email failed', e)
+                              setNotice({ type: 'error', text: e?.message || 'Failed to send sign-in email' })
                             }
                             setResendingUserId(null)
                           }} disabled={resendingUserId === u.id}>
-                            {resendingUserId === u.id ? 'Resetting…' : 'Reset password'}
+                            {resendingUserId === u.id ? 'Sending…' : 'Send sign-in email'}
                           </button>
                           <button className="btn ghost" onClick={() => setEditingUser({
                             id: u.id,

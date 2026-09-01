@@ -3,7 +3,7 @@ import { supabase, apiFetch } from '../lib/api'
 import { getUser } from '../lib/auth'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { formatDate } from '../lib/dateUtils'
-import { TEMPS, COLD_STORAGE_LOCATIONS } from '../constants'
+import { TEMPS } from '../constants'
 import LocationBreadcrumb from './LocationBreadcrumb'
 import ContainerCreateDrawer from './ContainerCreateDrawer'
 
@@ -1428,6 +1428,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
     try {
       const payload = {
         name: editForm.name.trim(),
+        type: editForm.type?.trim() || null,
         temperature: editForm.temperature?.trim() || null,
         location: editForm.location?.trim() || null,
         pm_due_date: editForm.pm_due_date || null,
@@ -1659,7 +1660,7 @@ export default function ColdStorageDetails({ id }: { id: string }) {
         <div>
           <h2 style={{ margin: 0 }}>{unit.name}</h2>
           <div className="muted" style={{ marginTop: 4 }}>
-            {unit.temperature ? unit.temperature : ''}
+            {unit.type} {unit.temperature ? `• ${unit.temperature}` : ''}
           </div>
           {unit.location && (
             <div className="muted" style={{ marginTop: 4 }}>{unit.location}</div>
@@ -3167,6 +3168,15 @@ function ColdStorageEditDrawer({
             <input value={unit.name || ''} onChange={(e) => onChange('name', e.target.value)} />
           </label>
           <label>
+            Type
+            <select value={unit.type || ''} onChange={(e) => onChange('type', e.target.value)}>
+              <option value="">Select type</option>
+              {['Freezer', 'Refrigerator'].map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+          <label>
             Temperature
             <select value={unit.temperature || ''} onChange={(e) => onChange('temperature', e.target.value)}>
               <option value="">Select temperature</option>
@@ -3177,12 +3187,7 @@ function ColdStorageEditDrawer({
           </label>
           <label>
             Location
-            <select value={unit.location || ''} onChange={(e) => onChange('location', e.target.value)}>
-              <option value="">Select location</option>
-              {COLD_STORAGE_LOCATIONS.map((location) => (
-                <option key={location} value={location}>{location}</option>
-              ))}
-            </select>
+            <input value={unit.location || ''} onChange={(e) => onChange('location', e.target.value)} />
           </label>
           <label>
             Interior Image
