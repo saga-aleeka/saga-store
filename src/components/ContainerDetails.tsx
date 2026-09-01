@@ -730,7 +730,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                   color: 'white'
                 }}
               >
-                📷 Start Scanning
+                Start Scanning
               </button>
               <button 
                 className="btn"
@@ -748,7 +748,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                   color: 'white'
                 }}
               >
-                {editMode ? '✓ Done' : '☑️ Multi-Select'}
+                {editMode ? 'Done' : 'Multi-Select'}
               </button>
             </>
           )}
@@ -783,7 +783,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
         }}>
           <div style={{ marginBottom: '12px' }}>
             <div style={{fontSize: 16, fontWeight: 700, color: '#1e40af', marginBottom: 8}}>
-              ☑️ Multi-Select Mode ({selectedSampleIds.size} selected)
+              Multi-Select Mode ({selectedSampleIds.size} selected)
             </div>
             <div style={{fontSize: 13, color: '#6b7280'}}>
               Click samples to select/deselect them for batch operations
@@ -804,7 +804,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     fontSize: '14px'
                   }}
                 >
-                  🗄️ Archive ({selectedSampleIds.size})
+                  Archive ({selectedSampleIds.size})
                 </button>
                 
                 <button
@@ -818,7 +818,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     fontSize: '14px'
                   }}
                 >
-                  📤 Checkout ({selectedSampleIds.size})
+                  Checkout ({selectedSampleIds.size})
                 </button>
                 
                 <button
@@ -832,7 +832,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     fontSize: '14px'
                   }}
                 >
-                  🎓 Toggle Training ({selectedSampleIds.size})
+                  Toggle Training ({selectedSampleIds.size})
                 </button>
                 
                 <button
@@ -850,7 +850,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                     fontSize: '14px'
                   }}
                 >
-                  🗑️ Delete ({selectedSampleIds.size})
+                  Delete ({selectedSampleIds.size})
                 </button>
                 
                 <button
@@ -924,7 +924,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
                 }}>
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: '#991b1b', marginBottom: '4px' }}>
-                      ⚠️ Confirm Deletion
+                      Confirm Deletion
                     </div>
                     <div style={{ fontSize: '14px', color: '#991b1b' }}>
                       You are about to permanently delete {selectedSampleIds.size} sample(s). This action cannot be undone.
@@ -1021,10 +1021,7 @@ export default function ContainerDetails({ id }: { id: string | number }){
           <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:12}}>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:700,color:'#5b21b6',marginBottom:8}}>
-                📷 Scanning Mode Active
-              </div>
-              <div style={{fontSize:13,color:'#6b7280'}}>
-                Scan or type sample ID, then press Enter. Click empty cells to change position.
+                Scanning Mode Active
               </div>
             </div>
             {lastScannedId && (
@@ -1206,6 +1203,8 @@ export default function ContainerDetails({ id }: { id: string | number }){
       {showSidebar && selectedSample && (
         <SampleHistorySidebar
           sample={selectedSample}
+          historyReturnTo={returnTo === 'rnd' || returnTo === 'rnd-samples' ? 'rnd-samples' : 'samples'}
+          historyReturnHash={window.location.hash || `#/containers/${id}`}
           onClose={() => {
             setShowSidebar(false)
             setSelectedSample(null)

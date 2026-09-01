@@ -83,9 +83,11 @@ Create a `.env.local` file with:
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_EXPECTED_SUPABASE_PROJECT_REF=your_project_ref
 VITE_API_BASE=your_api_base_url_optional
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+EXPECTED_SUPABASE_PROJECT_REF=your_project_ref
 ADMIN_SECRET=your_admin_secret
 CRON_SECRET=your_cron_secret
 ADMIN_ROLES=admin,owner
@@ -93,6 +95,49 @@ ADMIN_EMAILS=admin1@company.com,admin2@company.com
 
 VITE_ADMIN_EMAILS=admin1@company.com,admin2@company.com
 ```
+
+For a separate development setup, copy the committed template:
+
+```bash
+cp env/dev.env.example .env.local
+```
+
+Use values from a dedicated development Supabase/Vercel project, not production.
+
+### Dev Branch Workflow
+
+Keep day-to-day development isolated from `main`:
+
+```bash
+# one-time setup
+git switch -c dev
+git push -u origin dev
+
+# regular workflow
+git switch dev
+git pull
+```
+
+Recommended environment split:
+
+- `main` branch -> production deployment + production secrets
+- `dev` branch -> preview/development deployment + development secrets
+
+### Environment Lock (Prevents Cross-Environment Writes)
+
+This repo supports a hard lock to prevent accidentally connecting a deployment to the wrong Supabase project:
+
+- Backend lock: `EXPECTED_SUPABASE_PROJECT_REF`
+- Frontend lock: `VITE_EXPECTED_SUPABASE_PROJECT_REF`
+
+At runtime, the app extracts the project ref from `SUPABASE_URL` / `VITE_SUPABASE_URL` and compares it to the expected value. If they do not match, requests fail with `environment_guard_failed` (backend) and frontend initialization throws.
+
+Set values per deployment target:
+
+- Production (`main`): expected ref = your production Supabase project ref
+- Preview/Development (`dev`): expected ref = your development Supabase project ref
+
+On Vercel, configure these separately for `Production` and `Preview` environments.
 
 ### RBAC And Supabase User Setup
 
@@ -109,6 +154,16 @@ Admin role checks read from:
 - `user_metadata.role`
 
 An email allowlist fallback is also supported with `ADMIN_EMAILS` (backend) and `VITE_ADMIN_EMAILS` (frontend).
+
+#### Password-only rollout for existing users
+
+After deploying the password-only login page, established users select **Set or
+reset password**, enter their work email, and use the resulting Supabase recovery
+email to choose a password. After that one-time setup, users sign in only with
+their email and password.
+
+Ensure the production app URL is present in Supabase Auth's allowed redirect URLs
+so the recovery email returns users to the password setup screen.
 
 #### Onboard users from CLI
 
