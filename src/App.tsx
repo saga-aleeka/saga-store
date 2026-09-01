@@ -111,6 +111,7 @@ export default function App() {
   })
   const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer', roles: ['admin'], role: 'admin', email: 'dev@example.local' } : null)
   const [user, setUser] = useState<any | null>(initialUser)
+  const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(false)
   const canAccessDashboard = DISABLE_AUTH || !!user
   const canManageUsers = DISABLE_AUTH || isAdminUser(user)
 
@@ -142,12 +143,13 @@ export default function App() {
 
     let mounted = true
 
-    const syncFromSession = (session: any) => {
+    const syncFromSession = (session: any, event?: string) => {
       if (!mounted) return
       if (!session?.access_token || !session?.user) {
         clearToken()
         setUserStorage(null)
         setUser(null)
+        setPasswordRecoveryRequired(false)
         return
       }
 
@@ -155,6 +157,7 @@ export default function App() {
       setToken(session.access_token)
       setUserStorage(mappedUser)
       setUser(mappedUser)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecoveryRequired(true)
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -163,8 +166,8 @@ export default function App() {
       console.warn('Failed to restore Supabase session', err)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncFromSession(session)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      syncFromSession(session, event)
     })
 
     return () => {
@@ -180,6 +183,7 @@ export default function App() {
     try{ void supabase.auth.signOut() }catch{}
     try{ clearToken(); setUserStorage(null) }catch{}
     setUser(null)
+    setPasswordRecoveryRequired(false)
 
     if (broadcast) {
       try {
@@ -1283,13 +1287,15 @@ export default function App() {
     return <LoginPage onSuccess={(u: any) => setUser(u)} />
   }
 
-  if (!DISABLE_AUTH && user?.mustChangePassword) {
+  if (!DISABLE_AUTH && (user?.mustChangePassword || passwordRecoveryRequired)) {
     return (
       <ForcePasswordChange
         user={user}
+        isRecovery={passwordRecoveryRequired}
         onComplete={(updated: any) => {
           setUserStorage(updated)
           setUser(updated)
+          setPasswordRecoveryRequired(false)
         }}
         onSignOut={() => signOut()}
       />

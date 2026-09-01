@@ -30,7 +30,9 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function doSignIn(e?: React.FormEvent){
     e?.preventDefault()
@@ -38,6 +40,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
 
     setLoading(true)
     setError(null)
+    setNotice(null)
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -67,6 +70,33 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
       setPassword('')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function sendPasswordSetupEmail(){
+    if (!email.trim()) return
+
+    setResetLoading(true)
+    setError(null)
+    setNotice(null)
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        { redirectTo: window.location.origin }
+      )
+
+      if (resetError) {
+        setError('Could not send a password setup email. Check your email address and try again.')
+        return
+      }
+
+      setNotice('Password setup email sent. Check your inbox to continue.')
+    } catch (err) {
+      console.warn('password setup email failed', err)
+      setError('Could not send a password setup email. Please try again.')
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -114,7 +144,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
+              disabled={loading || resetLoading}
               style={{
                 width: '100%',
                 marginTop: 6,
@@ -137,7 +167,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
+              disabled={loading || resetLoading}
               style={{
                 width: '100%',
                 marginTop: 6,
@@ -165,13 +195,36 @@ export default function LoginPage({ onSuccess }: { onSuccess: (user: any) => voi
             </div>
           )}
 
+          {notice && (
+            <div role="status" style={{
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              color: '#166534',
+              borderRadius: 6,
+              padding: '10px 12px',
+              fontSize: 13,
+            }}>
+              {notice}
+            </div>
+          )}
+
           <button
             type="submit"
             className="btn"
-            disabled={loading || !email.trim() || !password}
+            disabled={loading || resetLoading || !email.trim() || !password}
             style={{ width: '100%', marginTop: 4 }}
           >
             {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={sendPasswordSetupEmail}
+            disabled={loading || resetLoading || !email.trim()}
+            style={{ width: '100%' }}
+          >
+            {resetLoading ? 'Sending password setup email…' : 'Set or reset password'}
           </button>
         </form>
       </div>

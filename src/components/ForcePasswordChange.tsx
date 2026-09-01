@@ -10,11 +10,12 @@ import {
 
 type Props = {
   user: any
+  isRecovery?: boolean
   onComplete: (user: any) => void
   onSignOut: () => void
 }
 
-export default function ForcePasswordChange({ user, onComplete, onSignOut }: Props){
+export default function ForcePasswordChange({ user, isRecovery = false, onComplete, onSignOut }: Props){
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [saving, setSaving] = useState(false)
@@ -86,9 +87,13 @@ export default function ForcePasswordChange({ user, onComplete, onSignOut }: Pro
       }}>
         <img src="/Foundation-Medicine.jpg" alt="Foundation Medicine" style={{ height: 56, width: 'auto', margin: '0 auto 16px', display: 'block' }} />
 
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>Choose a permanent password</h1>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>
+          {isRecovery ? 'Set your password' : 'Choose a permanent password'}
+        </h1>
         <p className="muted" style={{ marginTop: 8, marginBottom: 20, fontSize: 14 }}>
-          You signed in with a temporary password{user?.email ? ` for ${user.email}` : ''}. Set a permanent password to continue.
+          {isRecovery
+            ? `Set a password${user?.email ? ` for ${user.email}` : ''} to continue.`
+            : `You signed in with a temporary password${user?.email ? ` for ${user.email}` : ''}. Set a permanent password to continue.`}
         </p>
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

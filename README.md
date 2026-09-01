@@ -155,6 +155,16 @@ Admin role checks read from:
 
 An email allowlist fallback is also supported with `ADMIN_EMAILS` (backend) and `VITE_ADMIN_EMAILS` (frontend).
 
+#### Password-only rollout for existing users
+
+After deploying the password-only login page, established users select **Set or
+reset password**, enter their work email, and use the resulting Supabase recovery
+email to choose a password. After that one-time setup, users sign in only with
+their email and password.
+
+Ensure the production app URL is present in Supabase Auth's allowed redirect URLs
+so the recovery email returns users to the password setup screen.
+
 #### Onboard users from CLI
 
 Use the included onboarding utility:
