@@ -1,76 +1,21 @@
 import React, {useEffect, useRef, useState} from 'react'
-import { supabase } from '../lib/supabaseClient'
-import {
-  getPasswordRequirements,
-  getPasswordStrength,
-  isPasswordAccepted,
-  validateNewPassword,
-} from '../lib/passwordPolicy'
 
 type Props = { route?: string, user?: any, onSignOut?: () => void, isAdmin?: boolean, onExitAdmin?: () => void, containersCount?: number, archivedCount?: number, samplesCount?: number, searchQuery?: string, onSearchChange?: (query: string) => void }
 
-export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin, containersCount = 0, archivedCount = 0, samplesCount = 0, searchQuery = '', onSearchChange}: Props){
+type ThemePreference = 'system' | 'light' | 'dark'
+const ADMIN_SECTIONS = ['import', 'worklist', 'audit', 'backups', 'users'] as const
+const ADMIN_LAST_SECTION_KEY = 'saga_admin_last_section'
+
+export default function HeaderBar({route = window.location.hash || '#/containers', user, onSignOut, isAdmin, onExitAdmin, containersCount = 0, archivedCount = 0, samplesCount = 0, searchQuery = '', onSearchChange, themePreference = 'system', resolvedTheme = 'light', onThemePreferenceChange}: Props & { themePreference?: ThemePreference, resolvedTheme?: 'light' | 'dark', onThemePreferenceChange?: (mode: ThemePreference) => void }){
   const [menuOpen, setMenuOpen] = useState(false)
   const [tabsOpen, setTabsOpen] = useState(false)
-  const [showPasswordSetup, setShowPasswordSetup] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [savingPassword, setSavingPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordNotice, setPasswordNotice] = useState<string | null>(null)
-  const promptedUserRef = useRef<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const canAccessAdmin = !!user
   const root = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const tabsButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuDropdownRef = useRef<HTMLDivElement | null>(null)
   const tabsDropdownRef = useRef<HTMLDivElement | null>(null)
-  const passwordRequirements = getPasswordRequirements(newPassword)
-  const passwordStrength = getPasswordStrength(newPassword)
-  const passwordAccepted = isPasswordAccepted(newPassword, confirmPassword)
-
-  useEffect(() => {
-    const key = String(user?.email || user?.initials || '')
-    if (!key || user?.passwordSet) return
-    if (promptedUserRef.current === key) return
-    promptedUserRef.current = key
-    setShowPasswordSetup(true)
-  }, [user])
-
-  async function savePassword(){
-    const validationError = validateNewPassword(newPassword, confirmPassword)
-    if (validationError) {
-      setPasswordError(validationError)
-      return
-    }
-
-    setSavingPassword(true)
-    try {
-      setPasswordError(null)
-      setPasswordNotice(null)
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-        data: { password_set: true }
-      })
-
-      if (error) {
-        setPasswordError(error.message || 'Failed to update password')
-        return
-      }
-
-      setPasswordNotice('Password saved. You can now use password or magic link.')
-      setTimeout(() => {
-        setShowPasswordSetup(false)
-        setNewPassword('')
-        setConfirmPassword('')
-        setPasswordNotice(null)
-      }, 1000)
-    } catch (err) {
-      console.warn('password update failed', err)
-      setPasswordError('Failed to update password')
-    }
-    setSavingPassword(false)
-  }
 
   useEffect(() => {
     function onDoc(e: MouseEvent){
@@ -81,11 +26,13 @@ export default function HeaderBar({route = window.location.hash || '#/containers
       if (tabsButtonRef.current && tabsButtonRef.current.contains(target)) return
       setMenuOpen(false)
       setTabsOpen(false)
+      setSettingsOpen(false)
     }
     function onKey(e: KeyboardEvent){
       if (e.key === 'Escape') {
         setMenuOpen(false)
         setTabsOpen(false)
+        setSettingsOpen(false)
       }
     }
     document.addEventListener('click', onDoc)
@@ -100,238 +47,232 @@ export default function HeaderBar({route = window.location.hash || '#/containers
     if (window.location.hash !== path) window.location.hash = path
     setMenuOpen(false)
     setTabsOpen(false)
+    setSettingsOpen(false)
   }
 
   const showNewRack = route.startsWith('#/racks/')
   const newAction = showNewRack
     ? { label: 'New Rack', path: '#/new-rack' }
     : null
+  const limsUrl = String((import.meta as any).env?.VITE_LIMS_URL || 'https://sagabase-ht.sagadiagnostics.com/').trim()
+  const isAdminRoute = route.startsWith('#/admin')
+  const adminSection = route.startsWith('#/admin/') ? route.split('/')[2] : 'import'
+
+  const getLastAdminSection = () => {
+    try {
+      const stored = String(localStorage.getItem(ADMIN_LAST_SECTION_KEY) || '').trim()
+      return (ADMIN_SECTIONS as readonly string[]).includes(stored) ? stored : 'import'
+    } catch {
+      return 'import'
+    }
+  }
+
+  useEffect(() => {
+    if (!isAdminRoute) return
+    if (!(ADMIN_SECTIONS as readonly string[]).includes(adminSection)) return
+    try {
+      localStorage.setItem(ADMIN_LAST_SECTION_KEY, adminSection)
+    } catch {}
+  }, [isAdminRoute, adminSection])
 
   return (
-    <header className="topbar px-4 py-2" ref={root}>
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <img src="/saga-logo.png" alt="SAGA Diagnostics" className="h-8 w-auto" />
-          <div>
-            <div className="text-sm text-gray-500">{user ? `Signed in: ${user.initials}${user.name ? ' • ' + user.name : ''}` : 'Not signed in'}</div>
-          </div>
-        </div>
+    <>
+    <header className="topbar" ref={root} style={{
+      background: 'var(--card)',
+      borderBottom: '1px solid var(--border-soft)',
+      padding: '0 24px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 32, height: 56 }}>
 
-        <div className="flex items-center gap-4">
-          <div className="flex gap-2">
-            {!isAdmin && (
-              <>
-                {newAction && (
-                  <button className="btn" onClick={() => navigate(newAction.path)}>
-                    {newAction.label}
-                  </button>
-                )}
-              </>
-            )}
-            {isAdmin && (
-              <button className="btn ghost" onClick={() => { onExitAdmin ? onExitAdmin() : navigate('#/containers') }}>Exit Admin</button>
-            )}
-          </div>
+        {/* Logo */}
+        <img src="/foundation-medicine-logo.png" alt="Foundation Medicine" style={{ height: 28, width: 'auto', flexShrink: 0 }} />
 
-          <div className="flex items-center gap-3">
-            {user && (
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-1 rounded bg-gray-100 font-semibold">{user.initials}</div>
-                <button className="btn ghost" onClick={() => { onSignOut?.() }}>Sign out</button>
-              </div>
-            )}
-
-            {canAccessAdmin && (
-              <div className="relative">
-                <button ref={menuButtonRef} aria-label="menu" className="hamburger" onClick={() => setMenuOpen(v => !v)}>
-                  <span />
-                  <span />
-                  <span />
-                </button>
-
-                {menuOpen && (
-                  <div ref={menuDropdownRef} className="dropdown" role="menu">
-                    <button className="dropdown-item" onClick={() => navigate('#/admin')}>Admin Dashboard</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!isAdmin && (
-        <>
-          <div className="mt-3" style={{display: 'flex', alignItems: 'center'}}>
-            <div className="tabs" role="tablist" style={{gap: 6, alignItems: 'center'}}>
-              <button className={(route === '#/containers' ? 'tab active' : 'tab')} onClick={() => navigate('#/containers')} style={{padding: '6px 10px', fontSize: 13}}>Containers</button>
-              <button className={(route === '#/samples' ? 'tab active' : 'tab')} onClick={() => navigate('#/samples')} style={{padding: '6px 10px', fontSize: 13}}>Samples</button>
-              <button className={(route === '#/worklist' ? 'tab active' : 'tab')} onClick={() => navigate('#/worklist')} style={{padding: '6px 10px', fontSize: 13}}>Worklist</button>
-              <div className="relative" style={{display: 'inline-flex'}}>
+        {/* Nav links */}
+        {!isAdminRoute && (
+          <nav style={{ display: 'flex', alignItems: 'stretch', gap: 0, height: '100%' }} role="tablist">
+            {([
+              { label: 'Containers', path: '#/containers' },
+              { label: 'Samples', path: '#/samples' },
+              { label: 'Worklist', path: '#/worklist' },
+            ] as const).map(({ label, path }) => {
+              const active = route === path
+              return (
                 <button
-                  className="tab"
-                  onClick={() => setTabsOpen(v => !v)}
-                  aria-label="More tabs"
-                  ref={tabsButtonRef}
+                  key={path}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => navigate(path)}
                   style={{
-                    padding: '6px 10px',
-                    fontSize: 16,
-                    lineHeight: 1
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: active ? '2px solid var(--text-1)' : '2px solid transparent',
+                    padding: '0 16px',
+                    fontSize: 14,
+                    fontWeight: active ? 700 : 400,
+                    color: active ? 'var(--text-1)' : 'var(--muted)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'color 0.15s, border-color 0.15s',
                   }}
                 >
-                  <span style={{fontWeight: 700}}>⋯</span>
+                  {label}
                 </button>
+              )
+            })}
 
-                {tabsOpen && (
-                  <div ref={tabsDropdownRef} className="dropdown" role="menu" style={{minWidth: 180}}>
-                    <button className="dropdown-item" onClick={() => navigate('#/rnd')}>R&amp;D Containers</button>
-                    <button className="dropdown-item" onClick={() => navigate('#/rnd/samples')}>R&amp;D Samples</button>
-                    <div style={{borderTop: '1px solid #e5e7eb', margin: '4px 0'}} />
-                    <button className="dropdown-item" onClick={() => navigate('#/cold-storage')}>Storage Units</button>
-                    <button className="dropdown-item" onClick={() => navigate('#/tags')}>Tags</button>
-                    <button className="dropdown-item" onClick={() => navigate('#/archive')}>Archive</button>
+            {/* More dropdown */}
+            <div className="relative" style={{ display: 'inline-flex', alignItems: 'stretch' }}>
+              <button
+                className="tab"
+                onClick={() => setTabsOpen(v => !v)}
+                aria-label="More"
+                ref={tabsButtonRef}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: '2px solid transparent',
+                  padding: '0 12px',
+                  fontSize: 18,
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                ···
+              </button>
+              {tabsOpen && (
+                <div ref={tabsDropdownRef} className="dropdown" role="menu" style={{ minWidth: 180, top: 52 }}>
+                  <button className="dropdown-item" onClick={() => navigate('#/rnd')}>R&amp;D Containers</button>
+                  <button className="dropdown-item" onClick={() => navigate('#/rnd/samples')}>R&amp;D Samples</button>
+                  {limsUrl && (
+                    <a className="dropdown-item" href={limsUrl} target="_blank" rel="noopener noreferrer">LIMS ↗</a>
+                  )}
+                  <div className="dropdown-divider" />
+                  <button className="dropdown-item" onClick={() => navigate('#/cold-storage')}>Storage Units</button>
+                  <button className="dropdown-item" onClick={() => navigate('#/tags')}>Tags</button>
+                  <button className="dropdown-item" onClick={() => navigate('#/archive')}>Archive</button>
+                </div>
+              )}
+            </div>
+          </nav>
+        )}
+
+        {isAdminRoute && (
+          <nav style={{ display: 'flex', alignItems: 'stretch', gap: 0, height: '100%' }} role="tablist">
+            {[
+              ['import', 'Mass Import'],
+              ['worklist', 'Worklist'],
+              ['audit', 'Audit Trail'],
+              ['backups', 'Backups'],
+              ...(canAccessAdmin ? [['users', 'Users']] : [])
+            ].map(([key, label]) => {
+              const active = adminSection === key
+              return (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => navigate(`#/admin/${key}`)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: active ? '2px solid var(--text-1)' : '2px solid transparent',
+                    padding: '0 16px',
+                    fontSize: 14,
+                    fontWeight: active ? 700 : 400,
+                    color: active ? 'var(--text-1)' : 'var(--muted)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'color 0.15s, border-color 0.15s'
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </nav>
+        )}
+
+        {isAdminRoute && (
+          <button className="btn ghost" onClick={() => { onExitAdmin ? onExitAdmin() : navigate('#/containers') }}>Exit Admin</button>
+        )}
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Search */}
+        {!isAdminRoute && route !== '#/worklist' && !route.startsWith('#/containers/') && !route.startsWith('#/cold-storage') && !route.startsWith('#/racks/') && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            border: '1px solid var(--border-soft)',
+            borderRadius: 4,
+            background: 'var(--bg-1)',
+            minWidth: 260,
+            maxWidth: 380,
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <input
+              name="container-search"
+              type="search"
+              autoComplete="off"
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, flex: 1, color: 'var(--text-1)' }}
+              placeholder={(route === '#/samples' || route === '#/rnd/samples') ? 'Search samples…' : 'Search containers…'}
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+            />
+            {searchQuery && (
+              <button onClick={() => onSearchChange?.('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
+            )}
+          </div>
+        )}
+
+        {/* User + menu */}
+        {user && (
+          <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+            {user.initials}{user.name ? ` · ${user.name}` : ''}
+          </span>
+        )}
+        {user && (
+          <button className="btn ghost" onClick={() => onSignOut?.()}>Sign out</button>
+        )}
+
+        {canAccessAdmin && (
+          <div className="relative">
+            <button ref={menuButtonRef} aria-label="menu" className="hamburger" onClick={() => setMenuOpen(v => !v)}>
+              <span /><span /><span />
+            </button>
+            {menuOpen && (
+              <div ref={menuDropdownRef} className="dropdown" role="menu">
+                <button className="dropdown-item" onClick={() => navigate(`#/admin/${getLastAdminSection()}`)}>Admin Dashboard</button>
+                <div className="dropdown-divider" />
+                <button className="dropdown-item" onClick={() => setSettingsOpen(v => !v)}>User Settings</button>
+                {settingsOpen && (
+                  <div className="dropdown-settings" role="group" aria-label="Theme settings">
+                    <div className="dropdown-label">Theme</div>
+                    <label className="theme-option">
+                      <input type="radio" name="theme-preference" checked={themePreference === 'system'} onChange={() => onThemePreferenceChange?.('system')} />
+                      <span>System ({resolvedTheme})</span>
+                    </label>
+                    <label className="theme-option">
+                      <input type="radio" name="theme-preference" checked={themePreference === 'light'} onChange={() => onThemePreferenceChange?.('light')} />
+                      <span>Light</span>
+                    </label>
+                    <label className="theme-option">
+                      <input type="radio" name="theme-preference" checked={themePreference === 'dark'} onChange={() => onThemePreferenceChange?.('dark')} />
+                      <span>Dark</span>
+                    </label>
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
-
-          {route !== '#/worklist' && !route.startsWith('#/containers/') && !route.startsWith('#/cold-storage') && !route.startsWith('#/racks/') && (
-            <div className="search-row mt-3">
-              <div className="search flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21l-4.35-4.35" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                <input 
-                  className="bg-transparent outline-none text-sm flex-1" 
-                  placeholder={(route === '#/samples' || route === '#/rnd/samples') ? 'Search samples by ID, container, storage path, or position... (separate multiple terms with comma)' : 'Search containers by ID, name, rack, or storage path... (separate multiple terms with comma)'}
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => onSearchChange?.('')}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#64748b',
-                      fontSize: 18,
-                      padding: 0,
-                      lineHeight: 1
-                    }}
-                    aria-label="Clear search"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {showPasswordSetup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-[rgba(0,0,0,0.25)] z-50">
-          <div className="bg-white p-6 rounded-lg w-[430px] max-w-[92%] shadow-md">
-            <h3 className="m-0 mb-2 text-lg font-bold">Set Your Password</h3>
-            <p className="text-sm text-gray-600 mt-0 mb-3">Magic link sign-in is enabled. Add a password if you want to sign in either way.</p>
-
-            <div className="flex flex-col gap-2">
-              <input
-                aria-label="New password"
-                type="password"
-                placeholder="New password"
-                value={newPassword}
-                onChange={(e) => {
-                  setNewPassword(e.target.value)
-                  setPasswordError(null)
-                }}
-                className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
-              />
-              <div className="rounded border border-gray-200 p-3 bg-gray-50">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-gray-700">Password strength</span>
-                  <span
-                    className={
-                      passwordStrength.tone === 'strong'
-                        ? 'text-green-700'
-                        : passwordStrength.tone === 'medium'
-                          ? 'text-amber-700'
-                          : 'text-red-600'
-                    }
-                  >
-                    {newPassword ? passwordStrength.label : 'Enter a password'}
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {[0, 1, 2].map((index) => {
-                    const active = passwordStrength.score >= (index + 1) * 2 - 1
-                    return (
-                      <div
-                        key={index}
-                        className={[
-                          'h-2 rounded',
-                          !newPassword
-                            ? 'bg-gray-200'
-                            : active && passwordStrength.tone === 'strong'
-                              ? 'bg-green-600'
-                              : active && passwordStrength.tone === 'medium'
-                                ? 'bg-amber-500'
-                                : active
-                                  ? 'bg-red-500'
-                                  : 'bg-gray-200',
-                        ].join(' ')}
-                      />
-                    )
-                  })}
-                </div>
-                <ul className="mt-3 space-y-1 text-sm">
-                  {passwordRequirements.map((requirement) => (
-                    <li
-                      key={requirement.key}
-                      className={requirement.met ? 'text-green-700' : 'text-gray-600'}
-                    >
-                      {requirement.met ? 'OK' : 'Need'} {requirement.label}
-                    </li>
-                  ))}
-                  <li className={confirmPassword && newPassword === confirmPassword ? 'text-green-700' : 'text-gray-600'}>
-                    {confirmPassword && newPassword === confirmPassword ? 'OK' : 'Need'} Passwords match
-                  </li>
-                </ul>
-              </div>
-              <input
-                aria-label="Confirm password"
-                type="password"
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => {
-                  setConfirmPassword(e.target.value)
-                  setPasswordError(null)
-                }}
-                className="px-3 py-2 rounded border border-gray-200 text-sm outline-none"
-              />
-              {passwordError && <div className="text-red-600 text-sm">{passwordError}</div>}
-              {passwordNotice && <div className="text-green-700 text-sm">{passwordNotice}</div>}
-            </div>
-
-            <div className="flex gap-2 justify-end mt-4">
-              <button
-                className="btn ghost"
-                onClick={() => setShowPasswordSetup(false)}
-                disabled={savingPassword}
-              >
-                Skip for now
-              </button>
-              <button
-                className="btn"
-                onClick={savePassword}
-                disabled={savingPassword || !passwordAccepted}
-              >
-                {savingPassword ? 'Saving...' : 'Save password'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </header>
+  </>
   )
 }

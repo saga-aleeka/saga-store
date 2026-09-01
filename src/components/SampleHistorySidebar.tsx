@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { getToken } from '../lib/auth'
 import { apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
@@ -52,13 +53,15 @@ interface Sample {
 
 interface SampleHistorySidebarProps {
   sample: Sample | null
+  historyReturnTo?: 'samples' | 'rnd-samples'
+  historyReturnHash?: string
   onClose: () => void
   onArchive?: (sampleId: string) => void
   onUpdate?: () => void
   onDelete?: (sampleId: string) => void
 }
 
-export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpdate, onDelete }: SampleHistorySidebarProps) {
+export default function SampleHistorySidebar({ sample, historyReturnTo = 'samples', historyReturnHash, onClose, onArchive, onUpdate, onDelete }: SampleHistorySidebarProps) {
   const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
@@ -70,6 +73,10 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
   const [newTagColor, setNewTagColor] = useState('#94a3b8')
   const [creatingTag, setCreatingTag] = useState(false)
   const [updatingTags, setUpdatingTags] = useState(false)
+  const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => {
+    if (typeof document === 'undefined') return false
+    return document.documentElement.dataset.theme === 'dark'
+  })
 
   const readableTextColor = (hex: string) => {
     try {
@@ -93,6 +100,32 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
   const sortedHistory = [...history].sort((a, b) => 
     new Date(b.when).getTime() - new Date(a.when).getTime()
   )
+
+  const panelBackground = 'var(--card)'
+  const surfaceBackground = 'var(--card-soft)'
+  const panelText = 'var(--text-1)'
+  const mutedText = 'var(--muted)'
+  const panelBorder = 'var(--border-soft)'
+
+  const archiveToggleBg = archiving ? '#64748b' : (sample.is_archived ? '#ef4444' : (isDarkTheme ? '#334155' : '#d1d5db'))
+  const trainingToggleBg = archiving ? '#64748b' : (sample.is_training ? '#6366f1' : (isDarkTheme ? '#334155' : '#d1d5db'))
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const applyTheme = () => {
+      setIsDarkTheme(document.documentElement.dataset.theme === 'dark')
+    }
+
+    applyTheme()
+    const observer = new MutationObserver(applyTheme)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   // Fetch container names for UUIDs in history
   useEffect(() => {
@@ -193,7 +226,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       window.dispatchEvent(new CustomEvent('samples-updated'))
     } catch (error: any) {
       console.error('Failed to update tags:', error)
-      alert(`Failed to update tags: ${error?.message || 'Unknown error'}`)
+      toast.error(`Failed to update tags: ${error?.message || 'Unknown error'}`)
     } finally {
       setUpdatingTags(false)
     }
@@ -221,7 +254,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       window.dispatchEvent(new CustomEvent('samples-updated'))
     } catch (error: any) {
       console.error('Failed to create tag:', error)
-      alert(`Failed to create tag: ${error?.message || 'Unknown error'}`)
+      toast.error(`Failed to create tag: ${error?.message || 'Unknown error'}`)
     } finally {
       setCreatingTag(false)
     }
@@ -256,7 +289,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onUpdate?.()
     } catch (error) {
       console.error('Archive toggle error:', error)
-      alert('Failed to update archive status')
+      toast.error('Failed to update archive status')
     } finally {
       setArchiving(false)
     }
@@ -285,7 +318,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onUpdate?.()
     } catch (error) {
       console.error('Training toggle error:', error)
-      alert('Failed to update training status')
+      toast.error('Failed to update training status')
     } finally {
       setArchiving(false)
     }
@@ -317,7 +350,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onClose()
     } catch (error: any) {
       console.error('Checkout error:', error)
-      alert(error?.message || 'Failed to checkout sample')
+      toast.error(error?.message || 'Failed to checkout sample')
     } finally {
       setCheckingOut(false)
     }
@@ -344,7 +377,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       onClose()
     } catch (error) {
       console.error('Delete error:', error)
-      alert('Failed to delete sample')
+      toast.error('Failed to delete sample')
     } finally {
       setDeleting(false)
     }
@@ -379,6 +412,15 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
     return getActionLabel(event.action)
   }
 
+  const openSampleHistory = () => {
+    if (historyReturnHash) {
+      window.location.hash = `#/samples/${encodeURIComponent(sample.sample_id)}/history?returnTo=container&returnHash=${encodeURIComponent(historyReturnHash)}`
+      return
+    }
+    const returnTo = historyReturnTo === 'rnd-samples' ? 'rnd-samples' : 'samples'
+    window.location.hash = `#/samples/${encodeURIComponent(sample.sample_id)}/history?returnTo=${returnTo}`
+  }
+
   return (
     <div style={{
       position: 'fixed',
@@ -386,7 +428,9 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       right: 0,
       bottom: 0,
       width: '400px',
-      background: 'white',
+      background: panelBackground,
+      color: panelText,
+      borderLeft: `1px solid ${panelBorder}`,
       boxShadow: '-4px 0 12px rgba(0,0,0,0.1)',
       display: 'flex',
       flexDirection: 'column',
@@ -395,16 +439,30 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       {/* Header */}
       <div style={{
         padding: '20px',
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: `1px solid ${panelBorder}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start'
       }}>
         <div style={{ flex: 1 }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
+          <button
+            onClick={openSampleHistory}
+            style={{
+              margin: 0,
+              padding: 0,
+              background: 'none',
+              border: 'none',
+              fontSize: '18px',
+              fontWeight: 700,
+              color: '#3b82f6',
+              textDecoration: 'underline',
+              cursor: 'pointer'
+            }}
+            title="Open sample history"
+          >
             {sample.sample_id}
-          </h3>
-          <div style={{ marginTop: '4px', fontSize: '14px', color: '#6b7280' }}>
+          </button>
+          <div style={{ marginTop: '4px', fontSize: '14px', color: mutedText }}>
             Position: {sample.position}
           </div>
         </div>
@@ -416,7 +474,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
             fontSize: '24px',
             cursor: 'pointer',
             padding: '0',
-            color: '#6b7280',
+            color: mutedText,
             lineHeight: 1
           }}
           aria-label="Close"
@@ -426,23 +484,23 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
       </div>
 
       {/* Sample Info */}
-      <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+      <div style={{ padding: '20px', borderBottom: `1px solid ${panelBorder}` }}>
         <div style={{ display: 'grid', gap: '12px', fontSize: '14px' }}>
           {sample.owner && (
             <div>
-              <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px' }}>Owner</div>
+              <div style={{ color: mutedText, fontSize: '12px', marginBottom: '4px' }}>Owner</div>
               <div style={{ fontWeight: 600 }}>{sample.owner}</div>
             </div>
           )}
           {sample.status && (
             <div>
-              <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px' }}>Status</div>
+              <div style={{ color: mutedText, fontSize: '12px', marginBottom: '4px' }}>Status</div>
               <div style={{ fontWeight: 600 }}>{sample.status}</div>
             </div>
           )}
           {sample.created_at && (
             <div>
-              <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px' }}>Created</div>
+              <div style={{ color: mutedText, fontSize: '12px', marginBottom: '4px' }}>Created</div>
               <div>{formatDateTime(sample.created_at)}</div>
             </div>
           )}
@@ -455,7 +513,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               fontWeight: 600,
               fontSize: '13px'
             }}>
-              ⚠️ Archived
+              Archived
             </div>
           )}
           {sample.is_training && (
@@ -467,14 +525,14 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               fontWeight: 600,
               fontSize: '13px'
             }}>
-              🎓 Training Sample
+              Training Sample
             </div>
           )}
         </div>
 
         {/* Tags */}
-        <div style={{ marginTop: '16px', padding: '12px', background: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: 8 }}>Tags</div>
+        <div style={{ marginTop: '16px', padding: '12px', background: surfaceBackground, borderRadius: '6px', border: `1px solid ${panelBorder}` }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: panelText, marginBottom: 8 }}>Tags</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {loadingTags && <span className="muted">Loading tags...</span>}
             {!loadingTags && tags.length === 0 && (
@@ -484,7 +542,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               const active = selectedTagIds.has(tag.id)
               const color = tag.color || '#94a3b8'
               const bg = active ? color : `${color}22`
-              const textColor = active ? readableTextColor(color) : color
+              const textColor = active ? readableTextColor(color) : panelText
               return (
                 <button
                   key={tag.id}
@@ -527,7 +585,9 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               style={{
                 padding: '8px 10px',
                 borderRadius: 8,
-                border: '1px solid #d1d5db',
+                border: `1px solid ${panelBorder}`,
+                background: panelBackground,
+                color: panelText,
                 fontSize: 12,
                 minWidth: 160
               }}
@@ -558,13 +618,17 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px',
-          background: '#f9fafb',
+          background: surfaceBackground,
           borderRadius: '6px',
-          border: '1px solid #e5e7eb'
+          border: `1px solid ${panelBorder}`
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>🗄️</span>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Archive</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9z" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M9 13h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: panelText }}>Archive</span>
           </div>
           <button
             onClick={handleArchiveToggle}
@@ -573,7 +637,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               position: 'relative',
               width: '44px',
               height: '24px',
-              background: archiving ? '#9ca3af' : (sample.is_archived ? '#ef4444' : '#d1d5db'),
+              background: archiveToggleBg,
               border: 'none',
               borderRadius: '12px',
               cursor: archiving ? 'not-allowed' : 'pointer',
@@ -587,7 +651,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               left: sample.is_archived ? '22px' : '2px',
               width: '20px',
               height: '20px',
-              background: 'white',
+              background: '#f8fafc',
               borderRadius: '10px',
               transition: 'left 0.2s',
               boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
@@ -602,13 +666,16 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px',
-          background: '#f9fafb',
+          background: surfaceBackground,
           borderRadius: '6px',
-          border: '1px solid #e5e7eb'
+          border: `1px solid ${panelBorder}`
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>🎓</span>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Training Sample</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+              <path d="M7 10.5V14c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5v-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: panelText }}>Training Sample</span>
           </div>
           <button
             onClick={handleTrainingToggle}
@@ -617,7 +684,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               position: 'relative',
               width: '44px',
               height: '24px',
-              background: archiving ? '#9ca3af' : (sample.is_training ? '#6366f1' : '#d1d5db'),
+              background: trainingToggleBg,
               border: 'none',
               borderRadius: '12px',
               cursor: archiving ? 'not-allowed' : 'pointer',
@@ -631,7 +698,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
               left: sample.is_training ? '22px' : '2px',
               width: '20px',
               height: '20px',
-              background: 'white',
+              background: '#f8fafc',
               borderRadius: '10px',
               transition: 'left 0.2s',
               boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
@@ -656,7 +723,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
             fontSize: '14px'
           }}
         >
-          {checkingOut ? 'Checking Out...' : '📤 Checkout Sample'}
+          {checkingOut ? 'Checking Out...' : 'Checkout Sample'}
         </button>
 
         {/* Delete Button */}
@@ -667,16 +734,16 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
             marginTop: '12px',
             width: '100%',
             padding: '10px',
-            background: deleting ? '#9ca3af' : '#fef2f2',
-            color: '#991b1b',
-            border: '1px solid #fecaca',
+            background: deleting ? '#64748b' : (isDarkTheme ? '#3a1014' : '#fef2f2'),
+            color: isDarkTheme ? '#fecaca' : '#991b1b',
+            border: `1px solid ${isDarkTheme ? '#7f1d1d' : '#fecaca'}`,
             borderRadius: '6px',
             fontWeight: 600,
             cursor: deleting ? 'not-allowed' : 'pointer',
             fontSize: '14px'
           }}
         >
-          {deleting ? 'Deleting...' : '🗑️ Delete Sample'}
+          {deleting ? 'Deleting...' : 'Delete Sample'}
         </button>
       </div>
 
@@ -686,12 +753,12 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
         overflowY: 'auto',
         padding: '20px'
       }}>
-        <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: '#374151' }}>
+        <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: panelText }}>
           Movement History
         </h4>
 
         {sortedHistory.length === 0 ? (
-          <div style={{ color: '#9ca3af', fontSize: '14px', fontStyle: 'italic' }}>
+          <div style={{ color: mutedText, fontSize: '14px', fontStyle: 'italic' }}>
             No history recorded
           </div>
         ) : (
@@ -701,7 +768,7 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                 key={index}
                 style={{
                   padding: '12px',
-                  background: '#f9fafb',
+                  background: surfaceBackground,
                   borderRadius: '8px',
                   borderLeft: '3px solid #3b82f6',
                   display: 'flex',
@@ -712,12 +779,12 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{
                     padding: '3px 8px',
-                    background: event.action === 'moved' ? '#e0e7ff' : 
-                               event.action === 'inserted' ? '#dcfce7' : 
-                               event.action === 'archived' ? '#fed7aa' : '#e5e7eb',
-                    color: event.action === 'moved' ? '#3730a3' : 
-                          event.action === 'inserted' ? '#166534' : 
-                          event.action === 'archived' ? '#9a3412' : '#374151',
+                      background: event.action === 'moved' ? (isDarkTheme ? '#312e81' : '#e0e7ff') : 
+                         event.action === 'inserted' ? (isDarkTheme ? '#14532d' : '#dcfce7') : 
+                         event.action === 'archived' ? (isDarkTheme ? '#7c2d12' : '#fed7aa') : (isDarkTheme ? '#334155' : '#e5e7eb'),
+                      color: event.action === 'moved' ? (isDarkTheme ? '#c7d2fe' : '#3730a3') : 
+                        event.action === 'inserted' ? (isDarkTheme ? '#bbf7d0' : '#166534') : 
+                        event.action === 'archived' ? (isDarkTheme ? '#fed7aa' : '#9a3412') : (isDarkTheme ? '#e2e8f0' : '#374151'),
                     borderRadius: '4px',
                     fontSize: '11px',
                     fontWeight: 600,
@@ -728,8 +795,9 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                   {event.user && (
                     <span style={{
                       padding: '3px 8px',
-                      background: '#f3f4f6',
-                      color: '#374151',
+                      background: panelBackground,
+                      border: `1px solid ${panelBorder}`,
+                      color: panelText,
                       borderRadius: '4px',
                       fontSize: '11px',
                       fontWeight: 600
@@ -737,11 +805,11 @@ export default function SampleHistorySidebar({ sample, onClose, onArchive, onUpd
                       {event.user}
                     </span>
                   )}
-                  <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: '11px', color: mutedText, marginLeft: 'auto' }}>
                     {formatDateTime(event.when)}
                   </span>
                 </div>
-                <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
+                <div style={{ fontSize: '13px', color: panelText, lineHeight: 1.5 }}>
                   {formatHistoryDescription(event)}
                 </div>
               </div>

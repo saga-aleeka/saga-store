@@ -2,7 +2,7 @@
 async function createAuditLog(supabaseAdmin: any, params: {
   userInitials?: string | null
   userName?: string | null
-  entityType: 'container' | 'sample' | 'tag'
+  entityType: 'container' | 'sample' | 'tag' | 'external_account'
   entityId?: string | null
   action: string
   entityName?: string | null

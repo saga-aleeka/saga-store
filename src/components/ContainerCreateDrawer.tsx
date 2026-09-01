@@ -1,5 +1,5 @@
 import React, {useState, useRef, useEffect} from 'react'
-import { SAMPLE_TYPES, LAYOUTS, TEMPS } from '../constants'
+import { SAMPLE_TYPES, LAYOUTS, TEMPS, COLD_STORAGE_LOCATIONS } from '../constants'
 import { supabase } from '../lib/api'
 
 // Template configurations for each sample type
@@ -80,7 +80,6 @@ export default function ContainerCreateDrawer({
 
   const defaultStorageForm = {
     name: '',
-    type: '',
     temperature: '',
     location: '',
     interior_image_url: '',
@@ -93,7 +92,7 @@ export default function ContainerCreateDrawer({
   const [form, setForm] = useState<any>(defaultForm)
   const [errors, setErrors] = useState<{name?:string, cold_storage_id?:string, rack_id?:string, rack_position?:string}>({})
   const [storageForm, setStorageForm] = useState<any>(defaultStorageForm)
-  const [storageErrors, setStorageErrors] = useState<{name?:string, type?:string}>({})
+  const [storageErrors, setStorageErrors] = useState<{name?:string}>({})
   const [rackDrafts, setRackDrafts] = useState<Array<{name: string; position: string; grid_rows: string; grid_cols: string}>>([])
   const [savingStorage, setSavingStorage] = useState(false)
   const [storageImageFile, setStorageImageFile] = useState<File | null>(null)
@@ -358,14 +357,9 @@ export default function ContainerCreateDrawer({
   }
 
   const handleStorageTemperatureChange = (value: string) => {
-    const temp = String(value || '').trim()
-    let nextType = storageForm.type
-    if (temp === '4°C') nextType = 'Refrigerator'
-    if (temp === '-20°C' || temp === '-80°C') nextType = 'Freezer'
     setStorageForm((prev: any) => ({
       ...prev,
-      temperature: value,
-      type: nextType
+      temperature: value
     }))
   }
 
@@ -384,7 +378,6 @@ export default function ContainerCreateDrawer({
   const createStorageLocation = async () => {
     const newErrors: any = {}
     if (!storageForm.name.trim()) newErrors.name = 'Name is required'
-    if (!storageForm.type.trim()) newErrors.type = 'Type is required'
     setStorageErrors(newErrors)
     if (Object.keys(newErrors).length) return
 
@@ -395,7 +388,6 @@ export default function ContainerCreateDrawer({
         .insert([
           {
             name: storageForm.name.trim(),
-            type: storageForm.type.trim(),
             temperature: storageForm.temperature.trim() || null,
             location: storageForm.location.trim() || null,
             interior_image_url: storageForm.interior_image_url.trim() || null,
@@ -646,18 +638,17 @@ export default function ContainerCreateDrawer({
               </select>
             </label>
 
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{minWidth: 80, fontWeight: 600}}>Type</div>
-              <div className="muted" style={{fontSize: 13}}>{storageForm.type || '-'}</div>
-            </div>
-
             <label>
               Location
-              <input
+              <select
                 value={storageForm.location}
                 onChange={(e) => updateStorageField('location', e.target.value)}
-                placeholder="e.g., Lab A"
-              />
+              >
+                <option value="">Select location</option>
+                {COLD_STORAGE_LOCATIONS.map((location) => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
             </label>
 
             <label>

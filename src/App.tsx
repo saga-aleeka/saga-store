@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import { Toaster } from 'sonner'
 import Header from './components/HeaderBar'
 import ContainerFilters from './components/ContainerFilters'
 import ContainerCard from './components/ContainerCard'
@@ -6,7 +7,8 @@ import AdminDashboard from './components/AdminDashboard'
 import ContainerDetails from './components/ContainerDetails'
 import ContainerCreateDrawer from './components/ContainerCreateDrawer'
 import RackCreateDrawer from './components/RackCreateDrawer'
-import LoginModal from './components/LoginModal'
+import LoginPage from './components/LoginPage'
+import ForcePasswordChange from './components/ForcePasswordChange'
 import WorklistManager from './components/WorklistManager'
 import WorklistContainerView from './components/WorklistContainerView'
 import SampleHistory from './components/SampleHistory'
@@ -18,21 +20,27 @@ import { ContainerCardSkeleton, TableSkeleton } from './components/LoadingSkelet
 import { supabase, apiFetch } from './lib/api'
 import { clearToken, getUser, setToken, setUser as setUserStorage } from './lib/auth'
 import { formatDateTime, formatDate } from './lib/dateUtils'
-import { SAMPLE_TYPES } from './constants'
+import { SAMPLE_TYPES, SAMPLE_TYPE_META } from './constants'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
 import { getUserRoles, isAdminUser } from './lib/roles'
 
-// Sample type color mapping (same as ContainerFilters)
-const SAMPLE_TYPE_COLORS: { [key: string]: string } = {
-  'PA Pools': '#fb923c',
-  'DP Pools': '#10b981',
-  'cfDNA Tubes': '#9ca3af',
-  'DTC Tubes': '#7c3aed',
-  'MNC Tubes': '#ef4444',
-  'Plasma Tubes': '#f59e0b',
-  'BC Tubes': '#3b82f6',
-  'IDT Plates': '#06b6d4',
-  'Sample Type': '#6b7280'
+type ThemePreference = 'system' | 'light' | 'dark'
+
+const THEME_PREFERENCE_KEY = 'saga_theme_preference'
+const SAMPLE_LIST_STATE_KEY = 'saga_sample_list_state'
+
+function getSystemTheme(): 'light' | 'dark' {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function loadThemePreference(): ThemePreference {
+  try {
+    const stored = String(localStorage.getItem(THEME_PREFERENCE_KEY) || '').toLowerCase()
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+      return stored
+    }
+  } catch {}
+  return 'light'
 }
 
 // Compute readable text color (white or black) based on background hex
@@ -80,6 +88,7 @@ function toInitials(email?: string | null){
 
 function toStoredUser(user: any){
   const md = user?.user_metadata || {}
+  const appMd = user?.app_metadata || {}
   const email = user?.email || null
   const roles = getUserRoles(user)
   return {
@@ -89,15 +98,44 @@ function toStoredUser(user: any){
     roles,
     role: roles[0] || null,
     passwordSet: md.password_set === true || md.passwordSet === true,
+    mustChangePassword: appMd.must_change_password === true,
   }
 }
 
 export default function App() {
   const [route, setRoute] = useState<string>(window.location.hash || '#/containers')
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadThemePreference())
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
+    const initial = loadThemePreference()
+    return initial === 'system' ? getSystemTheme() : initial
+  })
   const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer', roles: ['admin'], role: 'admin', email: 'dev@example.local' } : null)
   const [user, setUser] = useState<any | null>(initialUser)
   const canAccessDashboard = DISABLE_AUTH || !!user
   const canManageUsers = DISABLE_AUTH || isAdminUser(user)
+
+  useEffect(() => {
+    try { localStorage.setItem(THEME_PREFERENCE_KEY, themePreference) } catch {}
+  }, [themePreference])
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      setResolvedTheme(themePreference === 'system' ? (media.matches ? 'dark' : 'light') : themePreference)
+    }
+
+    applyTheme()
+    if (themePreference !== 'system') return
+
+    const onChange = () => applyTheme()
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [themePreference])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolvedTheme)
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
 
   useEffect(() => {
     if (DISABLE_AUTH) return
@@ -209,6 +247,58 @@ export default function App() {
   const idleLastActivityRef = React.useRef<number>(Date.now())
   const idleBroadcastRef = React.useRef<string>(`tab-${Math.random().toString(36).slice(2)}`)
   const idleTriggeredRef = React.useRef<boolean>(false)
+  const restoreSampleListOnNextRouteRef = React.useRef<'#/samples' | '#/rnd/samples' | null>(null)
+  const suppressSearchResetRef = React.useRef(false)
+  const skipSamplePageResetRef = React.useRef(false)
+
+  const saveSampleListState = React.useCallback((listRoute: '#/samples' | '#/rnd/samples') => {
+    try {
+      const snapshot = {
+        route: listRoute,
+        searchQuery,
+        sampleTypeFilters,
+        sampleStatusFilters,
+        sampleTagFilters,
+        sampleSort,
+        samplesPerPage,
+        currentPage,
+        scrollY: window.scrollY,
+        savedAt: Date.now()
+      }
+      sessionStorage.setItem(SAMPLE_LIST_STATE_KEY, JSON.stringify(snapshot))
+    } catch {}
+  }, [searchQuery, sampleTypeFilters, sampleStatusFilters, sampleTagFilters, sampleSort, samplesPerPage, currentPage])
+
+  const restoreSampleListState = React.useCallback((listRoute: '#/samples' | '#/rnd/samples') => {
+    try {
+      const raw = sessionStorage.getItem(SAMPLE_LIST_STATE_KEY)
+      if (!raw) return false
+      const snapshot = JSON.parse(raw)
+      if (!snapshot || snapshot.route !== listRoute) return false
+
+      suppressSearchResetRef.current = true
+      skipSamplePageResetRef.current = true
+
+      setSearchQuery(String(snapshot.searchQuery || ''))
+      setSampleTypeFilters(Array.isArray(snapshot.sampleTypeFilters) ? snapshot.sampleTypeFilters : [])
+      setSampleStatusFilters(Array.isArray(snapshot.sampleStatusFilters) ? snapshot.sampleStatusFilters : [])
+      setSampleTagFilters(Array.isArray(snapshot.sampleTagFilters) ? snapshot.sampleTagFilters : [])
+      setSampleSort(snapshot.sampleSort && snapshot.sampleSort.key ? snapshot.sampleSort : { key: 'created_at', direction: 'desc' })
+      setSamplesPerPage(Number(snapshot.samplesPerPage) || 24)
+      setCurrentPage(Number(snapshot.currentPage) || 1)
+
+      const scrollY = Number(snapshot.scrollY)
+      if (Number.isFinite(scrollY)) {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'auto' })
+        })
+      }
+
+      return true
+    } catch {
+      return false
+    }
+  }, [])
 
   useEffect(() => {
     if (DISABLE_AUTH || !user) {
@@ -348,7 +438,11 @@ export default function App() {
       
       console.log(`Loaded ${allSamples.length} total samples (archived: ${isArchiveRoute})`)
       setSamples(allSamples)
-      setCurrentPage(1) // Reset to first page when reloading
+      if (skipSamplePageResetRef.current) {
+        skipSamplePageResetRef.current = false
+      } else {
+        setCurrentPage(1)
+      }
     }catch(e){
       console.warn('failed to load samples', e)
       setSamples([])
@@ -373,6 +467,10 @@ export default function App() {
 
   // Reset to page 1 when search changes
   useEffect(() => {
+    if (suppressSearchResetRef.current) {
+      suppressSearchResetRef.current = false
+      return
+    }
     setCurrentPage(1)
     setContainersCurrentPage(1)
   }, [searchQuery])
@@ -398,12 +496,16 @@ export default function App() {
   // Prevent stale per-session sample filters from hiding records when users revisit sample pages.
   useEffect(() => {
     if (route === '#/samples' || route === '#/rnd/samples') {
+      if (restoreSampleListOnNextRouteRef.current === route) {
+        restoreSampleListOnNextRouteRef.current = null
+        if (restoreSampleListState(route)) return
+      }
       setSampleTypeFilters([])
       setSampleStatusFilters([])
       setSampleTagFilters([])
       setSampleFilterMenu(null)
     }
-  }, [route])
+  }, [route, restoreSampleListState])
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || '#/containers')
@@ -515,6 +617,17 @@ export default function App() {
   }, [])
 
   const samplesCountDisplay = samplesCount ?? (samples?.length ?? 0)
+  const sharedHeaderProps = {
+    user,
+    onSignOut: signOut,
+    containersCount: containers?.length ?? 0,
+    archivedCount: archivedContainers?.length ?? 0,
+    searchQuery,
+    onSearchChange: setSearchQuery,
+    themePreference,
+    resolvedTheme,
+    onThemePreferenceChange: setThemePreference,
+  }
 
   const shelfById = React.useMemo(() => {
     return shelves.reduce<Record<string, any>>((acc, shelf) => {
@@ -543,6 +656,38 @@ export default function App() {
         .from('samples')
         .select('id, sample_id, container_id, previous_container_id, position, is_checked_out, is_archived, is_training, sample_tags:sample_tags(tag_id)')
         .or('container_id.not.is.null,and(is_checked_out.eq.true,previous_container_id.not.is.null)')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      const rows = data || []
+      allRows.push(...rows)
+      hasMore = rows.length === pageSize
+      page += 1
+
+      if (page > 500) {
+        hasMore = false
+      }
+    }
+
+    return allRows
+  }, [])
+
+  const fetchAllContainers = React.useCallback(async (archived: boolean) => {
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+    const allRows: any[] = []
+
+    while (hasMore) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('containers')
+        .select(`${CONTAINER_LOCATION_SELECT}`)
+        .eq('archived', archived)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .range(from, to)
@@ -681,17 +826,9 @@ export default function App() {
     async function onUpdated(e: any){
       // refresh both lists when a container is updated (might be archived/unarchived)
       try {
-        const [activeRes, archivedRes, racksRes, coldRes, allSamples] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}`)
-            .eq('archived', false)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}`)
-            .eq('archived', true)
-            .order('created_at', { ascending: false }),
+        const [activeRows, archivedRows, racksRes, coldRes, allSamples] = await Promise.all([
+          fetchAllContainers(false),
+          fetchAllContainers(true),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
@@ -703,26 +840,22 @@ export default function App() {
 
         const rackMap = new Map((racksRes.data || []).map((r: any) => [r.id, r]))
         const coldMap = new Map((coldRes.data || []).map((c: any) => [c.id, c]))
-        const activeWithSamples = mergeContainersWithSamples(activeRes.data || [], allSamples || [])
-        const archivedWithSamples = mergeContainersWithSamples(archivedRes.data || [], allSamples || [])
+        const activeWithSamples = mergeContainersWithSamples(activeRows || [], allSamples || [])
+        const archivedWithSamples = mergeContainersWithSamples(archivedRows || [], allSamples || [])
         
-        if (activeRes.data) {
-          const containersWithCounts = activeWithSamples.map((c: any) => ({
-            ...c,
-            used: getPhysicalSampleCount(c),
-            display_location: buildDisplayLocation(c, rackMap, coldMap)
-          }))
-          setContainers(containersWithCounts)
-        }
+        const containersWithCounts = activeWithSamples.map((c: any) => ({
+          ...c,
+          used: getPhysicalSampleCount(c),
+          display_location: buildDisplayLocation(c, rackMap, coldMap)
+        }))
+        setContainers(containersWithCounts)
         
-        if (archivedRes.data) {
-          const containersWithCounts = archivedWithSamples.map((c: any) => ({
-            ...c,
-            used: getPhysicalSampleCount(c),
-            display_location: buildDisplayLocation(c, rackMap, coldMap)
-          }))
-          setArchivedContainers(containersWithCounts)
-        }
+        const archivedWithCounts = archivedWithSamples.map((c: any) => ({
+          ...c,
+          used: getPhysicalSampleCount(c),
+          display_location: buildDisplayLocation(c, rackMap, coldMap)
+        }))
+        setArchivedContainers(archivedWithCounts)
       } catch(e) {
         console.warn('Failed to refresh containers after update', e)
       }
@@ -737,12 +870,8 @@ export default function App() {
     async function load(){
       setLoadingArchived(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}`)
-            .eq('archived', true)
-            .order('created_at', { ascending: false }),
+        const [data, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
+          fetchAllContainers(true),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
@@ -753,10 +882,6 @@ export default function App() {
         ])
         
         if (!mounted) return
-        if (error) {
-          console.error('Failed to load archived containers:', error)
-          throw error
-        }
         
         console.log('Loaded archived containers:', data)
         
@@ -788,12 +913,8 @@ export default function App() {
     async function load(){
       setLoadingContainers(true)
       try{
-        const [{ data, error }, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
-          supabase
-            .from('containers')
-            .select(`${CONTAINER_LOCATION_SELECT}`)
-            .eq('archived', false)
-            .order('created_at', { ascending: false }),
+        const [data, { data: racksData }, { data: coldStorageData }, allSamples] = await Promise.all([
+          fetchAllContainers(false),
           supabase
             .from('racks')
             .select('id, name, cold_storage_id'),
@@ -804,10 +925,6 @@ export default function App() {
         ])
 
         if (!mounted) return
-        if (error) {
-          console.error('Failed to load containers:', error)
-          throw error
-        }
 
         const rackMap = new Map((racksData || []).map((r: any) => [r.id, r]))
         const coldMap = new Map((coldStorageData || []).map((c: any) => [c.id, c]))
@@ -828,7 +945,7 @@ export default function App() {
 
     if (route === '#/containers' || route === '#/rnd') load()
     return () => { mounted = false }
-  }, [route, fetchAllContainerSamples, getPhysicalSampleCount, mergeContainersWithSamples])
+  }, [route, fetchAllContainerSamples, fetchAllContainers, getPhysicalSampleCount, mergeContainersWithSamples])
 
   const samplesForTypeFilters = React.useMemo(() => {
     if (!samples) return []
@@ -1161,6 +1278,24 @@ export default function App() {
     }
   }
 
+  // Auth gates render alone so the app shell (and its search field) never mounts behind them.
+  if (!DISABLE_AUTH && !user) {
+    return <LoginPage onSuccess={(u: any) => setUser(u)} />
+  }
+
+  if (!DISABLE_AUTH && user?.mustChangePassword) {
+    return (
+      <ForcePasswordChange
+        user={user}
+        onComplete={(updated: any) => {
+          setUserStorage(updated)
+          setUser(updated)
+        }}
+        onSignOut={() => signOut()}
+      />
+    )
+  }
+
   // worklist container view route: #/worklist/container/:id
   if (route.startsWith('#/worklist/container/') && route.split('/').length >= 4) {
     const parts = route.split('/')
@@ -1175,7 +1310,7 @@ export default function App() {
 
     return (
       <div className="app">
-        <Header route="#/worklist" user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route="#/worklist" {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <WorklistContainerView 
             containerId={id} 
@@ -1191,11 +1326,29 @@ export default function App() {
   if (route.startsWith('#/samples/') && route.includes('/history')) {
     const parts = route.split('/')
     const sampleId = decodeURIComponent(parts[2])
+    const historyQuery = route.includes('?') ? route.split('?')[1] : ''
+    const historyParams = new URLSearchParams(historyQuery)
+    const returnToParam = historyParams.get('returnTo')
+    const returnHash = historyParams.get('returnHash')
+    const returnTo =
+      returnToParam === 'rnd-samples'
+        ? '#/rnd/samples'
+        : returnToParam === 'container' && returnHash
+          ? decodeURIComponent(returnHash)
+          : '#/samples'
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
-          <SampleHistory sampleId={sampleId} onBack={() => { window.location.hash = '#/samples' }} />
+          <SampleHistory
+            sampleId={sampleId}
+            onBack={() => {
+              if (returnTo === '#/samples' || returnTo === '#/rnd/samples') {
+                restoreSampleListOnNextRouteRef.current = returnTo
+              }
+              window.location.hash = returnTo
+            }}
+          />
         </div>
       </div>
     )
@@ -1208,7 +1361,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <ColdStorageDetails id={id} />
         </div>
@@ -1223,7 +1376,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <RackDetails id={id} />
         </div>
@@ -1238,7 +1391,7 @@ export default function App() {
     const id = idWithQuery.split('?')[0]
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <ContainerDetails id={id} />
         </div>
@@ -1249,7 +1402,7 @@ export default function App() {
   if (route === '#/cold-storage') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <ColdStorageList />
         </div>
@@ -1260,7 +1413,7 @@ export default function App() {
   if (route === '#/tags') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <TagsManager />
         </div>
@@ -1271,7 +1424,7 @@ export default function App() {
   if (route === '#/new'){
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{marginTop:18}}>
           <ContainerCreateDrawer onClose={() => { window.location.hash = '#/containers' }} />
         </div>
@@ -1282,7 +1435,7 @@ export default function App() {
   if (route === '#/new-storage') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samplesCountDisplay} />
         <div style={{ marginTop: 18 }}>
           <ContainerCreateDrawer
             onClose={() => { window.location.hash = '#/cold-storage' }}
@@ -1296,7 +1449,7 @@ export default function App() {
   if (route === '#/new-rack') {
     return (
       <div className="app">
-        <Header route={route} user={user} onSignOut={signOut} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samples?.length ?? 0} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header route={route} {...sharedHeaderProps} samplesCount={samples?.length ?? 0} />
         <div style={{ marginTop: 18 }}>
           <RackCreateDrawer onClose={() => { window.location.hash = '#/cold-storage' }} />
         </div>
@@ -1306,11 +1459,8 @@ export default function App() {
 
   return (
     <div className="app">
-  <Header route={route} user={user} onSignOut={signOut} isAdmin={route === '#/admin'} onExitAdmin={() => { window.location.hash = '#/containers' }} containersCount={containers?.length ?? 0} archivedCount={archivedContainers?.length ?? 0} samplesCount={samplesCountDisplay} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-
-      {!user && (
-        <LoginModal onSuccess={(u:any) => setUser(u)} />
-      )}
+  <Toaster position="top-right" richColors />
+  <Header route={route} {...sharedHeaderProps} isAdmin={route.startsWith('#/admin')} onExitAdmin={() => { window.location.hash = '#/containers' }} samplesCount={samplesCountDisplay} />
 
       <div style={{marginTop:18}}>
         {(route === '#/containers' || route === '#/rnd') && (
@@ -2243,19 +2393,22 @@ export default function App() {
                   </thead>
                   <tbody>
                     {filteredSamples.slice((currentPage - 1) * samplesPerPage, currentPage * samplesPerPage).map((s: any, index: number) => {
+                      const activeContainerId = s.is_checked_out && s.previous_container_id ? s.previous_container_id : s.container_id
+                      const activePosition = s.is_checked_out && s.previous_position ? s.previous_position : s.position
                       const handleSampleClick = () => {
                         const returnTo = route === '#/rnd/samples' ? 'rnd-samples' : 'samples'
-                        window.location.hash = `#/containers/${s.container_id}?highlight=${encodeURIComponent(s.position)}&returnTo=${returnTo}`
+                        if (!activeContainerId) return
+                        window.location.hash = `#/containers/${activeContainerId}?highlight=${encodeURIComponent(activePosition || '')}&returnTo=${returnTo}`
                       }
                       
                       const containerData = s.is_checked_out && s.previous_containers ? s.previous_containers : s.containers
-                      const containerName = containerData?.name || s.container_id || '-'
+                      const containerName = containerData?.name || activeContainerId || '-'
                       const containerLocation = formatContainerLocation(containerData) || containerData?.location || '-'
                       // For checked out samples, use previous container type; otherwise use current container type
                       const containerType = s.is_checked_out && s.previous_containers?.type
                         ? s.previous_containers.type
                         : (s.containers?.type || 'Sample Type')
-                      const typeColor = SAMPLE_TYPE_COLORS[containerType] || '#6b7280'
+                      const typeColor = SAMPLE_TYPE_META[containerType]?.color || '#6b7280'
                       const tagItems = (s.sample_tags || [])
                         .map((t: any) => t.tags)
                         .filter(Boolean)
@@ -2285,7 +2438,11 @@ export default function App() {
                           </td>
                           <td style={{padding: 12}}>
                             <button
-                              onClick={() => window.location.hash = `#/samples/${encodeURIComponent(s.sample_id)}/history`}
+                              onClick={() => {
+                                const returnTo = route === '#/rnd/samples' ? 'rnd-samples' : 'samples'
+                                saveSampleListState(route === '#/rnd/samples' ? '#/rnd/samples' : '#/samples')
+                                window.location.hash = `#/samples/${encodeURIComponent(s.sample_id)}/history?returnTo=${returnTo}`
+                              }}
                               style={{
                                 background: 'none',
                                 border: 'none',
@@ -2323,7 +2480,7 @@ export default function App() {
                               fontSize: 12,
                               fontWeight: 600
                             }}>
-                              {s.position || '-'}
+                              {activePosition || '-'}
                             </span>
                           </td>
                           <td style={{padding: 12}}>
@@ -2515,11 +2672,14 @@ export default function App() {
           </div>
         )}
 
-        {route === '#/admin' && canAccessDashboard && (
-          <AdminDashboard canManageUsers={canManageUsers} />
+        {(route === '#/admin' || route.startsWith('#/admin/')) && canAccessDashboard && (
+          <AdminDashboard
+            canManageUsers={canManageUsers}
+            section={(route.startsWith('#/admin/') ? route.split('/')[2] : 'import') as any}
+          />
         )}
 
-        {route === '#/admin' && !!user && !canAccessDashboard && (
+        {(route === '#/admin' || route.startsWith('#/admin/')) && !!user && !canAccessDashboard && (
           <div className="card" style={{ padding: 16 }}>
             <h3 style={{ marginTop: 0 }}>Access Required</h3>
             <p className="muted" style={{ marginBottom: 0 }}>Sign in to access this page.</p>

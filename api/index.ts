@@ -15,6 +15,8 @@ const samplesHandler = require('./_handlers/samples')
 const samplesByIdHandler = require('./_handlers/samples/[id]')
 const containersHandler = require('./_handlers/containers')
 const containersByIdHandler = require('./_handlers/containers/[id]')
+const passwordResetHandler = require('./_handlers/password_reset')
+const changePasswordHandler = require('./_handlers/change_password')
 
 module.exports = async function handler(req: any, res: any) {
   const guard = checkSupabaseProjectRefLock()
@@ -38,6 +40,8 @@ module.exports = async function handler(req: any, res: any) {
   if (pathname === '/api/auth/signin') return authSigninHandler(req, res)
   if (pathname === '/api/authorized_users') return authorizedUsersHandler(req, res)
   if (pathname === '/api/admin_users') return adminUsersHandler(req, res)
+  if (pathname === '/api/password_reset') return passwordResetHandler(req, res)
+  if (pathname === '/api/change_password') return changePasswordHandler(req, res)
   if (pathname === '/api/audit') return auditHandler(req, res)
   if (pathname === '/api/tags') return tagsHandler(req, res)
   if (pathname === '/api/sample-tags') return sampleTagsHandler(req, res)

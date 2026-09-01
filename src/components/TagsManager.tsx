@@ -170,8 +170,8 @@ export default function TagsManager() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <h2 style={{ margin: 0 }}>Tags</h2>
-          <div className="muted" style={{ marginTop: 4 }}>Create, edit, archive, and delete sample tags.</div>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Tags</h2>
+          <div className="muted" style={{ marginTop: 8 }}>Create, edit, archive, and delete sample tags.</div>
         </div>
       </div>
 

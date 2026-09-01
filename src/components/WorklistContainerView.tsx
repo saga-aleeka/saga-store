@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import { toast } from 'sonner'
 import ContainerGridView from './ContainerGridView'
 import { supabase, apiFetch } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
@@ -115,17 +116,17 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         if (!res.ok) {
           const payload = await res.json().catch(() => null)
           console.error('Error checking out sample:', payload)
-          alert(`Failed to checkout ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
+          toast.error(`Failed to checkout ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
 
-      alert(`Checked out ${samplesToCheckout.length} sample(s)`)
+      toast.success(`Checked out ${samplesToCheckout.length} sample(s)`)
       setSelectedPositions(new Set())
       await loadContainer()
     } catch (err: any) {
       console.error('Error checking out samples:', err)
-      alert(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
+      toast.error(`Failed to checkout samples: ${err?.message || 'Unknown error'}`)
     } finally {
       setProcessing(false)
     }
@@ -151,7 +152,7 @@ export default function WorklistContainerView({ containerId, highlightPositions,
       
       if (fetchError) {
         console.error('Error fetching checked out samples:', fetchError)
-        alert(`Error: ${fetchError.message}`)
+        toast.error(`Error: ${fetchError.message}`)
         return
       }
 
@@ -171,16 +172,16 @@ export default function WorklistContainerView({ containerId, highlightPositions,
         if (!res.ok) {
           const payload = await res.json().catch(() => null)
           console.error('Error restoring sample:', payload)
-          alert(`Failed to restore ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
+          toast.error(`Failed to restore ${sample.sample_id}: ${payload?.message || payload?.error || 'Unknown error'}`)
           return
         }
       }
 
-      alert(`Restored ${checkedOutSamples.length} sample(s) to this container`)
+      toast.success(`Restored ${checkedOutSamples.length} sample(s) to this container`)
       await loadContainer()
     } catch (err: any) {
       console.error('Error undoing checkout:', err)
-      alert(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
+      toast.error(`Failed to undo checkout: ${err?.message || 'Unknown error'}`)
     } finally {
       setProcessing(false)
     }

@@ -1,16 +1,5 @@
 import React from 'react'
-
-const SAMPLE_TYPES: { key: string, label: string, color: string }[] = [
-  { key: 'PA Pools', label: 'PA Pools', color: '#fb923c' }, // orange
-  { key: 'DP Pools', label: 'DP Pools', color: '#10b981' }, // green
-  { key: 'cfDNA Tubes', label: 'cfDNA Tubes', color: '#9ca3af' }, // gray
-  { key: 'DTC Tubes', label: 'DTC Tubes', color: '#7c3aed' }, // purple
-  { key: 'MNC Tubes', label: 'MNC Tubes', color: '#ef4444' }, // red
-  { key: 'Plasma Tubes', label: 'Plasma Tubes', color: '#f59e0b' }, // yellow
-  { key: 'BC Tubes', label: 'BC Tubes', color: '#3b82f6' }, // blue
-  { key: 'IDT Plates', label: 'IDT Plates', color: '#06b6d4' }, // teal chosen
-  { key: 'Other', label: 'Other', color: '#1f2937' } // dark gray
-]
+import { SAMPLE_TYPE_OPTIONS } from '../constants'
 
 export default function ContainerFilters({ selected, onChange, availableOnly, onAvailableChange, trainingOnly, onTrainingChange }: any){
   const toggle = (key: string) => {
@@ -39,7 +28,7 @@ export default function ContainerFilters({ selected, onChange, availableOnly, on
   return (
     <div className="filters flex flex-col gap-3">
       <div className="flex items-center gap-3 flex-wrap">
-        {SAMPLE_TYPES.map(st => {
+        {SAMPLE_TYPE_OPTIONS.map(st => {
           const active = (selected || []).includes(st.key)
           const textColor = readableTextColor(st.color)
           // inactive: pastel background (20% alpha), text uses full color for contrast; active: fully saturated background with readable text
