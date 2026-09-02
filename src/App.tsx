@@ -102,6 +102,11 @@ function toStoredUser(user: any){
   }
 }
 
+function hasPasswordRecoveryCallback() {
+  const callbackParams = new URLSearchParams(window.location.hash.slice(1))
+  return callbackParams.get('type') === 'recovery'
+}
+
 export default function App() {
   const [route, setRoute] = useState<string>(window.location.hash || '#/containers')
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadThemePreference())
@@ -111,7 +116,7 @@ export default function App() {
   })
   const initialUser = getUser() ?? (DISABLE_AUTH ? { initials: 'DEV', name: 'Developer', roles: ['admin'], role: 'admin', email: 'dev@example.local' } : null)
   const [user, setUser] = useState<any | null>(initialUser)
-  const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(false)
+  const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(hasPasswordRecoveryCallback)
   const canAccessDashboard = DISABLE_AUTH || !!user
   const canManageUsers = DISABLE_AUTH || isAdminUser(user)
 

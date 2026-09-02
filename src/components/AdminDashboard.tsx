@@ -369,6 +369,11 @@ function useFetch<T>(url: string){
           return
         }
         const j = await r.json()
+        if (!r.ok) {
+          console.warn('Fetch failed for', url, j)
+          if (mounted && !aborted) { setData([] as any); setLoading(false) }
+          return
+        }
         if (mounted && !aborted){ setData(j.data ?? j); setLoading(false) }
       }catch(err){ 
         console.warn('Fetch error for', url, err)
@@ -405,6 +410,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
   // fetch Supabase auth users (admin-only tab)
   const authUsers = useFetch<any[]>(canManageUsers ? '/api/admin_users' : '')
   const authorizedUsers = useFetch<any[]>(canManageUsers ? '/api/authorized_users' : '')
+  const authUserList = Array.isArray(authUsers.data) ? authUsers.data : []
   const [showAdd, setShowAdd] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newFullName, setNewFullName] = useState('')
@@ -443,7 +449,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
   const [auditRows, setAuditRows] = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(true)
   const [auditTotal, setAuditTotal] = useState(0)
-  const authUserInitials = new Set((authUsers.data || []).map((user: any) => normalizeInitials(user?.initials)).filter(Boolean))
+  const authUserInitials = new Set(authUserList.map((user: any) => normalizeInitials(user?.initials)).filter(Boolean))
   
   // Fetch container names for audit log display
   const [containerNames, setContainerNames] = React.useState<Map<string, string>>(new Map())
@@ -1144,7 +1150,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
         <div>
           <div style={{marginTop:12}}>
             {authUsers.loading && <div className="muted">Loading...</div>}
-            {!authUsers.loading && authUsers.data && authUsers.data.length === 0 && <div className="muted">No users found</div>}
+            {!authUsers.loading && authUserList.length === 0 && <div className="muted">No users found</div>}
 
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:8}}>
               <div style={{display:'flex',gap:8}}>
@@ -1152,7 +1158,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
                 <AuthorizedUsersLink />
               </div>
               <div style={{fontSize:13,color:'#666'}}>
-                Users: {authUsers.data ? authUsers.data.length : '—'}
+                Users: {authUsers.loading ? '—' : authUserList.length}
               </div>
             </div>
 
@@ -1252,7 +1258,7 @@ export default function AdminDashboard({ canManageUsers = false, section = 'impo
                   </tr>
                 </thead>
                 <tbody>
-                  {!authUsers.loading && authUsers.data && authUsers.data.map((u:any) => (
+                  {!authUsers.loading && authUserList.map((u:any) => (
                     <tr key={u.id} style={{borderBottom:'1px solid #fafafa'}}>
                       <td style={{padding:8,verticalAlign:'middle'}}>{u.email || '—'}</td>
                       <td style={{padding:8,verticalAlign:'middle'}}>{u.full_name || '—'}</td>
