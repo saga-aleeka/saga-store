@@ -4,6 +4,7 @@ import { supabase, apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import { getToken, getUser } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
+import { confirmSampleCheckout } from '../lib/checkoutConfirmation'
 
 interface WorklistSample {
   id?: string
@@ -788,6 +789,11 @@ export default function WorklistManager({ adminMode = false }: { adminMode?: boo
         alert('No samples available to checkout (they may already be checked out)')
         return
       }
+
+      if (!confirmSampleCheckout({
+        count: availableSamples.length,
+        sampleIds: availableSamples.map((sample: any) => sample.sample_id),
+      })) return
 
       // Checkout each sample through audited server endpoint
       for (const sample of availableSamples) {

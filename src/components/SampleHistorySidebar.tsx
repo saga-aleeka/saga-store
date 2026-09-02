@@ -4,6 +4,7 @@ import { getToken } from '../lib/auth'
 import { apiFetch } from '../lib/api'
 import { formatDateTime } from '../lib/dateUtils'
 import { supabase } from '../lib/supabaseClient'
+import { confirmSampleCheckout } from '../lib/checkoutConfirmation'
 
 const TAG_COLOR_PALETTE = [
   '#0ea5e9',
@@ -325,9 +326,7 @@ export default function SampleHistorySidebar({ sample, historyReturnTo = 'sample
   }
 
   const handleCheckout = async () => {
-    if (!window.confirm(`Check out ${sample.sample_id}? This will remove it from the container and mark it as checked out.`)) {
-      return
-    }
+    if (!confirmSampleCheckout({ count: 1, sampleIds: [sample.sample_id] })) return
 
     setCheckingOut(true)
     try {

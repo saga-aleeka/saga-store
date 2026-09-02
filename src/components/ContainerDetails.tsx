@@ -6,6 +6,7 @@ import { getToken, getUser } from '../lib/auth'
 import { apiFetch } from '../lib/api'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
 import LocationBreadcrumb from './LocationBreadcrumb'
+import { confirmSampleCheckout } from '../lib/checkoutConfirmation'
 
 // Compute readable text color (white or dark) based on background hex
 function readableTextColor(hex: string){
@@ -433,7 +434,11 @@ export default function ContainerDetails({ id }: { id: string | number }){
   
   const handleBatchCheckout = async () => {
     if (selectedSampleIds.size === 0) return
-    if (!window.confirm(`Check out ${selectedSampleIds.size} sample(s)?`)) return
+    const selectedSamples = data.samples.filter((sample: any) => selectedSampleIds.has(sample.id))
+    if (!confirmSampleCheckout({
+      count: selectedSamples.length,
+      sampleIds: selectedSamples.map((sample: any) => sample.sample_id),
+    })) return
     
     setBatchActionInProgress(true)
     try {
@@ -443,22 +448,19 @@ export default function ContainerDetails({ id }: { id: string | number }){
       }
       
       // Checkout all selected samples
-      for (const sampleId of selectedSampleIds) {
-        const sample = data.samples.find((s: any) => s.id === sampleId)
-        if (sample) {
-          const res = await apiFetch(`/api/samples/${sampleId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${getToken()}`
-            },
-            body: JSON.stringify({ action: 'checkout' })
-          })
+      for (const sample of selectedSamples) {
+        const res = await apiFetch(`/api/samples/${sample.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`
+          },
+          body: JSON.stringify({ action: 'checkout' })
+        })
 
-          if (!res.ok) {
-            const payload = await res.json().catch(() => null)
-            throw new Error(payload?.message || payload?.error || `Failed to checkout ${sample.sample_id}`)
-          }
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
+          throw new Error(payload?.message || payload?.error || `Failed to checkout ${sample.sample_id}`)
         }
       }
       

@@ -23,6 +23,7 @@ import { formatDateTime, formatDate } from './lib/dateUtils'
 import { SAMPLE_TYPES, SAMPLE_TYPE_META } from './constants'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation, getContainerLocationSearchText } from './lib/locationUtils'
 import { getUserRoles, isAdminUser } from './lib/roles'
+import { confirmSampleCheckout } from './lib/checkoutConfirmation'
 
 type ThemePreference = 'system' | 'light' | 'dark'
 
@@ -2031,14 +2032,22 @@ export default function App() {
                           alert('You must be signed in to checkout samples')
                           return
                         }
+
+                        const checkoutCandidates = selectedSamples.filter((sample: any) => !sample.is_checked_out && sample.container_id)
+                        if (checkoutCandidates.length === 0) {
+                          alert('No selected samples can be checked out')
+                          return
+                        }
+                        if (!confirmSampleCheckout({
+                          count: checkoutCandidates.length,
+                          sampleIds: checkoutCandidates.map((sample: any) => sample.sample_id),
+                        })) return
                         
                         setLoadingSamples(true)
                         try {
                           const history: Array<{sample_id: string, container_id: string, position: string}> = []
                           
-                          for (const sample of selectedSamples) {
-                            if (sample.is_checked_out || !sample.container_id) continue
-                            
+                          for (const sample of checkoutCandidates) {
                             history.push({
                               sample_id: sample.sample_id,
                               container_id: sample.container_id,

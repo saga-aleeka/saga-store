@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/supabaseClient'
 import { getToken } from '../lib/auth'
 import { formatDateTime } from '../lib/dateUtils'
+import { confirmSampleCheckout } from '../lib/checkoutConfirmation'
 
 interface SampleHistoryProps {
   sampleId: string
@@ -165,6 +166,8 @@ export default function SampleHistory({ sampleId, onBack }: SampleHistoryProps) 
 
   const handlePreviewCheckout = async (sampleToCheckout: any) => {
     if (!sampleToCheckout) return
+    if (!confirmSampleCheckout({ count: 1, sampleIds: [sampleToCheckout.sample_id] })) return
+
     try {
       const token = getToken()
       const res = await apiFetch(`/api/samples/${sampleToCheckout.id}`, {

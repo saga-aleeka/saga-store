@@ -4,6 +4,7 @@ import ContainerGridView from './ContainerGridView'
 import { supabase, apiFetch } from '../lib/api'
 import { getToken, getUser } from '../lib/auth'
 import { CONTAINER_LOCATION_SELECT, formatContainerLocation } from '../lib/locationUtils'
+import { confirmSampleCheckout } from '../lib/checkoutConfirmation'
 
 interface Props {
   containerId: string
@@ -102,6 +103,11 @@ export default function WorklistContainerView({ containerId, highlightPositions,
       alert('You must be signed in to checkout samples')
       return
     }
+
+    if (!confirmSampleCheckout({
+      count: samplesToCheckout.length,
+      sampleIds: samplesToCheckout.map((sample: any) => sample.sample_id),
+    })) return
 
     setProcessing(true)
     try {
